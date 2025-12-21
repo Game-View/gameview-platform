@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 255 255 255;
+    --foreground: 24 24 27;
+  }
+
+  .dark {
+    --background: 24 24 27;
+    --foreground: 250 250 250;
+  }
+
+  body {
+    @apply bg-white text-gv-neutral-900 dark:bg-gv-neutral-900 dark:text-gv-neutral-100;
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+  }
+
+  /* Disable text selection on interactive elements */
+  button,
+  [role="button"] {
+    user-select: none;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gv-neutral-100 dark:bg-gv-neutral-800;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gv-neutral-300 dark:bg-gv-neutral-600 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gv-neutral-400 dark:bg-gv-neutral-500;
+  }
+}

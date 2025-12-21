@@ -1,0 +1,29 @@
+{
+  "name": "gameview-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Game View unified platform monorepo",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\""
+  },
+  "keywords": ["gameview", "3d-reconstruction", "gaussian-splatting"],
+  "author": "Game View Technology",
+  "license": "PROPRIETARY",
+  "packageManager": "pnpm@10.25.0",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.7.1",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}
