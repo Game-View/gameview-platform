@@ -7,7 +7,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 // Global cancellation flag for processing
 static CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
@@ -61,8 +61,6 @@ pub async fn save_settings(app: AppHandle, settings: AppSettings) -> Result<(), 
 /// Open file dialog to pick video files
 #[tauri::command]
 pub async fn pick_videos() -> Result<Vec<String>, String> {
-    use tauri_plugin_dialog::DialogExt;
-
     // Note: This is a placeholder - actual implementation would use the dialog plugin
     // The dialog plugin's API differs slightly in Tauri 2.0
     Ok(vec![])
