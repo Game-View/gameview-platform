@@ -3,10 +3,10 @@
 //! This module contains all the Tauri commands that can be invoked from the frontend.
 
 use crate::settings::AppSettings;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 
 // Global cancellation flag for processing
@@ -97,6 +97,8 @@ pub async fn get_cli_path(app: AppHandle) -> Result<String, String> {
 }
 
 /// Process videos using gvcore-cli
+/// CLI command: gvcore-cli run --input /path/cam1.mp4 --input /path/cam2.mp4 --output /path/output --brush-path /path/brush
+/// Progress output format: [stage_name] percent% - message
 #[tauri::command]
 pub async fn process_videos(app: AppHandle, args: ProcessArgs) -> Result<String, String> {
     use std::process::Stdio;
@@ -108,28 +110,29 @@ pub async fn process_videos(app: AppHandle, args: ProcessArgs) -> Result<String,
 
     let cli_path = get_cli_path(app.clone()).await?;
 
-    // Build command arguments
+    // Build command arguments using 'run' subcommand
     let mut cmd_args = vec![
-        "process".to_string(),
+        "run".to_string(),
         "--output".to_string(),
         args.output_dir.clone(),
-        "--preset".to_string(),
-        args.preset,
     ];
 
+    // Add each video as --input
     for video in &args.videos {
-        cmd_args.push("--video".to_string());
+        cmd_args.push("--input".to_string());
         cmd_args.push(video.clone());
     }
 
-    if let Some(colmap) = args.colmap_path {
-        cmd_args.push("--colmap-path".to_string());
-        cmd_args.push(colmap);
-    }
-
+    // Add brush path if provided
     if let Some(brush) = args.brush_path {
         cmd_args.push("--brush-path".to_string());
         cmd_args.push(brush);
+    }
+
+    // Add colmap path if provided
+    if let Some(colmap) = args.colmap_path {
+        cmd_args.push("--colmap-path".to_string());
+        cmd_args.push(colmap);
     }
 
     // Spawn the CLI process
@@ -143,6 +146,10 @@ pub async fn process_videos(app: AppHandle, args: ProcessArgs) -> Result<String,
     let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
     let mut reader = BufReader::new(stdout).lines();
 
+    // Regex to parse progress: [stage_name] percent% - message
+    let progress_re = Regex::new(r"\[(\w+)\] (\d+)% - (.+)")
+        .map_err(|e| format!("Failed to compile regex: {}", e))?;
+
     // Stream output to frontend
     while let Some(line) = reader.next_line().await.map_err(|e| e.to_string())? {
         // Check for cancellation
@@ -151,8 +158,32 @@ pub async fn process_videos(app: AppHandle, args: ProcessArgs) -> Result<String,
             return Err("Processing cancelled".to_string());
         }
 
-        // Try to parse as JSON progress
-        if let Ok(progress) = serde_json::from_str::<ProcessProgress>(&line) {
+        // Parse progress output: [stage_name] percent% - message
+        if let Some(captures) = progress_re.captures(&line) {
+            let stage = captures.get(1).map(|m| m.as_str()).unwrap_or("unknown");
+            let percent: f64 = captures
+                .get(2)
+                .and_then(|m| m.as_str().parse().ok())
+                .unwrap_or(0.0);
+            let message = captures.get(3).map(|m| m.as_str().to_string());
+
+            // Map CLI stage names to frontend stage names
+            let mapped_stage = match stage {
+                "frame_extraction" => "extracting_frames",
+                "colmap" => "detecting_cameras",
+                "brush" => "training_splats",
+                "metadata" => "exporting",
+                "completed" => "complete",
+                "failed" => "failed",
+                other => other,
+            };
+
+            let progress = ProcessProgress {
+                stage: mapped_stage.to_string(),
+                progress: percent,
+                message,
+            };
+
             app.emit("processing-progress", &progress).ok();
         }
     }
