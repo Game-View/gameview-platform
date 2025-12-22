@@ -40,18 +40,5 @@
       "timestampUrl": ""
     }
   },
-  "plugins": {
-    "fs": {
-      "scope": ["**"]
-    },
-    "shell": {
-      "scope": [
-        {
-          "name": "gvcore-cli",
-          "cmd": "gvcore-cli",
-          "args": true
-        }
-      ]
-    }
-  }
+  "plugins": {}
 }
