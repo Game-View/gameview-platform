@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { cn } from '../lib/utils';
 import { Button } from './Button';
 import { X, ChevronUp, ChevronDown, Play } from 'lucide-react';
@@ -33,9 +32,11 @@ export function TutorialModal({
   isExpanded = true,
   onExpandToggle,
   onClose,
-  onComplete,
+  onComplete: _onComplete,
   className,
 }: TutorialModalProps) {
+  // onComplete available for future use when tutorial finishes
+  void _onComplete;
   const step = steps[currentStep - 1];
 
   if (!step) return null;

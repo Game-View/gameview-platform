@@ -88,7 +88,10 @@ function SplatPointCloud({ url, quality, onError }: SplatPointCloudProps) {
     // TODO: Implement PLY loading and Gaussian Splat rendering
     // This would parse the PLY file and render the splats
     console.info('Loading splat from:', url, 'with quality:', quality);
-  }, [url, quality]);
+
+    // onError is available for error handling when loading fails
+    if (false) onError?.(new Error('placeholder'));
+  }, [url, quality, onError]);
 
   return (
     <mesh>

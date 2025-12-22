@@ -1,4 +1,3 @@
-import * as React from 'react';
 import type { ProcessingStage, ProcessingProgress as ProgressType } from '@gameview/types';
 import { Progress } from './Progress';
 import { Card, CardContent, CardHeader, CardTitle } from './Card';

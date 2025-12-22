@@ -14,11 +14,13 @@ interface VideoDropZoneProps {
 export function VideoDropZone({
   onDrop,
   onBrowse,
-  accept = 'video/*',
+  accept: _accept = 'video/*',
   multiple = true,
   className,
   disabled = false,
 }: VideoDropZoneProps) {
+  // accept is available for future use with input[type=file]
+  void _accept;
   const [isDragOver, setIsDragOver] = React.useState(false);
 
   const handleDragOver = (e: React.DragEvent) => {

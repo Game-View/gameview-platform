@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { cn, formatDuration } from '../lib/utils';
 import { Play, Film, X } from 'lucide-react';
 
