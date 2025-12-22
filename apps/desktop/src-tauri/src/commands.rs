@@ -80,20 +80,22 @@ pub async fn pick_output_directory() -> Result<Option<String>, String> {
 pub async fn get_cli_path(app: AppHandle) -> Result<String, String> {
     let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
 
+    // Try different extensions based on platform
     #[cfg(target_os = "windows")]
-    let cli_name = "gvcore-cli.exe";
+    let candidates = ["gvcore-cli.exe", "gvcore-cli.bat", "gvcore-cli.cmd"];
 
     #[cfg(not(target_os = "windows"))]
-    let cli_name = "gvcore-cli";
+    let candidates = ["gvcore-cli"];
 
-    let cli_path = resource_dir.join("resources").join(cli_name);
-
-    if cli_path.exists() {
-        Ok(cli_path.to_string_lossy().to_string())
-    } else {
-        // Fall back to system PATH
-        Ok(cli_name.to_string())
+    for cli_name in candidates {
+        let cli_path = resource_dir.join("resources").join(cli_name);
+        if cli_path.exists() {
+            return Ok(cli_path.to_string_lossy().to_string());
+        }
     }
+
+    // Fall back to system PATH
+    Ok("gvcore-cli".to_string())
 }
 
 /// Process videos using gvcore-cli
