@@ -1,0 +1,58 @@
+#!/bin/bash
+# Mock gvcore-cli for testing the Tauri integration
+# Simulates progress output in the format: [stage_name] percent% - message
+
+echo "[frame_extraction] 0% - Starting frame extraction..."
+sleep 0.5
+
+for i in 5 10 15 19; do
+    echo "[frame_extraction] $i% - Extracting frames..."
+    sleep 0.3
+done
+
+echo "[colmap] 20% - Running Structure from Motion..."
+sleep 0.5
+
+for i in 25 30 35; do
+    echo "[colmap] $i% - Processing COLMAP..."
+    sleep 0.4
+done
+
+echo "[colmap] 38% - Feature extraction complete"
+sleep 0.3
+echo "[colmap] 39% - Feature matching complete"
+sleep 0.3
+
+echo "[brush] 40% - Generating 3D Gaussian Splats..."
+sleep 0.5
+
+for i in 50 60 70 80 90; do
+    echo "[brush] $i% - Training Gaussian splats..."
+    sleep 0.5
+done
+
+echo "[metadata] 95% - Generating metadata..."
+sleep 0.3
+
+echo "[completed] 100% - Processing complete (1/1)"
+
+# Create a dummy output file
+OUTPUT_DIR=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --output)
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+if [ -n "$OUTPUT_DIR" ]; then
+    mkdir -p "$OUTPUT_DIR"
+    echo "mock ply data" > "$OUTPUT_DIR/output.ply"
+fi
+
+exit 0
