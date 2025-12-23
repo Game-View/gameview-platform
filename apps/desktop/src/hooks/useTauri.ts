@@ -4,10 +4,11 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
+import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useCallback, useEffect, useState } from 'react';
-import type { ProcessingProgress, AppSettings, QualityPreset } from '@gameview/types';
+import type { ProcessingProgress, AppSettings, QualityPreset, GVProject } from '@gameview/types';
 
 // ===== File Dialogs =====
 
@@ -137,7 +138,7 @@ export function useProcessing(): UseProcessingResult {
       unlisten = await listen<ProcessingProgress>('processing-progress', (event) => {
         setProgress(event.payload);
 
-        if (event.payload.stage === 'completed') {
+        if (event.payload.stage === 'complete') {
           setIsProcessing(false);
         } else if (event.payload.stage === 'failed') {
           setIsProcessing(false);
@@ -223,5 +224,142 @@ export async function getVideoMetadata(path: string): Promise<VideoMetadata> {
     width: 1920,
     height: 1080,
     fps: 30,
+  };
+}
+
+// ===== Project Files =====
+
+/**
+ * Open a project file dialog
+ */
+export async function pickProjectFile(): Promise<string | null> {
+  const selected = await open({
+    multiple: false,
+    filters: [
+      {
+        name: 'Game View Project',
+        extensions: ['gvproj'],
+      },
+    ],
+    title: 'Open Project',
+  });
+
+  return selected as string | null;
+}
+
+/**
+ * Save project file dialog
+ */
+export async function pickProjectSaveLocation(defaultName?: string): Promise<string | null> {
+  const selected = await save({
+    defaultPath: defaultName ? `${defaultName}.gvproj` : 'project.gvproj',
+    filters: [
+      {
+        name: 'Game View Project',
+        extensions: ['gvproj'],
+      },
+    ],
+    title: 'Save Project',
+  });
+
+  return selected;
+}
+
+/**
+ * Read a project file
+ */
+export async function readProjectFile(path: string): Promise<GVProject> {
+  const content = await readTextFile(path);
+  const project = JSON.parse(content) as GVProject;
+
+  // Validate the project file
+  if (project.type !== 'gameview-project') {
+    throw new Error('Invalid project file: not a Game View project');
+  }
+  if (!project.version) {
+    throw new Error('Invalid project file: missing version');
+  }
+
+  return project;
+}
+
+/**
+ * Write a project file
+ */
+export async function writeProjectFile(path: string, project: GVProject): Promise<void> {
+  const content = JSON.stringify(project, null, 2);
+  await writeTextFile(path, content);
+}
+
+/**
+ * Hook for managing project files
+ */
+export function useProjectFile() {
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const openProject = useCallback(async (): Promise<{ project: GVProject; path: string } | null> => {
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const path = await pickProjectFile();
+      if (!path) {
+        setIsLoading(false);
+        return null;
+      }
+
+      const project = await readProjectFile(path);
+      setIsLoading(false);
+      return { project, path };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(errorMessage);
+      setIsLoading(false);
+      throw err;
+    }
+  }, []);
+
+  const saveProject = useCallback(async (
+    project: GVProject,
+    existingPath?: string | null
+  ): Promise<string | null> => {
+    setError(null);
+    setIsSaving(true);
+
+    try {
+      let path = existingPath;
+
+      if (!path) {
+        path = await pickProjectSaveLocation(project.metadata.name);
+        if (!path) {
+          setIsSaving(false);
+          return null;
+        }
+      }
+
+      await writeProjectFile(path, project);
+      setIsSaving(false);
+      return path;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(errorMessage);
+      setIsSaving(false);
+      throw err;
+    }
+  }, []);
+
+  const saveProjectAs = useCallback(async (project: GVProject): Promise<string | null> => {
+    return saveProject(project, null);
+  }, [saveProject]);
+
+  return {
+    isSaving,
+    isLoading,
+    error,
+    openProject,
+    saveProject,
+    saveProjectAs,
   };
 }

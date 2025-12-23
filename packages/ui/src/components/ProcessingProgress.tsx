@@ -6,20 +6,20 @@ import { cn } from '../lib/utils';
 const stageLabels: Record<ProcessingStage, string> = {
   idle: 'Ready',
   extracting_frames: 'Extracting Frames',
-  running_colmap: 'Running COLMAP',
-  running_brush: 'Training 3D Gaussian Splat',
+  detecting_cameras: 'Detecting Cameras (COLMAP)',
+  training_splats: 'Training 3D Gaussian Splats',
   exporting: 'Exporting',
-  completed: 'Completed',
+  complete: 'Complete',
   failed: 'Failed',
 };
 
 const stageIcons: Record<ProcessingStage, string> = {
   idle: '⏸️',
   extracting_frames: '🎬',
-  running_colmap: '📐',
-  running_brush: '🎨',
+  detecting_cameras: '📐',
+  training_splats: '🎨',
   exporting: '📦',
-  completed: '✅',
+  complete: '✅',
   failed: '❌',
 };
 

@@ -18,6 +18,7 @@ import {
 import { useState } from 'react';
 import { useAppStore } from '../store/appStore';
 import { pickVideos, pickOutputDirectory } from '../hooks/useTauri';
+import { PRESET_SETTINGS } from '@gameview/types';
 import type { Production, VideoFile } from '@gameview/types';
 
 interface NewProductionDialogProps {
@@ -90,6 +91,7 @@ export function NewProductionDialog({ open, onOpenChange }: NewProductionDialogP
     setIsCreating(true);
 
     try {
+      const preset = 'balanced';
       const production: Production = {
         id: `prod-${Date.now()}`,
         name: name.trim(),
@@ -97,7 +99,12 @@ export function NewProductionDialog({ open, onOpenChange }: NewProductionDialogP
         updatedAt: new Date().toISOString(),
         videos,
         settings: {
-          preset: 'balanced',
+          preset,
+          totalSteps: PRESET_SETTINGS[preset].totalSteps ?? 15000,
+          maxSplats: PRESET_SETTINGS[preset].maxSplats ?? 7500000,
+          sizePercentage: PRESET_SETTINGS[preset].sizePercentage ?? 75,
+          splatFps: PRESET_SETTINGS[preset].splatFps ?? 20,
+          splatVideoLengthSeconds: PRESET_SETTINGS[preset].splatVideoLengthSeconds ?? 10,
           autoSync: true,
         },
         status: 'draft',
