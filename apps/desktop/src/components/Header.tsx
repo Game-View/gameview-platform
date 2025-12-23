@@ -1,15 +1,71 @@
-import { Button } from '@gameview/ui';
+import { Button, toast } from '@gameview/ui';
 import { useAppStore } from '../store/appStore';
-import { Settings, Bell, ChevronDown, Search } from 'lucide-react';
+import { Settings, Bell, ChevronDown, Search, Save, FolderOpen } from 'lucide-react';
 import { useState } from 'react';
+import { useProjectFile } from '../hooks/useTauri';
 
 interface HeaderProps {
   onNewProduction: () => void;
 }
 
 export function Header({ onNewProduction }: HeaderProps) {
-  const { currentProduction } = useAppStore();
+  const { currentProduction, projectPath, isProjectDirty, getProjectData, setProjectPath, setProjectDirty, loadProject, addRecentProduction } = useAppStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const { saveProject, openProject, isSaving, isLoading } = useProjectFile();
+
+  const handleSave = async () => {
+    const projectData = getProjectData();
+    if (!projectData) return;
+
+    try {
+      const path = await saveProject(projectData, projectPath);
+      if (path) {
+        setProjectPath(path);
+        setProjectDirty(false);
+        addRecentProduction({
+          id: projectData.metadata.name,
+          name: projectData.metadata.name,
+          path,
+          lastOpened: new Date().toISOString(),
+        });
+        toast({
+          title: 'Project Saved',
+          description: `Saved to ${path.split('/').pop()}`,
+        });
+      }
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to save project',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleOpen = async () => {
+    try {
+      const result = await openProject();
+      if (result) {
+        loadProject(result.project, result.path);
+        addRecentProduction({
+          id: result.project.metadata.name,
+          name: result.project.metadata.name,
+          path: result.path,
+          lastOpened: new Date().toISOString(),
+        });
+        toast({
+          title: 'Project Opened',
+          description: `Loaded "${result.project.metadata.name}"`,
+        });
+      }
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to open project',
+        variant: 'destructive',
+      });
+    }
+  };
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-gv-neutral-800 bg-gv-neutral-900 px-6">
@@ -35,20 +91,35 @@ export function Header({ onNewProduction }: HeaderProps) {
 
       {/* Center: Current production name */}
       {currentProduction && (
-        <div className="absolute left-1/2 -translate-x-1/2">
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
           <span className="text-sm text-gv-neutral-400">
             {currentProduction.name}
           </span>
+          {isProjectDirty && (
+            <span className="text-xs text-gv-warning-500" title="Unsaved changes">*</span>
+          )}
         </div>
       )}
 
       {/* Right: Actions + User */}
       <div className="flex items-center gap-4">
-        {/* New button */}
-        <Button size="sm" onClick={onNewProduction}>
-          New
-          <ChevronDown className="ml-1 w-4 h-4" />
-        </Button>
+        {/* File actions */}
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={handleOpen} disabled={isLoading}>
+            <FolderOpen className="w-4 h-4 mr-1" />
+            Open
+          </Button>
+          {currentProduction && (
+            <Button size="sm" variant="ghost" onClick={handleSave} disabled={isSaving || !isProjectDirty}>
+              <Save className="w-4 h-4 mr-1" />
+              {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          )}
+          <Button size="sm" onClick={onNewProduction}>
+            New
+            <ChevronDown className="ml-1 w-4 h-4" />
+          </Button>
+        </div>
 
         {/* Notifications */}
         <button className="p-2 text-gv-neutral-400 hover:text-white transition-colors">
