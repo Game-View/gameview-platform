@@ -1,31 +1,74 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, RabbitLoader } from '@gameview/ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, RabbitLoader, toast } from '@gameview/ui';
 import { useAppStore } from '../store/appStore';
 import { Plus, FolderOpen, Clock, Video, Sparkles } from 'lucide-react';
 import { useState } from 'react';
+import { useProjectFile, readProjectFile } from '../hooks/useTauri';
 
 interface WelcomeScreenProps {
   onNewProduction: () => void;
 }
 
 export function WelcomeScreen({ onNewProduction }: WelcomeScreenProps) {
-  const { settings } = useAppStore();
+  const { settings, loadProject, addRecentProduction } = useAppStore();
   const { recentProductions } = settings;
-  const [isLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const { openProject, isLoading: isOpening } = useProjectFile();
 
-  const handleOpenProduction = () => {
-    // TODO: Implement file picker for production
-    console.info('Open production');
+  const handleOpenProduction = async () => {
+    try {
+      const result = await openProject();
+      if (result) {
+        loadProject(result.project, result.path);
+        addRecentProduction({
+          id: result.project.metadata.name,
+          name: result.project.metadata.name,
+          path: result.path,
+          lastOpened: new Date().toISOString(),
+        });
+        toast({
+          title: 'Project Opened',
+          description: `Loaded "${result.project.metadata.name}"`,
+        });
+      }
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to open project',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleOpenRecent = (path: string) => {
-    // TODO: Implement opening recent production
-    console.info('Open recent:', path);
+  const handleOpenRecent = async (path: string, name: string) => {
+    setIsLoading(true);
+    try {
+      const project = await readProjectFile(path);
+      loadProject(project, path);
+      addRecentProduction({
+        id: name,
+        name,
+        path,
+        lastOpened: new Date().toISOString(),
+      });
+      toast({
+        title: 'Project Opened',
+        description: `Loaded "${name}"`,
+      });
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: `Failed to open "${name}": ${err instanceof Error ? err.message : 'File not found'}`,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  if (isLoading) {
+  if (isLoading || isOpening) {
     return (
       <div className="flex h-full items-center justify-center">
-        <RabbitLoader message="Loading production..." />
+        <RabbitLoader message="Loading project..." />
       </div>
     );
   }
@@ -95,7 +138,7 @@ export function WelcomeScreen({ onNewProduction }: WelcomeScreenProps) {
                   <li key={production.id}>
                     <button
                       className="w-full flex items-center gap-3 rounded-gv p-3 text-left transition-colors hover:bg-gv-neutral-700"
-                      onClick={() => handleOpenRecent(production.path)}
+                      onClick={() => handleOpenRecent(production.path, production.name)}
                     >
                       <div className="flex h-10 w-10 items-center justify-center rounded-gv bg-gv-neutral-700">
                         <Video className="h-5 w-5 text-gv-neutral-400" />
