@@ -4,9 +4,10 @@ import { useRef, useEffect, useCallback, useState } from "react";
 import { useUser, UserButton } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, RotateCcw, FileText, FolderOpen } from "lucide-react";
+import { ArrowLeft, RotateCcw, FileText, FolderOpen, Command } from "lucide-react";
 import { useChatStore } from "@/stores/chat-store";
 import { toast } from "@/stores/toast-store";
+import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
 import { ChatMessage, SparkTypingIndicator } from "@/components/chat/ChatMessage";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { SparkWelcome } from "@/components/chat/SparkWelcome";
@@ -51,6 +52,17 @@ export default function SparkPage() {
     creatorType?: CreatorType;
     creationGoals?: CreationGoal[];
   } | undefined;
+
+  // Escape key to close brief panel
+  useKeyboardShortcut({
+    key: "Escape",
+    callback: () => {
+      if (showBriefPanel) {
+        setShowBriefPanel(false);
+      }
+    },
+    disabled: !showBriefPanel,
+  });
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -389,6 +401,17 @@ export default function SparkPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Keyboard shortcut hint */}
+            <button
+              className="hidden sm:flex items-center gap-1 px-2 py-1 text-xs text-gv-neutral-500 hover:text-gv-neutral-300 transition-colors"
+              onClick={() => {
+                window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
+              }}
+              title="Quick actions (⌘K)"
+            >
+              <Command className="h-3 w-3" />
+              <span>K</span>
+            </button>
             {hasMessages && (
               <>
                 <button

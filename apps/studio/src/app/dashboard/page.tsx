@@ -212,6 +212,18 @@ export default function DashboardPage() {
             <span className="text-gv-primary-500 font-semibold">Studio</span>
           </div>
           <div className="flex items-center gap-4">
+            {/* Keyboard shortcut hint */}
+            <button
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gv-neutral-800 border border-gv-neutral-700 rounded-gv text-sm text-gv-neutral-400 hover:text-white hover:border-gv-neutral-600 transition-colors"
+              onClick={() => {
+                // Trigger command palette via keyboard event
+                window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
+              }}
+            >
+              <Search className="h-3.5 w-3.5" />
+              <span>Quick actions</span>
+              <kbd className="ml-1 px-1.5 py-0.5 bg-gv-neutral-700 rounded text-xs">⌘K</kbd>
+            </button>
             <Link
               href="/settings"
               className="p-2 text-gv-neutral-400 hover:text-white transition-colors"
