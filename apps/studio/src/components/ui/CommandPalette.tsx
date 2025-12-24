@@ -12,6 +12,8 @@ import {
   MessageSquare,
   User,
   Command,
+  Wrench,
+  Video,
 } from "lucide-react";
 import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
 
@@ -90,6 +92,23 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         icon: <User className="h-4 w-4" />,
         action: () => router.push("/onboarding"),
         category: "navigation",
+      },
+      {
+        id: "build",
+        label: "Build Experience",
+        description: "Upload videos and build 3D scenes",
+        icon: <Wrench className="h-4 w-4" />,
+        action: () => router.push("/dashboard"),
+        shortcut: "B",
+        category: "actions",
+      },
+      {
+        id: "upload",
+        label: "Upload Video",
+        description: "Add video footage to a scene",
+        icon: <Video className="h-4 w-4" />,
+        action: () => router.push("/dashboard"),
+        category: "actions",
       },
     ],
     [router]

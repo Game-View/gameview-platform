@@ -16,6 +16,7 @@ import {
   Loader2,
   Search,
   X,
+  Wrench,
 } from "lucide-react";
 import type { StoredBrief } from "@/lib/briefs";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -477,12 +478,23 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Actions */}
-                  <Link
-                    href={`/spark?brief=${brief.id}`}
-                    className="block w-full py-2 text-center text-sm font-medium text-gv-primary-500 hover:text-gv-primary-400 bg-gv-primary-500/10 hover:bg-gv-primary-500/20 rounded-gv transition-colors"
-                  >
-                    Continue with Spark
-                  </Link>
+                  <div className="flex gap-2">
+                    <Link
+                      href={`/spark?brief=${brief.id}`}
+                      className="flex-1 py-2 text-center text-sm font-medium text-gv-primary-500 hover:text-gv-primary-400 bg-gv-primary-500/10 hover:bg-gv-primary-500/20 rounded-gv transition-colors"
+                    >
+                      Continue with Spark
+                    </Link>
+                    {brief.completeness >= 50 && (
+                      <Link
+                        href={`/project/${brief.id}`}
+                        className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-gv-neutral-700 hover:bg-gv-neutral-600 rounded-gv transition-colors"
+                      >
+                        <Wrench className="h-4 w-4" />
+                        Build
+                      </Link>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
