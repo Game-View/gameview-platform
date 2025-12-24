@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
+import { ToastContainer } from "@/components/ui/Toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({
       <html lang="en" className="dark">
         <body className="min-h-screen bg-gv-neutral-900">
           {children}
+          <ToastContainer />
         </body>
       </html>
     </ClerkProvider>

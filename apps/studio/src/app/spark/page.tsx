@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, RotateCcw, FileText, FolderOpen } from "lucide-react";
 import { useChatStore } from "@/stores/chat-store";
+import { toast } from "@/stores/toast-store";
 import { ChatMessage, SparkTypingIndicator } from "@/components/chat/ChatMessage";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { SparkWelcome } from "@/components/chat/SparkWelcome";
@@ -67,6 +68,7 @@ export default function SparkPage() {
         const response = await fetch(`/api/briefs/${briefId}`);
         if (!response.ok) {
           console.error("Failed to load brief");
+          toast.error("Load failed", "Could not load the project. It may have been deleted.");
           return;
         }
 
@@ -137,7 +139,9 @@ export default function SparkPage() {
       setExtractedBrief(brief);
     } catch (error) {
       console.error("Brief extraction error:", error);
-      setBriefError(error instanceof Error ? error.message : "Failed to extract brief");
+      const message = error instanceof Error ? error.message : "Failed to extract brief";
+      setBriefError(message);
+      toast.error("Extraction failed", message);
     } finally {
       setBriefLoading(false);
     }
@@ -173,17 +177,23 @@ export default function SparkPage() {
       if (!savedBriefId) {
         setSavedBriefId(saved.id);
         setLoadedProjectName(saved.name || "Untitled Project");
+        if (!silent) {
+          toast.success("Brief saved!", "Your project has been saved to your dashboard.");
+        }
+      } else if (!silent) {
+        toast.success("Brief updated", "Changes saved successfully.");
       }
 
       if (!silent) {
         setIsSaved(true);
-        // Reset saved indicator after 2 seconds
         setTimeout(() => setIsSaved(false), 2000);
       }
     } catch (error) {
       console.error("Save brief error:", error);
       if (!silent) {
-        setBriefError(error instanceof Error ? error.message : "Failed to save brief");
+        const message = error instanceof Error ? error.message : "Failed to save brief";
+        toast.error("Save failed", message);
+        setBriefError(message);
       }
     } finally {
       if (!silent) setIsSaving(false);
@@ -284,7 +294,8 @@ export default function SparkPage() {
     } catch (error) {
       console.error("Chat error:", error);
       setTyping(false);
-      // Add error message
+      toast.error("Connection issue", "Please try again or check your connection.");
+      // Add error message in chat
       addMessage(
         "spark",
         "I apologize, but I encountered an issue. Please try again, or check that your connection is stable."
