@@ -2,8 +2,9 @@
 
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useUser, UserButton } from "@clerk/nextjs";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, RotateCcw, FileText } from "lucide-react";
+import { ArrowLeft, RotateCcw, FileText, FolderOpen } from "lucide-react";
 import { useChatStore } from "@/stores/chat-store";
 import { ChatMessage, SparkTypingIndicator } from "@/components/chat/ChatMessage";
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -14,6 +15,7 @@ import type { CreatorType, CreationGoal } from "@gameview/types";
 
 export default function SparkPage() {
   const { user, isLoaded } = useUser();
+  const searchParams = useSearchParams();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Brief panel state
@@ -27,6 +29,10 @@ export default function SparkPage() {
   const [isSaved, setIsSaved] = useState(false);
   const [savedBriefId, setSavedBriefId] = useState<string | null>(null);
 
+  // Loaded project state
+  const [loadedProjectName, setLoadedProjectName] = useState<string | null>(null);
+  const [isLoadingProject, setIsLoadingProject] = useState(false);
+
   const {
     messages,
     isTyping,
@@ -35,6 +41,7 @@ export default function SparkPage() {
     finalizeMessage,
     setTyping,
     clearChat,
+    loadMessages,
     getMessagesForAPI,
   } = useChatStore();
 
@@ -48,6 +55,63 @@ export default function SparkPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
+
+  // Load brief from URL parameter
+  useEffect(() => {
+    const briefId = searchParams.get("brief");
+    if (!briefId || messages.length > 0) return;
+
+    async function loadBrief() {
+      setIsLoadingProject(true);
+      try {
+        const response = await fetch(`/api/briefs/${briefId}`);
+        if (!response.ok) {
+          console.error("Failed to load brief");
+          return;
+        }
+
+        const brief = await response.json();
+
+        // Set the saved brief ID so updates go to this brief
+        setSavedBriefId(brief.id);
+        setLoadedProjectName(brief.name || "Untitled Project");
+
+        // Load conversation history if available
+        if (brief.conversationHistory && brief.conversationHistory.length > 0) {
+          loadMessages(brief.conversationHistory);
+        }
+
+        // Set the extracted brief for the panel
+        setExtractedBrief({
+          name: brief.name,
+          tagline: brief.tagline,
+          experienceType: brief.experienceType,
+          concept: brief.concept,
+          targetAudience: brief.targetAudience,
+          setting: brief.setting,
+          narrative: brief.narrative,
+          interactiveElements: brief.interactiveElements || [],
+          collectibles: brief.collectibles,
+          winCondition: brief.winCondition,
+          duration: brief.duration,
+          difficulty: brief.difficulty,
+          playerMode: brief.playerMode,
+          contentStatus: brief.contentStatus,
+          contentDescription: brief.contentDescription,
+          estimatedScenes: brief.estimatedScenes,
+          completeness: brief.completeness,
+          missingElements: brief.missingElements || [],
+          suggestedNextQuestions: brief.suggestedNextQuestions || [],
+        });
+      } catch (error) {
+        console.error("Error loading brief:", error);
+      } finally {
+        setIsLoadingProject(false);
+      }
+    }
+
+    loadBrief();
+  }, [searchParams, messages.length, loadMessages]);
 
   // Extract brief from conversation
   const extractBrief = useCallback(async () => {
@@ -79,16 +143,20 @@ export default function SparkPage() {
     }
   }, [getMessagesForAPI]);
 
-  // Save brief to database
-  const saveBrief = useCallback(async () => {
+  // Save brief to database (create or update)
+  const saveBrief = useCallback(async (silent = false) => {
     if (!extractedBrief) return;
 
-    setIsSaving(true);
+    if (!silent) setIsSaving(true);
     try {
       const conversationHistory = getMessagesForAPI();
 
-      const response = await fetch("/api/briefs", {
-        method: "POST",
+      // Update existing brief or create new one
+      const url = savedBriefId ? `/api/briefs/${savedBriefId}` : "/api/briefs";
+      const method = savedBriefId ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           brief: extractedBrief,
@@ -101,19 +169,26 @@ export default function SparkPage() {
         throw new Error(error.error || "Failed to save brief");
       }
 
-      const savedBrief = await response.json();
-      setSavedBriefId(savedBrief.id);
-      setIsSaved(true);
+      const saved = await response.json();
+      if (!savedBriefId) {
+        setSavedBriefId(saved.id);
+        setLoadedProjectName(saved.name || "Untitled Project");
+      }
 
-      // Reset saved indicator after 2 seconds
-      setTimeout(() => setIsSaved(false), 2000);
+      if (!silent) {
+        setIsSaved(true);
+        // Reset saved indicator after 2 seconds
+        setTimeout(() => setIsSaved(false), 2000);
+      }
     } catch (error) {
       console.error("Save brief error:", error);
-      setBriefError(error instanceof Error ? error.message : "Failed to save brief");
+      if (!silent) {
+        setBriefError(error instanceof Error ? error.message : "Failed to save brief");
+      }
     } finally {
-      setIsSaving(false);
+      if (!silent) setIsSaving(false);
     }
-  }, [extractedBrief, getMessagesForAPI]);
+  }, [extractedBrief, getMessagesForAPI, savedBriefId]);
 
   // Open brief panel and extract
   const handleOpenBrief = useCallback(() => {
@@ -189,6 +264,23 @@ export default function SparkPage() {
       if (showBriefPanel) {
         extractBrief();
       }
+
+      // Auto-save conversation to existing brief
+      if (savedBriefId) {
+        // Small delay to ensure message is finalized
+        setTimeout(async () => {
+          try {
+            const history = getMessagesForAPI();
+            await fetch(`/api/briefs/${savedBriefId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ conversationHistory: history }),
+            });
+          } catch (err) {
+            console.error("Auto-save failed:", err);
+          }
+        }, 100);
+      }
     } catch (error) {
       console.error("Chat error:", error);
       setTyping(false);
@@ -198,7 +290,7 @@ export default function SparkPage() {
         "I apologize, but I encountered an issue. Please try again, or check that your connection is stable."
       );
     }
-  }, [addMessage, appendToMessage, finalizeMessage, getMessagesForAPI, setTyping, showBriefPanel, extractBrief]);
+  }, [addMessage, appendToMessage, finalizeMessage, getMessagesForAPI, setTyping, showBriefPanel, extractBrief, savedBriefId]);
 
   // Handle clear chat
   const handleClearChat = useCallback(() => {
@@ -207,6 +299,9 @@ export default function SparkPage() {
     setShowBriefPanel(false);
     setSavedBriefId(null);
     setIsSaved(false);
+    setLoadedProjectName(null);
+    // Clear the URL parameter
+    window.history.replaceState({}, "", "/spark");
   }, [clearChat]);
 
   const hasMessages = messages.length > 0;
@@ -236,6 +331,21 @@ export default function SparkPage() {
               <span className="font-bold text-white text-xl tracking-wide">GAME VIEW</span>
               <span className="text-gv-primary-500 font-semibold">Spark</span>
             </div>
+            {/* Project indicator */}
+            {loadedProjectName && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-gv-neutral-800/80 border border-gv-neutral-700 rounded-full">
+                <FolderOpen className="h-3.5 w-3.5 text-gv-primary-500" />
+                <span className="text-sm text-gv-neutral-300 max-w-[200px] truncate">
+                  {loadedProjectName}
+                </span>
+              </div>
+            )}
+            {isLoadingProject && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-gv-neutral-800/50 rounded-full">
+                <div className="w-3 h-3 border-2 border-gv-primary-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-gv-neutral-400">Loading...</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {hasMessages && (

@@ -40,6 +40,7 @@ interface ChatState {
   updateBriefDraft: (updates: Partial<ProjectBriefDraft>) => void;
   setConversationPhase: (phase: ChatState["conversationPhase"]) => void;
   clearChat: () => void;
+  loadMessages: (messages: { role: string; content: string }[]) => void;
   getMessagesForAPI: () => { role: "user" | "assistant"; content: string }[];
 }
 
@@ -101,6 +102,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       briefDraft: {},
       conversationPhase: "welcome",
       streamingMessageId: null,
+    }),
+
+  // Load messages from saved conversation history
+  loadMessages: (savedMessages) =>
+    set({
+      messages: savedMessages.map((msg, index) => ({
+        id: `loaded_${index}_${Date.now()}`,
+        role: msg.role === "assistant" ? "spark" as MessageRole : "user" as MessageRole,
+        content: msg.content,
+        timestamp: new Date(),
+        isStreaming: false,
+      })),
+      conversationPhase: "discovery",
     }),
 
   // Format messages for the API (convert spark -> assistant)
