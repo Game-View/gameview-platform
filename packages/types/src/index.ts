@@ -265,3 +265,160 @@ export interface BoundingBox {
   min: [number, number, number];
   max: [number, number, number];
 }
+
+// ===== User Profile Types (for onboarding) =====
+
+export type CreatorType =
+  | 'musician'
+  | 'content_creator'
+  | 'brand_agency'
+  | 'sports_entertainment'
+  | 'venue_events'
+  | 'other';
+
+export type ExperienceLevel = 'new' | 'some_experience' | 'professional';
+
+export type CreationGoal =
+  | 'fan_experiences'
+  | 'virtual_tours'
+  | 'treasure_hunts'
+  | 'branded_content'
+  | 'still_exploring';
+
+export type FootageStatus = 'have_footage' | 'no_footage' | 'need_guidance';
+
+export interface UserProfile {
+  id: string;
+  clerkId: string;
+  email: string;
+  displayName?: string;
+
+  // Required onboarding fields
+  creatorType: CreatorType;
+  experienceLevel: ExperienceLevel;
+  creationGoals: CreationGoal[];
+  footageStatus: FootageStatus;
+
+  // Optional fields
+  socialLinks?: {
+    website?: string;
+    twitter?: string;
+    instagram?: string;
+    youtube?: string;
+  };
+  teamSize?: 'solo' | 'small_team' | 'agency';
+  referralSource?: string;
+
+  // Metadata
+  profileCompleted: boolean;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
+// Creator type display labels
+export const CREATOR_TYPE_LABELS: Record<CreatorType, string> = {
+  musician: 'Musician / Artist',
+  content_creator: 'Content Creator',
+  brand_agency: 'Brand / Agency',
+  sports_entertainment: 'Sports / Entertainment',
+  venue_events: 'Venue / Events',
+  other: 'Other',
+};
+
+// Experience level display labels
+export const EXPERIENCE_LEVEL_LABELS: Record<ExperienceLevel, string> = {
+  new: 'New to this',
+  some_experience: 'Some experience',
+  professional: 'Professional',
+};
+
+// Creation goals display labels
+export const CREATION_GOAL_LABELS: Record<CreationGoal, string> = {
+  fan_experiences: 'Fan experiences',
+  virtual_tours: 'Virtual tours',
+  treasure_hunts: 'Treasure hunts',
+  branded_content: 'Branded content',
+  still_exploring: 'Still exploring',
+};
+
+// Footage status display labels
+export const FOOTAGE_STATUS_LABELS: Record<FootageStatus, string> = {
+  have_footage: 'Yes, I have footage',
+  no_footage: 'No, not yet',
+  need_guidance: 'I need guidance on capture',
+};
+
+// ===== Project Brief Types (for Spark AI) =====
+
+export type ExperienceType =
+  | 'treasure_hunt'
+  | 'virtual_tour'
+  | 'interactive_story'
+  | 'competition'
+  | 'brand_experience';
+
+export type BriefStatus = 'draft' | 'in_progress' | 'approved' | 'archived';
+
+export interface ProjectBrief {
+  id: string;
+  userId: string;
+
+  // Basic info
+  name: string;
+  tagline?: string;
+  experienceType?: ExperienceType;
+
+  // Overview
+  duration?: string; // e.g., "1-3 hours"
+  difficulty?: 'easy' | 'medium' | 'hard' | 'progressive';
+  playerMode?: 'single' | 'multiplayer' | 'competitive';
+
+  // Story
+  narrative?: string;
+
+  // Gameplay
+  gameplayPhases?: {
+    phase: number;
+    description: string;
+  }[];
+
+  // Venues
+  venues?: {
+    name: string;
+    location?: string;
+    difficulty?: string;
+    content?: string;
+  }[];
+
+  // Interactive elements
+  collectibles?: {
+    type: string;
+    count?: number;
+    hidingSpots?: string;
+  };
+
+  // Win condition
+  winCondition?: string;
+
+  // Rewards
+  rewards?: {
+    completion?: string;
+    grandPrize?: string;
+    social?: string;
+  };
+
+  // Technical requirements
+  technicalRequirements?: {
+    videoCapture?: string;
+    scenes?: number;
+    customObjects?: string;
+    integrations?: string[];
+  };
+
+  // Metadata
+  status: BriefStatus;
+  conversationId?: string; // Link to Spark chat
+  createdAt: string;
+  updatedAt: string;
+}
+
