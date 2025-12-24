@@ -72,6 +72,9 @@ export interface StoredObject {
   updatedAt: string;
 }
 
+// Import interaction types
+import type { Interaction } from "./interactions";
+
 // Placed object instance in a scene
 export interface PlacedObject {
   instanceId: string;
@@ -81,6 +84,7 @@ export interface PlacedObject {
   transform: ObjectTransform;
   interactionType: InteractionType | null;
   metadata: ObjectMetadata;
+  interactions?: Interaction[];
 }
 
 // Input for creating a new object

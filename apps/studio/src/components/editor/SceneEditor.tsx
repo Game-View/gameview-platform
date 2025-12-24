@@ -15,6 +15,7 @@ import * as THREE from "three";
 import { Loader2 } from "lucide-react";
 import { useEditorStore } from "@/stores/editor-store";
 import type { PlacedObject, ObjectTransform } from "@/lib/objects";
+import { TriggerZoneVisualization } from "./TriggerZoneVisualization";
 
 interface SceneEditorProps {
   splatUrl?: string;
@@ -281,6 +282,13 @@ const PlacedObjectMesh = ({ object, isSelected, onSelect, onHover, ref }: Placed
           <meshBasicMaterial color="#4f46e5" wireframe transparent opacity={0.5} />
         </mesh>
       )}
+
+      {/* Trigger zone visualization */}
+      <TriggerZoneVisualization
+        interactions={object.interactions || []}
+        position={{ x: 0, y: 0, z: 0 }}
+        isSelected={isSelected}
+      />
     </group>
   );
 };

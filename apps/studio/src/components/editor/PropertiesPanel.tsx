@@ -13,22 +13,9 @@ import {
   Settings2,
 } from "lucide-react";
 import { useEditorStore, type TransformMode } from "@/stores/editor-store";
-import type { ObjectTransform, InteractionType } from "@/lib/objects";
-
-const interactionTypes: { value: InteractionType | "none"; label: string }[] = [
-  { value: "none", label: "None (Static)" },
-  { value: "collectible", label: "Collectible" },
-  { value: "trigger", label: "Trigger Zone" },
-  { value: "physics", label: "Physics Object" },
-  { value: "animation", label: "Animated" },
-  { value: "audio", label: "Audio Source" },
-  { value: "teleport", label: "Teleport" },
-  { value: "door", label: "Door" },
-  { value: "switch", label: "Switch" },
-  { value: "pickup", label: "Pickup" },
-  { value: "checkpoint", label: "Checkpoint" },
-  { value: "spawn", label: "Spawn Point" },
-];
+import { InteractionPanel } from "./InteractionPanel";
+import type { ObjectTransform } from "@/lib/objects";
+import type { Interaction } from "@/lib/interactions";
 
 interface PropertiesPanelProps {
   className?: string;
@@ -53,7 +40,7 @@ export function PropertiesPanel({ className = "", onClose }: PropertiesPanelProp
 
   const [expandedSections, setExpandedSections] = useState({
     transform: true,
-    interaction: true,
+    interactions: true,
     snap: false,
   });
 
@@ -103,8 +90,8 @@ export function PropertiesPanel({ className = "", onClose }: PropertiesPanelProp
     updateObject(selectedObject.instanceId, { name });
   };
 
-  const handleInteractionChange = (interactionType: InteractionType | null) => {
-    updateObject(selectedObject.instanceId, { interactionType });
+  const handleInteractionsChange = (interactions: Interaction[]) => {
+    updateObject(selectedObject.instanceId, { interactions });
   };
 
   return (
@@ -267,38 +254,31 @@ export function PropertiesPanel({ className = "", onClose }: PropertiesPanelProp
         )}
       </div>
 
-      {/* Interaction Section */}
+      {/* Interactions Section */}
       <div className="border-b border-gv-neutral-800">
         <button
-          onClick={() => toggleSection("interaction")}
+          onClick={() => toggleSection("interactions")}
           className="w-full px-4 py-3 flex items-center justify-between text-sm font-medium text-white hover:bg-gv-neutral-800/50"
         >
-          <span>Interaction</span>
-          {expandedSections.interaction ? (
+          <span className="flex items-center gap-2">
+            Interactions
+            {selectedObject.interactions && selectedObject.interactions.length > 0 && (
+              <span className="text-xs px-1.5 py-0.5 bg-gv-primary-500/20 text-gv-primary-400 rounded">
+                {selectedObject.interactions.length}
+              </span>
+            )}
+          </span>
+          {expandedSections.interactions ? (
             <ChevronDown className="h-4 w-4 text-gv-neutral-400" />
           ) : (
             <ChevronRight className="h-4 w-4 text-gv-neutral-400" />
           )}
         </button>
-        {expandedSections.interaction && (
-          <div className="px-4 pb-4">
-            <select
-              value={selectedObject.interactionType || "none"}
-              onChange={(e) =>
-                handleInteractionChange(e.target.value === "none" ? null : (e.target.value as InteractionType))
-              }
-              className="w-full px-3 py-2 bg-gv-neutral-800 border border-gv-neutral-700 rounded-gv text-white focus:outline-none focus:ring-2 focus:ring-gv-primary-500"
-            >
-              {interactionTypes.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-gv-neutral-500 mt-2">
-              Defines how players can interact with this object
-            </p>
-          </div>
+        {expandedSections.interactions && (
+          <InteractionPanel
+            interactions={selectedObject.interactions || []}
+            onChange={handleInteractionsChange}
+          />
         )}
       </div>
 
