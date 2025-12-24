@@ -495,10 +495,13 @@ export default function BuildPage() {
                   <p className="text-gv-neutral-300 mb-4">
                     Your 3D scene has been processed and is ready to view.
                   </p>
-                  <button className="flex items-center gap-2 px-6 py-3 bg-gv-primary-500 hover:bg-gv-primary-600 text-white font-medium rounded-gv transition-colors">
+                  <Link
+                    href={`/project/${briefId}/scene/${selectedScene.id}`}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gv-primary-500 hover:bg-gv-primary-600 text-white font-medium rounded-gv transition-colors"
+                  >
                     <Eye className="h-5 w-5" />
                     View Scene
-                  </button>
+                  </Link>
                 </div>
               )}
 
