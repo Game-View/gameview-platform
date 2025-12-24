@@ -1,0 +1,75 @@
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
+
+// Public routes that don't require authentication
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/api/webhooks(.*)",
+]);
+
+// Routes that require a completed profile
+const requiresProfile = createRouteMatcher([
+  "/dashboard(.*)",
+  "/projects(.*)",
+  "/spark(.*)",
+  "/settings(.*)",
+]);
+
+// Routes that are part of onboarding (don't redirect from these)
+const isOnboardingRoute = createRouteMatcher(["/onboarding(.*)"]);
+
+// API routes (skip profile check)
+const isApiRoute = createRouteMatcher(["/api(.*)"]);
+
+export default clerkMiddleware(async (auth, req) => {
+  const { userId } = await auth();
+
+  // Allow public routes
+  if (isPublicRoute(req)) {
+    return NextResponse.next();
+  }
+
+  // Require authentication for all other routes
+  if (!userId) {
+    const signInUrl = new URL("/sign-in", req.url);
+    signInUrl.searchParams.set("redirect_url", req.url);
+    return NextResponse.redirect(signInUrl);
+  }
+
+  // Skip profile check for API routes and onboarding
+  if (isApiRoute(req) || isOnboardingRoute(req)) {
+    return NextResponse.next();
+  }
+
+  // Check if profile is required but not completed
+  if (requiresProfile(req)) {
+    try {
+      // Get user from Clerk to check metadata
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      const profileCompleted = user.unsafeMetadata?.profileCompleted as boolean | undefined;
+
+      if (!profileCompleted) {
+        // Redirect to onboarding
+        return NextResponse.redirect(new URL("/onboarding", req.url));
+      }
+    } catch (error) {
+      console.error("Error checking profile status:", error);
+      // On error, allow through but log it
+    }
+  }
+
+  return NextResponse.next();
+});
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // Always run for API routes
+    "/(api|trpc)(.*)",
+  ],
+};

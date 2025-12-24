@@ -145,14 +145,37 @@ export default function OnboardingPage() {
     }
   };
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleSubmit = async () => {
     if (!user || !creatorType || !experienceLevel || !footageStatus) return;
 
     setIsSubmitting(true);
+    setError(null);
 
     try {
-      // TODO: Save to Supabase
-      // For now, just save to user metadata via Clerk
+      // Save to Supabase via API
+      const response = await fetch("/api/profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: user.primaryEmailAddress?.emailAddress,
+          displayName: user.fullName || user.firstName,
+          creatorType,
+          experienceLevel,
+          creationGoals,
+          footageStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to save profile");
+      }
+
+      // Also update Clerk metadata for quick checks
       await user.update({
         unsafeMetadata: {
           profileCompleted: true,
@@ -169,9 +192,9 @@ export default function OnboardingPage() {
       } else {
         router.push("/dashboard");
       }
-    } catch (error) {
-      console.error("Failed to save profile:", error);
-      // TODO: Show error toast
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+      setError(err instanceof Error ? err.message : "Failed to save profile. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -352,6 +375,13 @@ export default function OnboardingPage() {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="mt-6 p-4 bg-gv-error/10 border border-gv-error/30 rounded-gv text-gv-error text-sm text-center">
+              {error}
             </div>
           )}
 
