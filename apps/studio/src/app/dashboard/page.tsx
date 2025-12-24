@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useUser, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import {
@@ -11,10 +11,15 @@ import {
   Clock,
   Target,
   Trash2,
+  Archive,
   MoreVertical,
   Loader2,
+  Search,
+  X,
 } from "lucide-react";
 import type { StoredBrief } from "@/lib/briefs";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { toast } from "@/stores/toast-store";
 
 const EXPERIENCE_TYPE_LABELS: Record<string, string> = {
   treasure_hunt: "Treasure Hunt",
@@ -28,13 +33,36 @@ const STATUS_COLORS: Record<string, string> = {
   draft: "bg-gv-neutral-600",
   in_progress: "bg-gv-warning-500",
   ready: "bg-gv-success",
+  archived: "bg-gv-neutral-500",
 };
+
+type FilterStatus = "all" | "draft" | "in_progress" | "ready" | "archived";
+
+const FILTER_OPTIONS: { value: FilterStatus; label: string }[] = [
+  { value: "all", label: "All Projects" },
+  { value: "draft", label: "Drafts" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "ready", label: "Ready" },
+  { value: "archived", label: "Archived" },
+];
 
 export default function DashboardPage() {
   const { user } = useUser();
   const [briefs, setBriefs] = useState<StoredBrief[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+
+  // Delete confirmation modal state
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    briefId: string | null;
+    briefName: string;
+  }>({ isOpen: false, briefId: null, briefName: "" });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const metadata = user?.unsafeMetadata as {
     profileCompleted?: boolean;
@@ -52,6 +80,7 @@ export default function DashboardPage() {
         }
       } catch (error) {
         console.error("Failed to fetch briefs:", error);
+        toast.error("Failed to load projects", "Please try refreshing the page.");
       } finally {
         setIsLoading(false);
       }
@@ -59,17 +88,102 @@ export default function DashboardPage() {
     fetchBriefs();
   }, []);
 
-  // Delete (archive) a brief
-  const handleDelete = async (id: string) => {
+  // Filter and search briefs
+  const filteredBriefs = useMemo(() => {
+    return briefs.filter((brief) => {
+      // Filter by status
+      if (filterStatus !== "all" && brief.status !== filterStatus) {
+        return false;
+      }
+
+      // Filter by search query
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const name = (brief.name || "").toLowerCase();
+        const tagline = (brief.tagline || "").toLowerCase();
+        const concept = (brief.concept || "").toLowerCase();
+
+        return name.includes(query) || tagline.includes(query) || concept.includes(query);
+      }
+
+      return true;
+    });
+  }, [briefs, filterStatus, searchQuery]);
+
+  // Count by status for tabs
+  const statusCounts = useMemo(() => {
+    const counts: Record<FilterStatus, number> = {
+      all: briefs.length,
+      draft: 0,
+      in_progress: 0,
+      ready: 0,
+      archived: 0,
+    };
+    briefs.forEach((brief) => {
+      if (brief.status in counts) {
+        counts[brief.status as FilterStatus]++;
+      }
+    });
+    return counts;
+  }, [briefs]);
+
+  // Open delete confirmation
+  const openDeleteModal = (brief: StoredBrief) => {
+    setDeleteModal({
+      isOpen: true,
+      briefId: brief.id,
+      briefName: brief.name || "Untitled Project",
+    });
+    setActiveMenu(null);
+  };
+
+  // Delete (permanently remove) a brief
+  const handleDelete = async () => {
+    if (!deleteModal.briefId) return;
+
+    setIsDeleting(true);
     try {
-      const response = await fetch(`/api/briefs/${id}`, {
+      const response = await fetch(`/api/briefs/${deleteModal.briefId}`, {
         method: "DELETE",
       });
       if (response.ok) {
-        setBriefs((prev) => prev.filter((b) => b.id !== id));
+        setBriefs((prev) => prev.filter((b) => b.id !== deleteModal.briefId));
+        toast.success("Project deleted", `"${deleteModal.briefName}" has been removed.`);
+      } else {
+        throw new Error("Failed to delete");
       }
     } catch (error) {
       console.error("Failed to delete brief:", error);
+      toast.error("Delete failed", "Could not delete the project. Please try again.");
+    } finally {
+      setIsDeleting(false);
+      setDeleteModal({ isOpen: false, briefId: null, briefName: "" });
+    }
+  };
+
+  // Archive a brief
+  const handleArchive = async (brief: StoredBrief) => {
+    const newStatus = brief.status === "archived" ? "draft" : "archived";
+    try {
+      const response = await fetch(`/api/briefs/${brief.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (response.ok) {
+        setBriefs((prev) =>
+          prev.map((b) => (b.id === brief.id ? { ...b, status: newStatus } : b))
+        );
+        toast.success(
+          newStatus === "archived" ? "Project archived" : "Project restored",
+          newStatus === "archived"
+            ? `"${brief.name || "Untitled"}" moved to archive.`
+            : `"${brief.name || "Untitled"}" restored to drafts.`
+        );
+      }
+    } catch (error) {
+      console.error("Failed to archive brief:", error);
+      toast.error("Action failed", "Could not update the project. Please try again.");
     }
     setActiveMenu(null);
   };
@@ -165,26 +279,110 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Recent Projects / Briefs */}
+        {/* Projects Section */}
         <div>
-          <h2 className="text-xl font-semibold text-white mb-4">Your Projects</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <h2 className="text-xl font-semibold text-white">Your Projects</h2>
+
+            {/* Search */}
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gv-neutral-500" />
+              <input
+                type="text"
+                placeholder="Search projects..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-8 py-2 bg-gv-neutral-800 border border-gv-neutral-700 rounded-gv text-white text-sm placeholder:text-gv-neutral-500 focus:outline-none focus:border-gv-primary-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gv-neutral-500 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Status Filter Tabs */}
+          <div className="flex gap-1 mb-6 overflow-x-auto pb-2">
+            {FILTER_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setFilterStatus(option.value)}
+                className={`px-4 py-2 text-sm font-medium rounded-gv whitespace-nowrap transition-colors ${
+                  filterStatus === option.value
+                    ? "bg-gv-primary-500/20 text-gv-primary-400 border border-gv-primary-500/30"
+                    : "text-gv-neutral-400 hover:text-white hover:bg-gv-neutral-800"
+                }`}
+              >
+                {option.label}
+                {statusCounts[option.value] > 0 && (
+                  <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-gv-neutral-700">
+                    {statusCounts[option.value]}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
 
           {isLoading ? (
             <div className="bg-gv-neutral-800/50 border border-gv-neutral-700 rounded-gv-lg p-12 flex items-center justify-center">
               <Loader2 className="h-6 w-6 text-gv-neutral-400 animate-spin" />
             </div>
-          ) : briefs.length === 0 ? (
+          ) : filteredBriefs.length === 0 ? (
             <div className="bg-gv-neutral-800/50 border border-gv-neutral-700 rounded-gv-lg p-12 text-center">
-              <p className="text-gv-neutral-500">
-                No projects yet. Start with Spark to create your first experience!
-              </p>
+              {searchQuery ? (
+                <>
+                  <Search className="h-12 w-12 text-gv-neutral-600 mx-auto mb-4" />
+                  <p className="text-gv-neutral-400 mb-2">
+                    No projects match &ldquo;{searchQuery}&rdquo;
+                  </p>
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="text-gv-primary-500 hover:text-gv-primary-400 text-sm"
+                  >
+                    Clear search
+                  </button>
+                </>
+              ) : filterStatus !== "all" ? (
+                <>
+                  <FolderOpen className="h-12 w-12 text-gv-neutral-600 mx-auto mb-4" />
+                  <p className="text-gv-neutral-400 mb-2">
+                    No {filterStatus.replace("_", " ")} projects
+                  </p>
+                  <button
+                    onClick={() => setFilterStatus("all")}
+                    className="text-gv-primary-500 hover:text-gv-primary-400 text-sm"
+                  >
+                    View all projects
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-12 w-12 text-gv-neutral-600 mx-auto mb-4" />
+                  <p className="text-gv-neutral-400 mb-4">
+                    No projects yet. Start with Spark to create your first experience!
+                  </p>
+                  <Link
+                    href="/spark"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gv-primary-500 hover:bg-gv-primary-600 text-white rounded-gv text-sm font-medium transition-colors"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Start with Spark
+                  </Link>
+                </>
+              )}
             </div>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {briefs.map((brief) => (
+              {filteredBriefs.map((brief) => (
                 <div
                   key={brief.id}
-                  className="bg-gv-neutral-800/50 border border-gv-neutral-700 rounded-gv-lg p-5 hover:border-gv-neutral-600 transition-all relative group"
+                  className={`bg-gv-neutral-800/50 border border-gv-neutral-700 rounded-gv-lg p-5 hover:border-gv-neutral-600 transition-all relative group ${
+                    brief.status === "archived" ? "opacity-60" : ""
+                  }`}
                 >
                   {/* Menu Button */}
                   <div className="absolute top-3 right-3">
@@ -197,9 +395,16 @@ export default function DashboardPage() {
 
                     {/* Dropdown Menu */}
                     {activeMenu === brief.id && (
-                      <div className="absolute right-0 top-8 bg-gv-neutral-800 border border-gv-neutral-700 rounded-gv shadow-lg z-10 py-1 min-w-[140px]">
+                      <div className="absolute right-0 top-8 bg-gv-neutral-800 border border-gv-neutral-700 rounded-gv shadow-lg z-10 py-1 min-w-[160px]">
                         <button
-                          onClick={() => handleDelete(brief.id)}
+                          onClick={() => handleArchive(brief)}
+                          className="w-full px-4 py-2 text-left text-sm text-gv-neutral-300 hover:bg-gv-neutral-700 flex items-center gap-2"
+                        >
+                          <Archive className="h-4 w-4" />
+                          {brief.status === "archived" ? "Restore" : "Archive"}
+                        </button>
+                        <button
+                          onClick={() => openDeleteModal(brief)}
                           className="w-full px-4 py-2 text-left text-sm text-gv-error hover:bg-gv-neutral-700 flex items-center gap-2"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -272,6 +477,18 @@ export default function DashboardPage() {
           )}
         </div>
       </main>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, briefId: null, briefName: "" })}
+        onConfirm={handleDelete}
+        title="Delete Project"
+        message={`Are you sure you want to delete "${deleteModal.briefName}"? This action cannot be undone.`}
+        confirmLabel="Delete Project"
+        confirmVariant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }
