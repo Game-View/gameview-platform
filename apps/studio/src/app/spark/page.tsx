@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useUser, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { ArrowLeft, RotateCcw, FileText } from "lucide-react";
@@ -18,8 +18,11 @@ export default function SparkPage() {
     messages,
     isTyping,
     addMessage,
+    appendToMessage,
+    finalizeMessage,
     setTyping,
     clearChat,
+    getMessagesForAPI,
   } = useChatStore();
 
   // Get user profile from Clerk metadata
@@ -33,19 +36,79 @@ export default function SparkPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = useCallback(async (content: string) => {
     // Add user message
     addMessage("user", content);
     setTyping(true);
 
-    // Simulate Spark response (will be replaced with Claude API in Sprint 3)
-    setTimeout(() => {
-      // For now, Spark gives contextual placeholder responses
-      const sparkResponse = generateSparkResponse(content, metadata?.creatorType);
-      addMessage("spark", sparkResponse);
+    try {
+      // Get conversation history for context
+      const conversationMessages = getMessagesForAPI();
+
+      // Add the new user message
+      conversationMessages.push({ role: "user", content });
+
+      // Call the streaming API
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ messages: conversationMessages }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to get response");
+      }
+
+      // Create a placeholder message for streaming
+      const sparkMessageId = addMessage("spark", "");
       setTyping(false);
-    }, 1500);
-  };
+
+      // Read the stream
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") {
+              finalizeMessage(sparkMessageId);
+              break;
+            }
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.text) {
+                appendToMessage(sparkMessageId, parsed.text);
+              }
+            } catch {
+              // Skip malformed JSON
+            }
+          }
+        }
+      }
+
+      finalizeMessage(sparkMessageId);
+    } catch (error) {
+      console.error("Chat error:", error);
+      setTyping(false);
+      // Add error message
+      addMessage(
+        "spark",
+        "I apologize, but I encountered an issue. Please try again, or check that your connection is stable."
+      );
+    }
+  }, [addMessage, appendToMessage, finalizeMessage, getMessagesForAPI, setTyping]);
 
   const hasMessages = messages.length > 0;
 
@@ -138,91 +201,4 @@ export default function SparkPage() {
       />
     </div>
   );
-}
-
-// Temporary placeholder response generator (will be replaced by Claude API)
-function generateSparkResponse(userMessage: string, creatorType?: CreatorType): string {
-  const lowerMessage = userMessage.toLowerCase();
-
-  // Context-aware intro
-  const creatorContext = creatorType
-    ? {
-        musician: "your music and artistry",
-        content_creator: "your content and audience",
-        brand_agency: "your brand's story",
-        sports_entertainment: "your fans and their energy",
-        venue_events: "your venue's unique atmosphere",
-        other: "your creative vision",
-      }[creatorType]
-    : "your creative vision";
-
-  // Simple pattern matching for demo
-  if (lowerMessage.includes("fan experience") || lowerMessage.includes("audience")) {
-    return `I love that you want to create a deeper connection with your audience! Fan experiences are all about making people feel like they're part of something special.
-
-Let me ask you a few questions to understand your vision better:
-
-1. **Where will this experience take place?** Is there a specific venue, location, or setting you have in mind?
-
-2. **What's the main emotion you want fans to feel?** Excitement, nostalgia, wonder, connection?
-
-3. **Do you have any existing content** (photos, videos, music) that could be part of this experience?
-
-Take your time - I'm here to help you shape ${creatorContext} into something unforgettable.`;
-  }
-
-  if (lowerMessage.includes("virtual tour") || lowerMessage.includes("tour")) {
-    return `Virtual tours are a fantastic way to let people explore spaces from anywhere in the world!
-
-To help you design the perfect tour, I'd like to know:
-
-1. **What location do you want to feature?** A venue, studio, museum, or somewhere else?
-
-2. **What story do you want to tell** as people move through the space?
-
-3. **Are there any interactive elements** you'd like to include - like hidden items, audio guides, or clickable hotspots?
-
-This is going to be a great way to showcase ${creatorContext}!`;
-  }
-
-  if (lowerMessage.includes("treasure hunt") || lowerMessage.includes("scavenger")) {
-    return `Treasure hunts add such an exciting layer of interactivity! People love the thrill of discovery.
-
-Let's figure out the basics:
-
-1. **What's the setting?** Indoor, outdoor, or a hybrid experience?
-
-2. **What are players searching for?** Physical items, digital collectibles, clues, or all of the above?
-
-3. **Is there a narrative or theme** tying the hunt together?
-
-We can make this tied to ${creatorContext} in really creative ways!`;
-  }
-
-  if (lowerMessage.includes("not sure") || lowerMessage.includes("explore") || lowerMessage.includes("help me")) {
-    return `No problem at all - that's exactly what I'm here for! Sometimes the best ideas come from just talking things through.
-
-Let me ask you a few open-ended questions:
-
-1. **What excites you most** about creating interactive experiences?
-
-2. **Is there something your audience has been asking for** that you haven't been able to deliver yet?
-
-3. **Think of an experience you've had** (at a concert, museum, event) that really stuck with you. What made it memorable?
-
-There's no wrong answer - we're just exploring possibilities together!`;
-  }
-
-  // Default response
-  return `That sounds like an interesting direction! I want to make sure I fully understand ${creatorContext}.
-
-Can you tell me more about:
-
-1. **Who is this experience for?** Your existing fans, new audiences, or a specific group?
-
-2. **What's the main goal?** Engagement, education, promotion, or something else?
-
-3. **Do you have a rough idea of the scope?** Something quick and simple, or a more elaborate experience?
-
-The more context you share, the better I can help you shape this into something amazing!`;
 }
