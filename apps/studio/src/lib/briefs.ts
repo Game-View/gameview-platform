@@ -1,5 +1,6 @@
 import { createServerClient } from "./supabase";
 import type { ExtractedBrief } from "@/app/api/brief/extract/route";
+import type { GameConfig } from "./game-logic";
 
 export interface StoredBrief {
   id: string;
@@ -23,6 +24,7 @@ export interface StoredBrief {
   completeness: number;
   missingElements: string[];
   conversationHistory: { role: string; content: string; timestamp: string }[];
+  gameConfig: GameConfig | null;
   status: "draft" | "in_progress" | "ready" | "archived";
   createdAt: string;
   updatedAt: string;
@@ -37,6 +39,7 @@ export interface CreateBriefInput {
 export interface UpdateBriefInput {
   brief?: Partial<ExtractedBrief>;
   conversationHistory?: { role: string; content: string }[];
+  gameConfig?: GameConfig;
   status?: StoredBrief["status"];
 }
 
@@ -160,6 +163,10 @@ export async function updateBrief(
       ...msg,
       timestamp: new Date().toISOString(),
     }));
+  }
+
+  if (input.gameConfig !== undefined) {
+    updates.gameConfig = input.gameConfig;
   }
 
   if (input.status) {

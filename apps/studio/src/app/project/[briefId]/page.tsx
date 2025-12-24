@@ -17,8 +17,11 @@ import {
   Settings,
   Eye,
   ChevronRight,
+  X,
 } from "lucide-react";
 import { toast } from "@/stores/toast-store";
+import { GameLogicPanel } from "@/components/game-logic";
+import { defaultGameConfig, type GameConfig } from "@/lib/game-logic";
 import type { StoredScene, VideoFile, ProcessingStatus } from "@/lib/scenes";
 
 interface StoredBrief {
@@ -26,6 +29,7 @@ interface StoredBrief {
   name: string | null;
   tagline: string | null;
   status: string;
+  gameConfig: GameConfig | null;
 }
 
 export default function BuildPage() {
@@ -42,6 +46,9 @@ export default function BuildPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isCreatingScene, setIsCreatingScene] = useState(false);
   const [newSceneName, setNewSceneName] = useState("");
+  const [showGameLogic, setShowGameLogic] = useState(false);
+  const [gameConfig, setGameConfig] = useState<GameConfig>(defaultGameConfig);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
 
   // Fetch brief and scenes
   useEffect(() => {
@@ -57,6 +64,11 @@ export default function BuildPage() {
         }
         const briefData = await briefRes.json();
         setBrief(briefData);
+
+        // Load game config if exists
+        if (briefData.gameConfig) {
+          setGameConfig(briefData.gameConfig);
+        }
 
         // Fetch scenes for this brief
         const scenesRes = await fetch(`/api/scenes?briefId=${briefId}`);
@@ -305,6 +317,32 @@ export default function BuildPage() {
     }
   };
 
+  // Handle game config changes with auto-save
+  const handleGameConfigChange = useCallback(
+    async (newConfig: GameConfig) => {
+      setGameConfig(newConfig);
+
+      // Debounced auto-save
+      setIsSavingConfig(true);
+      try {
+        const res = await fetch(`/api/briefs/${briefId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ gameConfig: newConfig }),
+        });
+
+        if (!res.ok) throw new Error("Failed to save");
+        toast.success("Saved", "Game logic saved");
+      } catch (error) {
+        console.error("Failed to save game config:", error);
+        toast.error("Error", "Failed to save game logic");
+      } finally {
+        setIsSavingConfig(false);
+      }
+    },
+    [briefId]
+  );
+
   // Format file size
   const formatSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -363,7 +401,15 @@ export default function BuildPage() {
             >
               Edit Brief
             </Link>
-            <button className="p-2 text-gv-neutral-400 hover:text-white transition-colors">
+            <button
+              onClick={() => setShowGameLogic(true)}
+              className={`p-2 transition-colors ${
+                showGameLogic
+                  ? "text-gv-primary-400"
+                  : "text-gv-neutral-400 hover:text-white"
+              }`}
+              title="Game Logic Settings"
+            >
               <Settings className="h-5 w-5" />
             </button>
           </div>
@@ -635,6 +681,42 @@ export default function BuildPage() {
             </div>
           )}
         </main>
+
+        {/* Game Logic Panel (Slide-out) */}
+        <aside
+          className={`fixed top-0 right-0 h-full w-96 bg-gv-neutral-900 border-l border-gv-neutral-800 shadow-2xl transform transition-transform duration-300 z-50 ${
+            showGameLogic ? "translate-x-0" : "translate-x-full"
+          }`}
+        >
+          <div className="flex items-center justify-between p-4 border-b border-gv-neutral-800">
+            <div className="flex items-center gap-2">
+              <Settings className="h-5 w-5 text-gv-primary-400" />
+              <h2 className="text-lg font-semibold text-white">Game Logic</h2>
+              {isSavingConfig && (
+                <Loader2 className="h-4 w-4 text-gv-neutral-400 animate-spin" />
+              )}
+            </div>
+            <button
+              onClick={() => setShowGameLogic(false)}
+              className="p-2 text-gv-neutral-400 hover:text-white transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <GameLogicPanel
+            config={gameConfig}
+            onChange={handleGameConfigChange}
+            className="h-[calc(100%-64px)]"
+          />
+        </aside>
+
+        {/* Backdrop for Game Logic Panel */}
+        {showGameLogic && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40"
+            onClick={() => setShowGameLogic(false)}
+          />
+        )}
       </div>
     </div>
   );
