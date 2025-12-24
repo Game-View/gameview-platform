@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   Loader2,
   RefreshCw,
+  Save,
+  Check,
 } from "lucide-react";
 import type { ExtractedBrief } from "@/app/api/brief/extract/route";
 
@@ -22,6 +24,10 @@ interface BriefPanelProps {
   error: string | null;
   onClose: () => void;
   onRefresh: () => void;
+  onSave?: () => void;
+  isSaving?: boolean;
+  isSaved?: boolean;
+  savedBriefId?: string | null;
 }
 
 const EXPERIENCE_TYPE_LABELS: Record<string, string> = {
@@ -45,7 +51,17 @@ const PLAYER_MODE_LABELS: Record<string, string> = {
   competitive: "Competitive",
 };
 
-export function BriefPanel({ brief, isLoading, error, onClose, onRefresh }: BriefPanelProps) {
+export function BriefPanel({
+  brief,
+  isLoading,
+  error,
+  onClose,
+  onRefresh,
+  onSave,
+  isSaving,
+  isSaved,
+  savedBriefId,
+}: BriefPanelProps) {
   return (
     <div className="h-full flex flex-col bg-gv-neutral-900 border-l border-gv-neutral-800">
       {/* Header */}
@@ -53,6 +69,11 @@ export function BriefPanel({ brief, isLoading, error, onClose, onRefresh }: Brie
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-gv-primary-500" />
           <h2 className="font-semibold text-white">Project Brief</h2>
+          {savedBriefId && (
+            <span className="px-2 py-0.5 bg-gv-success/10 text-gv-success text-xs rounded-full">
+              Saved
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -269,11 +290,40 @@ export function BriefPanel({ brief, isLoading, error, onClose, onRefresh }: Brie
       </div>
 
       {/* Footer */}
-      {brief && brief.completeness >= 80 && (
-        <div className="p-4 border-t border-gv-neutral-800">
-          <button className="w-full py-3 bg-gv-primary-500 hover:bg-gv-primary-600 text-white rounded-gv font-medium transition-colors">
-            Start Building Experience
-          </button>
+      {brief && (
+        <div className="p-4 border-t border-gv-neutral-800 space-y-3">
+          {/* Save Button */}
+          {onSave && !savedBriefId && (
+            <button
+              onClick={onSave}
+              disabled={isSaving}
+              className="w-full py-3 bg-gv-neutral-700 hover:bg-gv-neutral-600 text-white rounded-gv font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : isSaved ? (
+                <>
+                  <Check className="h-4 w-4 text-gv-success" />
+                  Saved!
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Save Brief
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Build Experience CTA */}
+          {brief.completeness >= 80 && (
+            <button className="w-full py-3 bg-gv-primary-500 hover:bg-gv-primary-600 text-white rounded-gv font-medium transition-colors">
+              Start Building Experience
+            </button>
+          )}
         </div>
       )}
     </div>

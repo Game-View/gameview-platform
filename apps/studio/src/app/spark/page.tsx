@@ -22,6 +22,11 @@ export default function SparkPage() {
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefError, setBriefError] = useState<string | null>(null);
 
+  // Save state
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [savedBriefId, setSavedBriefId] = useState<string | null>(null);
+
   const {
     messages,
     isTyping,
@@ -73,6 +78,42 @@ export default function SparkPage() {
       setBriefLoading(false);
     }
   }, [getMessagesForAPI]);
+
+  // Save brief to database
+  const saveBrief = useCallback(async () => {
+    if (!extractedBrief) return;
+
+    setIsSaving(true);
+    try {
+      const conversationHistory = getMessagesForAPI();
+
+      const response = await fetch("/api/briefs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brief: extractedBrief,
+          conversationHistory,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to save brief");
+      }
+
+      const savedBrief = await response.json();
+      setSavedBriefId(savedBrief.id);
+      setIsSaved(true);
+
+      // Reset saved indicator after 2 seconds
+      setTimeout(() => setIsSaved(false), 2000);
+    } catch (error) {
+      console.error("Save brief error:", error);
+      setBriefError(error instanceof Error ? error.message : "Failed to save brief");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [extractedBrief, getMessagesForAPI]);
 
   // Open brief panel and extract
   const handleOpenBrief = useCallback(() => {
@@ -164,6 +205,8 @@ export default function SparkPage() {
     clearChat();
     setExtractedBrief(null);
     setShowBriefPanel(false);
+    setSavedBriefId(null);
+    setIsSaved(false);
   }, [clearChat]);
 
   const hasMessages = messages.length > 0;
@@ -278,6 +321,10 @@ export default function SparkPage() {
               error={briefError}
               onClose={() => setShowBriefPanel(false)}
               onRefresh={extractBrief}
+              onSave={saveBrief}
+              isSaving={isSaving}
+              isSaved={isSaved}
+              savedBriefId={savedBriefId}
             />
           )}
         </div>
