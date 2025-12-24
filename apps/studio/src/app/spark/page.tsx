@@ -304,6 +304,36 @@ export default function SparkPage() {
     window.history.replaceState({}, "", "/spark");
   }, [clearChat]);
 
+  // Handle brief field updates from edit mode
+  const handleBriefUpdate = useCallback(
+    async (updates: Partial<ExtractedBrief>) => {
+      if (!extractedBrief) return;
+
+      // Update local state immediately
+      const updatedBrief = { ...extractedBrief, ...updates };
+      setExtractedBrief(updatedBrief);
+
+      // Update the loaded project name if name was changed
+      if (updates.name) {
+        setLoadedProjectName(updates.name);
+      }
+
+      // Auto-save to database if we have a saved brief
+      if (savedBriefId) {
+        try {
+          await fetch(`/api/briefs/${savedBriefId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ brief: updates }),
+          });
+        } catch (err) {
+          console.error("Auto-save brief update failed:", err);
+        }
+      }
+    },
+    [extractedBrief, savedBriefId]
+  );
+
   const hasMessages = messages.length > 0;
 
   if (!isLoaded) {
@@ -432,6 +462,7 @@ export default function SparkPage() {
               onClose={() => setShowBriefPanel(false)}
               onRefresh={extractBrief}
               onSave={saveBrief}
+              onBriefUpdate={handleBriefUpdate}
               isSaving={isSaving}
               isSaved={isSaved}
               savedBriefId={savedBriefId}

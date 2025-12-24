@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   X,
   Sparkles,
@@ -15,8 +16,11 @@ import {
   RefreshCw,
   Save,
   Check,
+  Pencil,
+  Eye,
 } from "lucide-react";
 import type { ExtractedBrief } from "@/app/api/brief/extract/route";
+import { EditableText, EditableSelect, EditableTags } from "./EditableField";
 
 interface BriefPanelProps {
   brief: ExtractedBrief | null;
@@ -25,31 +29,38 @@ interface BriefPanelProps {
   onClose: () => void;
   onRefresh: () => void;
   onSave?: () => void;
+  onBriefUpdate?: (updates: Partial<ExtractedBrief>) => void;
   isSaving?: boolean;
   isSaved?: boolean;
   savedBriefId?: string | null;
 }
 
-const EXPERIENCE_TYPE_LABELS: Record<string, string> = {
-  treasure_hunt: "Treasure Hunt",
-  virtual_tour: "Virtual Tour",
-  interactive_story: "Interactive Story",
-  competition: "Competition",
-  brand_experience: "Brand Experience",
-};
+const EXPERIENCE_TYPE_OPTIONS = [
+  { value: "treasure_hunt", label: "Treasure Hunt" },
+  { value: "virtual_tour", label: "Virtual Tour" },
+  { value: "interactive_story", label: "Interactive Story" },
+  { value: "competition", label: "Competition" },
+  { value: "brand_experience", label: "Brand Experience" },
+];
 
-const DIFFICULTY_LABELS: Record<string, string> = {
-  easy: "Easy",
-  medium: "Medium",
-  hard: "Hard",
-  progressive: "Progressive",
-};
+const DIFFICULTY_OPTIONS = [
+  { value: "easy", label: "Easy" },
+  { value: "medium", label: "Medium" },
+  { value: "hard", label: "Hard" },
+  { value: "progressive", label: "Progressive" },
+];
 
-const PLAYER_MODE_LABELS: Record<string, string> = {
-  single: "Single Player",
-  multiplayer: "Multiplayer",
-  competitive: "Competitive",
-};
+const PLAYER_MODE_OPTIONS = [
+  { value: "single", label: "Single Player" },
+  { value: "multiplayer", label: "Multiplayer" },
+  { value: "competitive", label: "Competitive" },
+];
+
+const CONTENT_STATUS_OPTIONS = [
+  { value: "has_content", label: "Has existing footage" },
+  { value: "needs_capture", label: "Needs to capture footage" },
+  { value: "needs_guidance", label: "Needs capture guidance" },
+];
 
 export function BriefPanel({
   brief,
@@ -58,10 +69,19 @@ export function BriefPanel({
   onClose,
   onRefresh,
   onSave,
+  onBriefUpdate,
   isSaving,
   isSaved,
   savedBriefId,
 }: BriefPanelProps) {
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  const handleFieldUpdate = (field: keyof ExtractedBrief, value: unknown) => {
+    if (onBriefUpdate) {
+      onBriefUpdate({ [field]: value });
+    }
+  };
+
   return (
     <div className="h-full flex flex-col bg-gv-neutral-900 border-l border-gv-neutral-800">
       {/* Header */}
@@ -76,6 +96,19 @@ export function BriefPanel({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {brief && (
+            <button
+              onClick={() => setIsEditMode(!isEditMode)}
+              className={`p-2 transition-colors ${
+                isEditMode
+                  ? "text-gv-primary-500 bg-gv-primary-500/10"
+                  : "text-gv-neutral-400 hover:text-white"
+              }`}
+              title={isEditMode ? "View mode" : "Edit mode"}
+            >
+              {isEditMode ? <Eye className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+            </button>
+          )}
           <button
             onClick={onRefresh}
             disabled={isLoading}
@@ -92,6 +125,15 @@ export function BriefPanel({
           </button>
         </div>
       </div>
+
+      {/* Edit Mode Banner */}
+      {isEditMode && brief && (
+        <div className="px-4 py-2 bg-gv-primary-500/10 border-b border-gv-primary-500/20">
+          <p className="text-xs text-gv-primary-400">
+            Click on any field to edit. Changes auto-save.
+          </p>
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
@@ -125,136 +167,184 @@ export function BriefPanel({
             </div>
 
             {/* Project Name & Tagline */}
-            {(brief.name || brief.tagline) && (
-              <div>
-                {brief.name && (
-                  <h3 className="text-xl font-bold text-white mb-1">{brief.name}</h3>
-                )}
-                {brief.tagline && (
-                  <p className="text-gv-neutral-400 text-sm italic">{brief.tagline}</p>
-                )}
-              </div>
-            )}
+            <div>
+              <EditableText
+                value={brief.name}
+                placeholder="Project name..."
+                onSave={(value) => handleFieldUpdate("name", value)}
+                isEditing={isEditMode}
+                className="text-xl font-bold text-white mb-1 block"
+              />
+              <EditableText
+                value={brief.tagline}
+                placeholder="Add a catchy tagline..."
+                onSave={(value) => handleFieldUpdate("tagline", value)}
+                isEditing={isEditMode}
+                className="text-gv-neutral-400 text-sm italic block"
+              />
+            </div>
 
             {/* Quick Stats */}
             <div className="grid grid-cols-2 gap-3">
-              {brief.experienceType && (
-                <div className="bg-gv-neutral-800/50 rounded-gv p-3">
-                  <div className="flex items-center gap-2 text-gv-neutral-400 mb-1">
-                    <Gamepad2 className="h-4 w-4" />
-                    <span className="text-xs">Type</span>
-                  </div>
-                  <p className="text-sm text-white">
-                    {EXPERIENCE_TYPE_LABELS[brief.experienceType] || brief.experienceType}
-                  </p>
+              <div className="bg-gv-neutral-800/50 rounded-gv p-3">
+                <div className="flex items-center gap-2 text-gv-neutral-400 mb-1">
+                  <Gamepad2 className="h-4 w-4" />
+                  <span className="text-xs">Type</span>
                 </div>
-              )}
+                <EditableSelect
+                  value={brief.experienceType}
+                  options={EXPERIENCE_TYPE_OPTIONS}
+                  placeholder="Select type"
+                  onSave={(value) => handleFieldUpdate("experienceType", value)}
+                  isEditing={isEditMode}
+                  className="text-sm text-white"
+                />
+              </div>
 
-              {brief.targetAudience && (
-                <div className="bg-gv-neutral-800/50 rounded-gv p-3">
-                  <div className="flex items-center gap-2 text-gv-neutral-400 mb-1">
-                    <Users className="h-4 w-4" />
-                    <span className="text-xs">Audience</span>
-                  </div>
-                  <p className="text-sm text-white truncate">{brief.targetAudience}</p>
+              <div className="bg-gv-neutral-800/50 rounded-gv p-3">
+                <div className="flex items-center gap-2 text-gv-neutral-400 mb-1">
+                  <Users className="h-4 w-4" />
+                  <span className="text-xs">Audience</span>
                 </div>
-              )}
+                <EditableText
+                  value={brief.targetAudience}
+                  placeholder="Target audience"
+                  onSave={(value) => handleFieldUpdate("targetAudience", value)}
+                  isEditing={isEditMode}
+                  className="text-sm text-white"
+                />
+              </div>
 
-              {brief.duration && (
-                <div className="bg-gv-neutral-800/50 rounded-gv p-3">
-                  <div className="flex items-center gap-2 text-gv-neutral-400 mb-1">
-                    <Clock className="h-4 w-4" />
-                    <span className="text-xs">Duration</span>
-                  </div>
-                  <p className="text-sm text-white">{brief.duration}</p>
+              <div className="bg-gv-neutral-800/50 rounded-gv p-3">
+                <div className="flex items-center gap-2 text-gv-neutral-400 mb-1">
+                  <Clock className="h-4 w-4" />
+                  <span className="text-xs">Duration</span>
                 </div>
-              )}
+                <EditableText
+                  value={brief.duration}
+                  placeholder="e.g., 30 mins"
+                  onSave={(value) => handleFieldUpdate("duration", value)}
+                  isEditing={isEditMode}
+                  className="text-sm text-white"
+                />
+              </div>
 
-              {brief.difficulty && (
-                <div className="bg-gv-neutral-800/50 rounded-gv p-3">
-                  <div className="flex items-center gap-2 text-gv-neutral-400 mb-1">
-                    <Target className="h-4 w-4" />
-                    <span className="text-xs">Difficulty</span>
-                  </div>
-                  <p className="text-sm text-white">
-                    {DIFFICULTY_LABELS[brief.difficulty] || brief.difficulty}
-                  </p>
+              <div className="bg-gv-neutral-800/50 rounded-gv p-3">
+                <div className="flex items-center gap-2 text-gv-neutral-400 mb-1">
+                  <Target className="h-4 w-4" />
+                  <span className="text-xs">Difficulty</span>
                 </div>
-              )}
+                <EditableSelect
+                  value={brief.difficulty}
+                  options={DIFFICULTY_OPTIONS}
+                  placeholder="Select difficulty"
+                  onSave={(value) => handleFieldUpdate("difficulty", value)}
+                  isEditing={isEditMode}
+                  className="text-sm text-white"
+                />
+              </div>
 
-              {brief.playerMode && (
-                <div className="bg-gv-neutral-800/50 rounded-gv p-3">
-                  <div className="flex items-center gap-2 text-gv-neutral-400 mb-1">
-                    <Users className="h-4 w-4" />
-                    <span className="text-xs">Player Mode</span>
-                  </div>
-                  <p className="text-sm text-white">
-                    {PLAYER_MODE_LABELS[brief.playerMode] || brief.playerMode}
-                  </p>
+              <div className="bg-gv-neutral-800/50 rounded-gv p-3 col-span-2">
+                <div className="flex items-center gap-2 text-gv-neutral-400 mb-1">
+                  <Users className="h-4 w-4" />
+                  <span className="text-xs">Player Mode</span>
                 </div>
-              )}
+                <EditableSelect
+                  value={brief.playerMode}
+                  options={PLAYER_MODE_OPTIONS}
+                  placeholder="Select mode"
+                  onSave={(value) => handleFieldUpdate("playerMode", value)}
+                  isEditing={isEditMode}
+                  className="text-sm text-white"
+                />
+              </div>
             </div>
 
             {/* Concept */}
-            {brief.concept && (
-              <Section title="Concept">
-                <p className="text-sm text-gv-neutral-300">{brief.concept}</p>
-              </Section>
-            )}
+            <Section title="Concept">
+              <EditableText
+                value={brief.concept}
+                placeholder="Describe the core concept..."
+                onSave={(value) => handleFieldUpdate("concept", value)}
+                isEditing={isEditMode}
+                multiline
+                className="text-sm text-gv-neutral-300"
+              />
+            </Section>
 
             {/* Setting */}
-            {brief.setting && (
-              <Section title="Setting" icon={<MapPin className="h-4 w-4" />}>
-                <p className="text-sm text-gv-neutral-300">{brief.setting}</p>
-              </Section>
-            )}
+            <Section title="Setting" icon={<MapPin className="h-4 w-4" />}>
+              <EditableText
+                value={brief.setting}
+                placeholder="Where does this take place?"
+                onSave={(value) => handleFieldUpdate("setting", value)}
+                isEditing={isEditMode}
+                multiline
+                className="text-sm text-gv-neutral-300"
+              />
+            </Section>
 
             {/* Narrative */}
-            {brief.narrative && (
-              <Section title="Story/Theme">
-                <p className="text-sm text-gv-neutral-300">{brief.narrative}</p>
-              </Section>
-            )}
+            <Section title="Story/Theme">
+              <EditableText
+                value={brief.narrative}
+                placeholder="What's the story or theme?"
+                onSave={(value) => handleFieldUpdate("narrative", value)}
+                isEditing={isEditMode}
+                multiline
+                className="text-sm text-gv-neutral-300"
+              />
+            </Section>
 
             {/* Interactive Elements */}
-            {brief.interactiveElements.length > 0 && (
-              <Section title="Interactive Elements">
-                <div className="flex flex-wrap gap-2">
-                  {brief.interactiveElements.map((element, index) => (
-                    <span
-                      key={index}
-                      className="px-2 py-1 bg-gv-primary-500/10 border border-gv-primary-500/30 rounded text-xs text-gv-primary-400"
-                    >
-                      {element}
-                    </span>
-                  ))}
-                </div>
-              </Section>
-            )}
+            <Section title="Interactive Elements">
+              <EditableTags
+                values={brief.interactiveElements}
+                placeholder="No elements added"
+                onSave={(values) => handleFieldUpdate("interactiveElements", values)}
+                isEditing={isEditMode}
+              />
+            </Section>
 
             {/* Content Status */}
-            {brief.contentStatus && (
-              <Section title="360° Content" icon={<Camera className="h-4 w-4" />}>
-                <div className="flex items-center gap-2 mb-2">
-                  {brief.contentStatus === "has_content" ? (
-                    <CheckCircle2 className="h-4 w-4 text-gv-success" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4 text-gv-warning-500" />
-                  )}
-                  <span className="text-sm text-gv-neutral-300">
-                    {brief.contentStatus === "has_content" && "Has existing footage"}
-                    {brief.contentStatus === "needs_capture" && "Needs to capture footage"}
-                    {brief.contentStatus === "needs_guidance" && "Needs capture guidance"}
-                  </span>
-                </div>
-                {brief.contentDescription && (
-                  <p className="text-sm text-gv-neutral-400">{brief.contentDescription}</p>
+            <Section title="360° Content" icon={<Camera className="h-4 w-4" />}>
+              <div className="space-y-2">
+                {!isEditMode ? (
+                  brief.contentStatus && (
+                    <div className="flex items-center gap-2">
+                      {brief.contentStatus === "has_content" ? (
+                        <CheckCircle2 className="h-4 w-4 text-gv-success" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-gv-warning-500" />
+                      )}
+                      <span className="text-sm text-gv-neutral-300">
+                        {CONTENT_STATUS_OPTIONS.find((o) => o.value === brief.contentStatus)?.label}
+                      </span>
+                    </div>
+                  )
+                ) : (
+                  <EditableSelect
+                    value={brief.contentStatus}
+                    options={CONTENT_STATUS_OPTIONS}
+                    placeholder="Content status"
+                    onSave={(value) => handleFieldUpdate("contentStatus", value)}
+                    isEditing={isEditMode}
+                    className="text-sm text-gv-neutral-300"
+                  />
                 )}
-              </Section>
-            )}
+                <EditableText
+                  value={brief.contentDescription}
+                  placeholder="Describe your content..."
+                  onSave={(value) => handleFieldUpdate("contentDescription", value)}
+                  isEditing={isEditMode}
+                  multiline
+                  className="text-sm text-gv-neutral-400"
+                />
+              </div>
+            </Section>
 
-            {/* Missing Elements */}
-            {brief.missingElements.length > 0 && (
+            {/* Missing Elements - Not editable, AI-generated */}
+            {brief.missingElements.length > 0 && !isEditMode && (
               <Section title="Still Needed" variant="warning">
                 <ul className="space-y-1">
                   {brief.missingElements.map((element, index) => (
@@ -270,8 +360,8 @@ export function BriefPanel({
               </Section>
             )}
 
-            {/* Suggested Questions */}
-            {brief.suggestedNextQuestions.length > 0 && brief.completeness < 100 && (
+            {/* Suggested Questions - Not editable, AI-generated */}
+            {brief.suggestedNextQuestions.length > 0 && brief.completeness < 100 && !isEditMode && (
               <Section title="Suggested Next Questions" variant="info">
                 <ul className="space-y-2">
                   {brief.suggestedNextQuestions.map((question, index) => (
