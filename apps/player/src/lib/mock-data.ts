@@ -711,3 +711,176 @@ export function formatPlayTime(minutes: number): string {
   }
   return `${minutes}m`;
 }
+
+// ============================================
+// Search Functions
+// ============================================
+
+export interface SearchResults {
+  experiences: Experience[];
+  creators: Creator[];
+  totalResults: number;
+}
+
+// Search experiences by title, description, tags, subcategory
+export function searchExperiences(query: string, filters?: {
+  category?: string;
+  priceType?: "free" | "paid" | "all";
+  sortBy?: "relevance" | "popular" | "recent" | "price_low" | "price_high";
+}): Experience[] {
+  const q = query.toLowerCase().trim();
+
+  if (!q) return [];
+
+  let results = mockExperiences.filter((exp) => {
+    const matchesTitle = exp.title.toLowerCase().includes(q);
+    const matchesDescription = exp.description.toLowerCase().includes(q);
+    const matchesTags = exp.tags.some((tag) => tag.toLowerCase().includes(q));
+    const matchesSubcategory = exp.subcategory.toLowerCase().includes(q);
+    const matchesCategory = exp.category.toLowerCase().includes(q);
+
+    return matchesTitle || matchesDescription || matchesTags || matchesSubcategory || matchesCategory;
+  });
+
+  // Apply filters
+  if (filters?.category && filters.category !== "all") {
+    results = results.filter((exp) => exp.category === filters.category);
+  }
+
+  if (filters?.priceType === "free") {
+    results = results.filter((exp) => exp.price === 0);
+  } else if (filters?.priceType === "paid") {
+    results = results.filter((exp) => exp.price > 0);
+  }
+
+  // Sort results
+  switch (filters?.sortBy) {
+    case "popular":
+      results.sort((a, b) => b.playCount - a.playCount);
+      break;
+    case "recent":
+      results.sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
+      break;
+    case "price_low":
+      results.sort((a, b) => a.price - b.price);
+      break;
+    case "price_high":
+      results.sort((a, b) => b.price - a.price);
+      break;
+    case "relevance":
+    default:
+      // For relevance, prioritize title matches
+      results.sort((a, b) => {
+        const aTitle = a.title.toLowerCase().includes(q) ? 1 : 0;
+        const bTitle = b.title.toLowerCase().includes(q) ? 1 : 0;
+        if (aTitle !== bTitle) return bTitle - aTitle;
+        return b.playCount - a.playCount;
+      });
+  }
+
+  return results;
+}
+
+// Search creators by username, displayName, tagline, bio
+export function searchCreators(query: string, filters?: {
+  category?: string;
+  verified?: boolean;
+}): Creator[] {
+  const q = query.toLowerCase().trim();
+
+  if (!q) return [];
+
+  let results = mockCreators.filter((creator) => {
+    const matchesUsername = creator.username.toLowerCase().includes(q);
+    const matchesDisplayName = creator.displayName.toLowerCase().includes(q);
+    const matchesTagline = creator.tagline?.toLowerCase().includes(q);
+    const matchesBio = creator.bio?.toLowerCase().includes(q);
+    const matchesCategory = creator.category.toLowerCase().includes(q);
+
+    return matchesUsername || matchesDisplayName || matchesTagline || matchesBio || matchesCategory;
+  });
+
+  // Apply filters
+  if (filters?.category && filters.category !== "all") {
+    results = results.filter((creator) => creator.category === filters.category);
+  }
+
+  if (filters?.verified) {
+    results = results.filter((creator) => creator.isVerified);
+  }
+
+  // Sort by followers (most popular first)
+  results.sort((a, b) => b.followers - a.followers);
+
+  return results;
+}
+
+// Combined search for both experiences and creators
+export function search(query: string, filters?: {
+  category?: string;
+  priceType?: "free" | "paid" | "all";
+  sortBy?: "relevance" | "popular" | "recent" | "price_low" | "price_high";
+  verified?: boolean;
+}): SearchResults {
+  const experiences = searchExperiences(query, filters);
+  const creators = searchCreators(query, { category: filters?.category, verified: filters?.verified });
+
+  return {
+    experiences,
+    creators,
+    totalResults: experiences.length + creators.length,
+  };
+}
+
+// Get search suggestions based on partial query
+export function getSearchSuggestions(query: string, limit = 5): string[] {
+  const q = query.toLowerCase().trim();
+
+  if (!q || q.length < 2) return [];
+
+  const suggestions = new Set<string>();
+
+  // Add matching experience titles
+  mockExperiences.forEach((exp) => {
+    if (exp.title.toLowerCase().includes(q)) {
+      suggestions.add(exp.title);
+    }
+  });
+
+  // Add matching creator names
+  mockCreators.forEach((creator) => {
+    if (creator.displayName.toLowerCase().includes(q)) {
+      suggestions.add(creator.displayName);
+    }
+  });
+
+  // Add matching tags
+  mockExperiences.forEach((exp) => {
+    exp.tags.forEach((tag) => {
+      if (tag.toLowerCase().includes(q)) {
+        suggestions.add(tag);
+      }
+    });
+  });
+
+  // Add matching subcategories
+  mockExperiences.forEach((exp) => {
+    if (exp.subcategory.toLowerCase().includes(q)) {
+      suggestions.add(exp.subcategory);
+    }
+  });
+
+  return Array.from(suggestions).slice(0, limit);
+}
+
+// Get recent/popular search terms (simulated)
+export function getPopularSearchTerms(): string[] {
+  return [
+    "space",
+    "concert",
+    "travel",
+    "museum",
+    "history",
+    "basketball",
+  ];
+}
