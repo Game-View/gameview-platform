@@ -512,31 +512,98 @@ export function formatDuration(minutes: number): string {
 // Mock User Data (for personalization testing)
 // ============================================
 
-export interface MockUser {
-  id: string;
-  name: string;
-  followedCreatorIds: string[];
-  playHistory: PlayHistoryEntry[];
-}
-
 export interface PlayHistoryEntry {
   experienceId: string;
   playedAt: string;
   completed: boolean;
+  playTimeMinutes: number;
 }
+
+export interface ConnectedAccount {
+  platform: "youtube" | "tiktok" | "twitch" | "twitter" | "instagram";
+  username: string;
+  connected: boolean;
+  avatarUrl?: string;
+}
+
+export interface MockUser {
+  id: string;
+  username: string;
+  displayName: string;
+  email: string;
+  avatar: string;
+  bio?: string;
+  joinedAt: string;
+  // Interests selected during onboarding
+  interests: string[];
+  // Category preferences
+  categoryPreferences: ("entertainment" | "education" | "exploration")[];
+  // Social connections
+  connectedAccounts: ConnectedAccount[];
+  // Following & activity
+  followedCreatorIds: string[];
+  wishlistExperienceIds: string[];
+  playHistory: PlayHistoryEntry[];
+  // Stats
+  totalPlayTimeMinutes: number;
+}
+
+// Available interest tags for onboarding
+export const AVAILABLE_INTERESTS = [
+  // Entertainment
+  { id: "music", label: "Music & Concerts", category: "entertainment" },
+  { id: "sports", label: "Sports", category: "entertainment" },
+  { id: "gaming", label: "Gaming", category: "entertainment" },
+  { id: "movies", label: "Movies & TV", category: "entertainment" },
+  { id: "comedy", label: "Comedy", category: "entertainment" },
+  { id: "art", label: "Art & Design", category: "entertainment" },
+  // Education
+  { id: "science", label: "Science", category: "education" },
+  { id: "space", label: "Space & Astronomy", category: "education" },
+  { id: "history", label: "History", category: "education" },
+  { id: "nature", label: "Nature & Wildlife", category: "education" },
+  { id: "technology", label: "Technology", category: "education" },
+  { id: "learning", label: "Learning & Skills", category: "education" },
+  // Exploration
+  { id: "travel", label: "Travel & Tourism", category: "exploration" },
+  { id: "architecture", label: "Architecture", category: "exploration" },
+  { id: "culture", label: "Culture & Heritage", category: "exploration" },
+  { id: "adventure", label: "Adventure", category: "exploration" },
+  { id: "food", label: "Food & Cuisine", category: "exploration" },
+  { id: "cities", label: "Cities & Urban", category: "exploration" },
+];
 
 // Simulated logged-in user for testing personalization
 export const mockCurrentUser: MockUser = {
   id: "user_1",
-  name: "Test Player",
+  username: "player_james",
+  displayName: "James",
+  email: "james@example.com",
+  avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=James&backgroundColor=f97066",
+  bio: "Love exploring virtual worlds and discovering new experiences!",
+  joinedAt: "2024-11-01",
+  // Selected interests
+  interests: ["music", "space", "history", "travel"],
+  categoryPreferences: ["entertainment", "education", "exploration"],
+  // Connected social accounts
+  connectedAccounts: [
+    { platform: "youtube", username: "JamesPlays", connected: true },
+    { platform: "tiktok", username: "", connected: false },
+    { platform: "twitch", username: "james_gamer", connected: true },
+    { platform: "twitter", username: "", connected: false },
+    { platform: "instagram", username: "", connected: false },
+  ],
   // User follows Zac Brown Band and NASA
   followedCreatorIds: ["creator_1", "creator_5"],
+  // Wishlist
+  wishlistExperienceIds: ["exp_1", "exp_7", "exp_11"],
   // User has played some experiences
   playHistory: [
-    { experienceId: "exp_2", playedAt: "2024-12-20", completed: true }, // Backstage Pass
-    { experienceId: "exp_9", playedAt: "2024-12-18", completed: true }, // ISS Spacewalk
-    { experienceId: "exp_10", playedAt: "2024-12-15", completed: false }, // Mars Rover
+    { experienceId: "exp_2", playedAt: "2024-12-20", completed: true, playTimeMinutes: 8 },
+    { experienceId: "exp_9", playedAt: "2024-12-18", completed: true, playTimeMinutes: 20 },
+    { experienceId: "exp_10", playedAt: "2024-12-15", completed: false, playTimeMinutes: 7 },
   ],
+  totalPlayTimeMinutes: 35,
 };
 
 // Get creators the user follows
@@ -616,4 +683,31 @@ export function getCreatorsToDiscover(category: string, limit = 4): Creator[] {
     .filter((c) => c.category === category && !mockCurrentUser.followedCreatorIds.includes(c.id))
     .sort((a, b) => b.followers - a.followers)
     .slice(0, limit);
+}
+
+// Get user's wishlist experiences
+export function getWishlistExperiences(): Experience[] {
+  return mockExperiences.filter((e) => mockCurrentUser.wishlistExperienceIds.includes(e.id));
+}
+
+// Get user's play history with experience details
+export function getPlayHistoryWithDetails(): (PlayHistoryEntry & { experience: Experience })[] {
+  return mockCurrentUser.playHistory
+    .map((entry) => {
+      const experience = mockExperiences.find((e) => e.id === entry.experienceId);
+      if (!experience) return null;
+      return { ...entry, experience };
+    })
+    .filter((entry): entry is PlayHistoryEntry & { experience: Experience } => entry !== null)
+    .sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
+}
+
+// Format play time
+export function formatPlayTime(minutes: number): string {
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+  return `${minutes}m`;
 }
