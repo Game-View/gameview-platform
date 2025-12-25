@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
-import { Loader2, PanelLeftClose, PanelLeft, PanelRightClose, PanelRight, Box, Volume2, X } from "lucide-react";
+import { Loader2, PanelLeftClose, PanelLeft, PanelRightClose, PanelRight, Box, Volume2, X, Play } from "lucide-react";
 import { ViewerControls } from "@/components/viewer/ViewerControls";
 import { ObjectLibrary } from "@/components/objects/ObjectLibrary";
 import { SceneAudioPanel, defaultSceneAudioConfig } from "@/components/audio";
@@ -18,6 +18,8 @@ import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
 import { toast } from "@/stores/toast-store";
 import type { StoredScene } from "@/lib/scenes";
 import type { StoredObject, PlacedObject } from "@/lib/objects";
+import { PlaytestMode } from "@/components/playtest";
+import { defaultGameConfig, type GameConfig } from "@/lib/game-logic";
 
 // Dynamic import for SceneEditor (uses Three.js)
 const SceneEditor = dynamic(
@@ -52,6 +54,8 @@ export default function SceneEditorPage() {
   const [selectedLibraryObject, setSelectedLibraryObject] = useState<StoredObject | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [audioConfig, setAudioConfig] = useState<SceneAudioConfig>(defaultSceneAudioConfig);
+  const [isPlaytestMode, setIsPlaytestMode] = useState(false);
+  const [gameConfig, setGameConfig] = useState<GameConfig>(defaultGameConfig);
 
   // Editor store
   const {
@@ -93,6 +97,19 @@ export default function SceneEditorPage() {
         // Load audio config
         if (data.audioConfig) {
           setAudioConfig(data.audioConfig);
+        }
+
+        // Fetch game config from brief
+        try {
+          const briefRes = await fetch(`/api/briefs/${briefId}`);
+          if (briefRes.ok) {
+            const briefData = await briefRes.json();
+            if (briefData.gameConfig) {
+              setGameConfig(briefData.gameConfig);
+            }
+          }
+        } catch {
+          console.error("Failed to fetch brief for game config");
         }
 
         // Check if scene is ready
@@ -324,6 +341,15 @@ export default function SceneEditorPage() {
 
         {/* Right panel toggles */}
         <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
+          {/* Playtest Button */}
+          <button
+            onClick={() => setIsPlaytestMode(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 backdrop-blur-sm rounded-gv text-white font-medium transition-colors"
+            title="Test your experience"
+          >
+            <Play className="h-4 w-4" />
+            Test
+          </button>
           <button
             onClick={() => setShowAudioPanel((prev) => !prev)}
             className={`p-2 backdrop-blur-sm rounded-gv text-white transition-colors ${
@@ -402,6 +428,18 @@ export default function SceneEditorPage() {
           toast.success("Upload complete", "Your object is now available in the library");
         }}
       />
+
+      {/* Playtest Mode */}
+      {isPlaytestMode && (
+        <PlaytestMode
+          sceneId={sceneId}
+          briefId={briefId}
+          splatUrl={scene.splatUrl || undefined}
+          gameConfig={gameConfig}
+          placedObjects={placedObjects}
+          onExit={() => setIsPlaytestMode(false)}
+        />
+      )}
     </div>
   );
 }
