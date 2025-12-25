@@ -1,4 +1,5 @@
 import { createServerClient } from "./supabase";
+import type { SceneAudioConfig } from "./audio";
 
 // Processing status enum matching database
 export type ProcessingStatus =
@@ -67,6 +68,7 @@ export interface StoredScene {
   lightingPreset: string;
   placedObjects: PlacedObject[];
   interactions: Interaction[];
+  audioConfig: SceneAudioConfig | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -100,6 +102,7 @@ export interface UpdateSceneInput {
   lightingPreset?: string;
   placedObjects?: PlacedObject[];
   interactions?: Interaction[];
+  audioConfig?: SceneAudioConfig;
 }
 
 // Create a new scene
@@ -219,6 +222,7 @@ export async function updateScene(
   if (input.lightingPreset !== undefined) updates.lightingPreset = input.lightingPreset;
   if (input.placedObjects !== undefined) updates.placedObjects = input.placedObjects;
   if (input.interactions !== undefined) updates.interactions = input.interactions;
+  if (input.audioConfig !== undefined) updates.audioConfig = input.audioConfig;
 
   const { data, error } = await supabase
     .from("scenes")

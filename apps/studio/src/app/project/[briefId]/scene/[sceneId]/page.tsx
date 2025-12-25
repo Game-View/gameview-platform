@@ -4,9 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
-import { Loader2, PanelLeftClose, PanelLeft, PanelRightClose, PanelRight, Box } from "lucide-react";
+import { Loader2, PanelLeftClose, PanelLeft, PanelRightClose, PanelRight, Box, Volume2, X } from "lucide-react";
 import { ViewerControls } from "@/components/viewer/ViewerControls";
 import { ObjectLibrary } from "@/components/objects/ObjectLibrary";
+import { SceneAudioPanel, defaultSceneAudioConfig } from "@/components/audio";
+import type { SceneAudioConfig } from "@/lib/audio";
 import { ObjectUploadModal } from "@/components/objects/ObjectUploadModal";
 import { PropertiesPanel } from "@/components/editor/PropertiesPanel";
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
@@ -46,8 +48,10 @@ export default function SceneEditorPage() {
   // UI state
   const [showLibrary, setShowLibrary] = useState(true);
   const [showProperties, setShowProperties] = useState(true);
+  const [showAudioPanel, setShowAudioPanel] = useState(false);
   const [selectedLibraryObject, setSelectedLibraryObject] = useState<StoredObject | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [audioConfig, setAudioConfig] = useState<SceneAudioConfig>(defaultSceneAudioConfig);
 
   // Editor store
   const {
@@ -84,6 +88,11 @@ export default function SceneEditorPage() {
         // Load placed objects into editor store
         if (data.placedObjects && Array.isArray(data.placedObjects)) {
           setPlacedObjects(data.placedObjects);
+        }
+
+        // Load audio config
+        if (data.audioConfig) {
+          setAudioConfig(data.audioConfig);
         }
 
         // Check if scene is ready
@@ -137,6 +146,27 @@ export default function SceneEditorPage() {
 
     return () => clearTimeout(timeout);
   }, [isDirty, scene, saveObjects]);
+
+  // Save audio config
+  const saveAudioConfig = useCallback(async (config: SceneAudioConfig) => {
+    if (!scene) return;
+
+    try {
+      const res = await fetch(`/api/scenes/${sceneId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audioConfig: config }),
+      });
+
+      if (!res.ok) throw new Error("Failed to save audio");
+
+      setAudioConfig(config);
+      toast.success("Saved", "Audio settings saved");
+    } catch (err) {
+      console.error("Failed to save audio config:", err);
+      toast.error("Error", "Failed to save audio settings");
+    }
+  }, [scene, sceneId]);
 
   // Navigation handlers
   const handleBack = useCallback(() => {
@@ -292,8 +322,17 @@ export default function SceneEditorPage() {
           )}
         </div>
 
-        {/* Right panel toggle */}
-        <div className="absolute top-4 right-4 z-30">
+        {/* Right panel toggles */}
+        <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
+          <button
+            onClick={() => setShowAudioPanel((prev) => !prev)}
+            className={`p-2 backdrop-blur-sm rounded-gv text-white transition-colors ${
+              showAudioPanel ? "bg-gv-primary-500 hover:bg-gv-primary-600" : "bg-black/50 hover:bg-black/70"
+            }`}
+            title={showAudioPanel ? "Hide audio settings" : "Show audio settings"}
+          >
+            <Volume2 className="h-5 w-5" />
+          </button>
           <button
             onClick={() => setShowProperties((prev) => !prev)}
             className="p-2 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-gv text-white transition-colors"
@@ -321,6 +360,38 @@ export default function SceneEditorPage() {
       >
         <PropertiesPanel className="h-full w-72" />
       </aside>
+
+      {/* Audio Panel Slide-out */}
+      {showAudioPanel && (
+        <div className="fixed inset-0 z-50 flex items-start justify-end">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowAudioPanel(false)}
+          />
+
+          {/* Panel */}
+          <div className="relative h-full w-[480px] bg-gv-neutral-900 border-l border-gv-neutral-700 shadow-xl overflow-auto animate-slide-in-right">
+            <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-gv-neutral-900 border-b border-gv-neutral-700">
+              <div className="flex items-center gap-3">
+                <Volume2 className="h-5 w-5 text-gv-primary-400" />
+                <h2 className="text-lg font-semibold text-white">Scene Audio</h2>
+              </div>
+              <button
+                onClick={() => setShowAudioPanel(false)}
+                className="p-2 hover:bg-gv-neutral-700 rounded-gv transition-colors"
+              >
+                <X className="h-5 w-5 text-gv-neutral-400" />
+              </button>
+            </div>
+
+            <SceneAudioPanel
+              config={audioConfig}
+              onChange={saveAudioConfig}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Upload Modal */}
       <ObjectUploadModal
