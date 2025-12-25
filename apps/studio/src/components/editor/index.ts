@@ -4,3 +4,4 @@ export { EditorToolbar } from "./EditorToolbar";
 export { InteractionPanel } from "./InteractionPanel";
 export { TriggerZoneVisualization } from "./TriggerZoneVisualization";
 export { useEditorKeyboard } from "./useEditorKeyboard";
+export { PortalEditor } from "./PortalEditor";

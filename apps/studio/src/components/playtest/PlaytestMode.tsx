@@ -9,8 +9,10 @@ import { PlayerHUD } from "./PlayerHUD";
 import { FirstPersonControls } from "./FirstPersonControls";
 import { InteractionRuntime, TriggerZoneVisuals } from "./InteractionRuntime";
 import { DebugToolbar } from "./DebugToolbar";
+import { NavigationRuntime, NavigationHUD } from "./NavigationRuntime";
 import type { GameConfig } from "@/lib/game-logic";
 import type { PlacedObject } from "@/lib/objects";
+import type { PortalConfig, SpawnPoint, SceneData } from "@/lib/scene-navigation";
 
 // Dynamic import for GaussianSplats
 const GaussianSplats = dynamic(
@@ -24,6 +26,9 @@ interface PlaytestModeProps {
   splatUrl?: string;
   gameConfig: GameConfig;
   placedObjects: PlacedObject[];
+  portals?: PortalConfig[];
+  spawnPoints?: SpawnPoint[];
+  availableScenes?: SceneData[];
   onExit: () => void;
 }
 
@@ -33,6 +38,9 @@ export function PlaytestMode({
   splatUrl,
   gameConfig,
   placedObjects,
+  portals = [],
+  spawnPoints = [],
+  availableScenes = [],
   onExit,
 }: PlaytestModeProps) {
   const {
@@ -139,12 +147,26 @@ export function PlaytestMode({
         {/* Interaction Runtime */}
         <InteractionRuntime enabled={!isPaused} />
 
+        {/* Navigation Runtime (Portals) */}
+        {portals.length > 0 && (
+          <NavigationRuntime
+            enabled={!isPaused}
+            currentSceneId={sceneId}
+            portals={portals}
+            spawnPoints={spawnPoints}
+            availableScenes={availableScenes}
+          />
+        )}
+
         {/* Debug Visuals */}
         <TriggerZoneVisuals objects={placedObjects} visible={debugState.showTriggerZones} />
       </Canvas>
 
       {/* HUD Overlay */}
       <PlayerHUD className="absolute inset-0" />
+
+      {/* Navigation HUD (Portal Prompts, Transitions) */}
+      <NavigationHUD enabled={!isPaused && portals.length > 0} />
 
       {/* Debug Toolbar */}
       <DebugToolbar />
