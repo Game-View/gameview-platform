@@ -1,5 +1,3 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { clerkClient } from "@clerk/nextjs/server";
 import { NextResponse, NextRequest } from "next/server";
 
 // Check if we should skip auth (for local testing)
@@ -8,76 +6,85 @@ const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
 const isPlaceholderKey = clerkKey === "pk_test_xxx" || clerkKey.length < 20;
 const skipAuth = process.env.NEXT_PUBLIC_SKIP_AUTH === "true" || isPlaceholderKey;
 
-// Public routes that don't require authentication
-const isPublicRoute = createRouteMatcher([
-  "/",
-  "/sign-in(.*)",
-  "/sign-up(.*)",
-  "/api/webhooks(.*)",
-]);
-
-// Routes that require a completed profile
-const requiresProfile = createRouteMatcher([
-  "/dashboard(.*)",
-  "/projects(.*)",
-  "/spark(.*)",
-  "/settings(.*)",
-]);
-
-// Routes that are part of onboarding (don't redirect from these)
-const isOnboardingRoute = createRouteMatcher(["/onboarding(.*)"]);
-
-// API routes (skip profile check)
-const isApiRoute = createRouteMatcher(["/api(.*)"]);
-
 // Test mode middleware - bypasses all auth
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function testModeMiddleware(_req: NextRequest) {
   // In test mode, allow all routes
   return NextResponse.next();
 }
 
-// Production middleware with Clerk auth
-const productionMiddleware = clerkMiddleware(async (auth, req) => {
-  const { userId } = await auth();
+// Only import and use Clerk when not in test mode
+let productionMiddleware: (req: NextRequest) => Promise<NextResponse> | NextResponse;
 
-  // Allow public routes
-  if (isPublicRoute(req)) {
-    return NextResponse.next();
-  }
+if (!skipAuth) {
+  // Dynamic import to avoid loading Clerk in test mode
+  const { clerkMiddleware, createRouteMatcher } = require("@clerk/nextjs/server");
+  const { clerkClient } = require("@clerk/nextjs/server");
 
-  // Require authentication for all other routes
-  if (!userId) {
-    const signInUrl = new URL("/sign-in", req.url);
-    signInUrl.searchParams.set("redirect_url", req.url);
-    return NextResponse.redirect(signInUrl);
-  }
+  // Public routes that don't require authentication
+  const isPublicRoute = createRouteMatcher([
+    "/",
+    "/sign-in(.*)",
+    "/sign-up(.*)",
+    "/api/webhooks(.*)",
+  ]);
 
-  // Skip profile check for API routes and onboarding
-  if (isApiRoute(req) || isOnboardingRoute(req)) {
-    return NextResponse.next();
-  }
+  // Routes that require a completed profile
+  const requiresProfile = createRouteMatcher([
+    "/dashboard(.*)",
+    "/projects(.*)",
+    "/spark(.*)",
+    "/settings(.*)",
+  ]);
 
-  // Check if profile is required but not completed
-  if (requiresProfile(req)) {
-    try {
-      // Get user from Clerk to check metadata
-      const client = await clerkClient();
-      const user = await client.users.getUser(userId);
-      const profileCompleted = user.unsafeMetadata?.profileCompleted as boolean | undefined;
+  // Routes that are part of onboarding (don't redirect from these)
+  const isOnboardingRoute = createRouteMatcher(["/onboarding(.*)"]);
 
-      if (!profileCompleted) {
-        // Redirect to onboarding
-        return NextResponse.redirect(new URL("/onboarding", req.url));
-      }
-    } catch (error) {
-      console.error("Error checking profile status:", error);
-      // On error, allow through but log it
+  // API routes (skip profile check)
+  const isApiRoute = createRouteMatcher(["/api(.*)"]);
+
+  productionMiddleware = clerkMiddleware(async (auth: () => Promise<{ userId: string | null }>, req: NextRequest) => {
+    const { userId } = await auth();
+
+    // Allow public routes
+    if (isPublicRoute(req)) {
+      return NextResponse.next();
     }
-  }
 
-  return NextResponse.next();
-});
+    // Require authentication for all other routes
+    if (!userId) {
+      const signInUrl = new URL("/sign-in", req.url);
+      signInUrl.searchParams.set("redirect_url", req.url);
+      return NextResponse.redirect(signInUrl);
+    }
+
+    // Skip profile check for API routes and onboarding
+    if (isApiRoute(req) || isOnboardingRoute(req)) {
+      return NextResponse.next();
+    }
+
+    // Check if profile is required but not completed
+    if (requiresProfile(req)) {
+      try {
+        // Get user from Clerk to check metadata
+        const client = await clerkClient();
+        const user = await client.users.getUser(userId);
+        const profileCompleted = user.unsafeMetadata?.profileCompleted as boolean | undefined;
+
+        if (!profileCompleted) {
+          // Redirect to onboarding
+          return NextResponse.redirect(new URL("/onboarding", req.url));
+        }
+      } catch (error) {
+        console.error("Error checking profile status:", error);
+        // On error, allow through but log it
+      }
+    }
+
+    return NextResponse.next();
+  });
+} else {
+  productionMiddleware = testModeMiddleware;
+}
 
 // Export the appropriate middleware based on mode
 export default skipAuth ? testModeMiddleware : productionMiddleware;
