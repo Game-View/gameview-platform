@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SignedIn, SignedOut } from "@clerk/nextjs";
+import { SignedIn, SignedOut } from "@/components/auth/AuthComponents";
 import { Sparkles, Play, Zap, Users } from "lucide-react";
 
 export default function Home() {
