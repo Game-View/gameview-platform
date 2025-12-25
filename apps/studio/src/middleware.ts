@@ -3,7 +3,10 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { NextResponse, NextRequest } from "next/server";
 
 // Check if we should skip auth (for local testing)
-const skipAuth = process.env.NEXT_PUBLIC_SKIP_AUTH === "true";
+// Skip if env var is set OR if using placeholder Clerk key
+const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
+const isPlaceholderKey = clerkKey === "pk_test_xxx" || clerkKey.length < 20;
+const skipAuth = process.env.NEXT_PUBLIC_SKIP_AUTH === "true" || isPlaceholderKey;
 
 // Public routes that don't require authentication
 const isPublicRoute = createRouteMatcher([
