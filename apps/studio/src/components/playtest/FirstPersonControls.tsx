@@ -9,16 +9,26 @@ interface FirstPersonControlsProps {
   enabled?: boolean;
   movementSpeed?: number;
   lookSensitivity?: number;
+  keyboardLookSpeed?: number;
   minPitch?: number;
   maxPitch?: number;
+  jumpForce?: number;
+  gravity?: number;
+  verticalSpeed?: number;
+  spinSpeed?: number;
 }
 
 export function FirstPersonControls({
   enabled = true,
   movementSpeed = 5,
   lookSensitivity = 0.002,
+  keyboardLookSpeed = 90, // degrees per second
   minPitch = -89,
   maxPitch = 89,
+  jumpForce = 8,
+  gravity = 20,
+  verticalSpeed = 4,
+  spinSpeed = 180, // degrees per second
 }: FirstPersonControlsProps) {
   const { camera, gl } = useThree();
   const { isPlaytestMode, isPaused, updatePlayerPosition, updatePlayerRotation, playerState } =
@@ -26,12 +36,30 @@ export function FirstPersonControls({
 
   // Movement state
   const keysRef = useRef({
+    // Movement (WASD)
     forward: false,
     backward: false,
     left: false,
     right: false,
     sprint: false,
+    // Vertical (T/G)
+    up: false,
+    down: false,
+    // Jump (Space)
+    jump: false,
+    // Look (Arrows)
+    lookUp: false,
+    lookDown: false,
+    lookLeft: false,
+    lookRight: false,
+    // Spin (Q)
+    spin: false,
   });
+
+  // Physics state
+  const velocityRef = useRef({ x: 0, y: 0, z: 0 });
+  const isGroundedRef = useRef(true);
+  const groundLevelRef = useRef(1.6); // Default eye height
 
   // Look state
   const rotationRef = useRef({ pitch: 0, yaw: 0 });
@@ -63,7 +91,7 @@ export function FirstPersonControls({
     };
   }, [gl.domElement]);
 
-  // Handle mouse movement
+  // Handle mouse movement for looking
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isLockedRef.current || !enabled || isPaused) return;
@@ -96,50 +124,116 @@ export function FirstPersonControls({
       if (!enabled || isPaused) return;
 
       switch (e.code) {
+        // Movement - WASD
         case "KeyW":
-        case "ArrowUp":
           keysRef.current.forward = true;
           break;
         case "KeyS":
-        case "ArrowDown":
           keysRef.current.backward = true;
           break;
         case "KeyA":
-        case "ArrowLeft":
           keysRef.current.left = true;
           break;
         case "KeyD":
-        case "ArrowRight":
           keysRef.current.right = true;
           break;
+
+        // Sprint - Shift
         case "ShiftLeft":
         case "ShiftRight":
           keysRef.current.sprint = true;
+          break;
+
+        // Look - Arrow keys
+        case "ArrowUp":
+          keysRef.current.lookUp = true;
+          break;
+        case "ArrowDown":
+          keysRef.current.lookDown = true;
+          break;
+        case "ArrowLeft":
+          keysRef.current.lookLeft = true;
+          break;
+        case "ArrowRight":
+          keysRef.current.lookRight = true;
+          break;
+
+        // Vertical movement - T (up) / G (down)
+        case "KeyT":
+          keysRef.current.up = true;
+          break;
+        case "KeyG":
+          keysRef.current.down = true;
+          break;
+
+        // Jump - Space
+        case "Space":
+          if (isGroundedRef.current) {
+            keysRef.current.jump = true;
+            velocityRef.current.y = jumpForce;
+            isGroundedRef.current = false;
+          }
+          break;
+
+        // Spin - Q
+        case "KeyQ":
+          keysRef.current.spin = true;
           break;
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       switch (e.code) {
+        // Movement
         case "KeyW":
-        case "ArrowUp":
           keysRef.current.forward = false;
           break;
         case "KeyS":
-        case "ArrowDown":
           keysRef.current.backward = false;
           break;
         case "KeyA":
-        case "ArrowLeft":
           keysRef.current.left = false;
           break;
         case "KeyD":
-        case "ArrowRight":
           keysRef.current.right = false;
           break;
+
+        // Sprint
         case "ShiftLeft":
         case "ShiftRight":
           keysRef.current.sprint = false;
+          break;
+
+        // Look
+        case "ArrowUp":
+          keysRef.current.lookUp = false;
+          break;
+        case "ArrowDown":
+          keysRef.current.lookDown = false;
+          break;
+        case "ArrowLeft":
+          keysRef.current.lookLeft = false;
+          break;
+        case "ArrowRight":
+          keysRef.current.lookRight = false;
+          break;
+
+        // Vertical
+        case "KeyT":
+          keysRef.current.up = false;
+          break;
+        case "KeyG":
+          keysRef.current.down = false;
+          break;
+
+        // Jump
+        case "Space":
+          keysRef.current.jump = false;
+          break;
+
+        // Spin
+        case "KeyQ":
+          keysRef.current.spin = false;
           break;
       }
     };
@@ -151,7 +245,7 @@ export function FirstPersonControls({
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [enabled, isPaused]);
+  }, [enabled, isPaused, jumpForce]);
 
   // Click to enter pointer lock
   useEffect(() => {
@@ -175,6 +269,7 @@ export function FirstPersonControls({
         playerState.position.z
       );
       rotationRef.current = { ...playerState.rotation };
+      groundLevelRef.current = playerState.position.y;
     }
   }, [isPlaytestMode, enabled, camera, playerState.position, playerState.rotation]);
 
@@ -185,7 +280,31 @@ export function FirstPersonControls({
     const keys = keysRef.current;
     const speed = keys.sprint ? movementSpeed * 1.5 : movementSpeed;
 
-    // Calculate movement direction
+    // ===== KEYBOARD LOOK =====
+    // Arrow keys for looking around
+    if (keys.lookUp) {
+      rotationRef.current.pitch = Math.min(maxPitch, rotationRef.current.pitch + keyboardLookSpeed * delta);
+    }
+    if (keys.lookDown) {
+      rotationRef.current.pitch = Math.max(minPitch, rotationRef.current.pitch - keyboardLookSpeed * delta);
+    }
+    if (keys.lookLeft) {
+      rotationRef.current.yaw += keyboardLookSpeed * delta;
+    }
+    if (keys.lookRight) {
+      rotationRef.current.yaw -= keyboardLookSpeed * delta;
+    }
+
+    // Q for spinning (fast rotation)
+    if (keys.spin) {
+      rotationRef.current.yaw += spinSpeed * delta;
+    }
+
+    // Normalize yaw
+    rotationRef.current.yaw = rotationRef.current.yaw % 360;
+    updatePlayerRotation(rotationRef.current);
+
+    // ===== HORIZONTAL MOVEMENT =====
     let forward = 0;
     let strafe = 0;
 
@@ -194,7 +313,10 @@ export function FirstPersonControls({
     if (keys.left) strafe -= 1;
     if (keys.right) strafe += 1;
 
-    // Apply movement if any keys are pressed
+    // Calculate movement direction
+    let moveX = 0;
+    let moveZ = 0;
+
     if (forward !== 0 || strafe !== 0) {
       // Normalize diagonal movement
       const length = Math.sqrt(forward * forward + strafe * strafe);
@@ -205,21 +327,47 @@ export function FirstPersonControls({
       const yawRad = (rotationRef.current.yaw * Math.PI) / 180;
 
       // Calculate world-space movement
-      const moveX = Math.sin(yawRad) * forward + Math.cos(yawRad) * strafe;
-      const moveZ = Math.cos(yawRad) * forward - Math.sin(yawRad) * strafe;
-
-      // Update position
-      const newPos = {
-        x: camera.position.x + moveX * speed * delta,
-        y: camera.position.y, // Keep height constant
-        z: camera.position.z + moveZ * speed * delta,
-      };
-
-      camera.position.set(newPos.x, newPos.y, newPos.z);
-      updatePlayerPosition(newPos);
+      moveX = Math.sin(yawRad) * forward + Math.cos(yawRad) * strafe;
+      moveZ = Math.cos(yawRad) * forward - Math.sin(yawRad) * strafe;
     }
 
-    // Apply rotation
+    // ===== VERTICAL MOVEMENT =====
+    // T/G for flying up/down
+    let verticalMove = 0;
+    if (keys.up) verticalMove += verticalSpeed * delta;
+    if (keys.down) verticalMove -= verticalSpeed * delta;
+
+    // Apply gravity if not using T/G vertical controls
+    if (!keys.up && !keys.down) {
+      velocityRef.current.y -= gravity * delta;
+    } else {
+      // Cancel gravity when using T/G
+      velocityRef.current.y = 0;
+    }
+
+    // Calculate new position
+    const newPos = {
+      x: camera.position.x + moveX * speed * delta,
+      y: camera.position.y + velocityRef.current.y * delta + verticalMove,
+      z: camera.position.z + moveZ * speed * delta,
+    };
+
+    // Ground collision (simple floor at groundLevel)
+    if (newPos.y <= groundLevelRef.current && !keys.up && !keys.down) {
+      newPos.y = groundLevelRef.current;
+      velocityRef.current.y = 0;
+      isGroundedRef.current = true;
+    } else if (keys.up || keys.down) {
+      // Update ground level when flying
+      groundLevelRef.current = newPos.y;
+      isGroundedRef.current = true;
+    }
+
+    // Update camera position
+    camera.position.set(newPos.x, newPos.y, newPos.z);
+    updatePlayerPosition(newPos);
+
+    // ===== APPLY ROTATION =====
     const pitchRad = (rotationRef.current.pitch * Math.PI) / 180;
     const yawRad = (rotationRef.current.yaw * Math.PI) / 180;
 
@@ -239,30 +387,58 @@ export function useFirstPersonInput() {
     left: false,
     right: false,
     sprint: false,
+    up: false,
+    down: false,
+    jump: false,
+    lookUp: false,
+    lookDown: false,
+    lookLeft: false,
+    lookRight: false,
+    spin: false,
   });
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.code) {
         case "KeyW":
-        case "ArrowUp":
           keysRef.current.forward = true;
           break;
         case "KeyS":
-        case "ArrowDown":
           keysRef.current.backward = true;
           break;
         case "KeyA":
-        case "ArrowLeft":
           keysRef.current.left = true;
           break;
         case "KeyD":
-        case "ArrowRight":
           keysRef.current.right = true;
           break;
         case "ShiftLeft":
         case "ShiftRight":
           keysRef.current.sprint = true;
+          break;
+        case "ArrowUp":
+          keysRef.current.lookUp = true;
+          break;
+        case "ArrowDown":
+          keysRef.current.lookDown = true;
+          break;
+        case "ArrowLeft":
+          keysRef.current.lookLeft = true;
+          break;
+        case "ArrowRight":
+          keysRef.current.lookRight = true;
+          break;
+        case "KeyT":
+          keysRef.current.up = true;
+          break;
+        case "KeyG":
+          keysRef.current.down = true;
+          break;
+        case "Space":
+          keysRef.current.jump = true;
+          break;
+        case "KeyQ":
+          keysRef.current.spin = true;
           break;
       }
     };
@@ -270,24 +446,44 @@ export function useFirstPersonInput() {
     const handleKeyUp = (e: KeyboardEvent) => {
       switch (e.code) {
         case "KeyW":
-        case "ArrowUp":
           keysRef.current.forward = false;
           break;
         case "KeyS":
-        case "ArrowDown":
           keysRef.current.backward = false;
           break;
         case "KeyA":
-        case "ArrowLeft":
           keysRef.current.left = false;
           break;
         case "KeyD":
-        case "ArrowRight":
           keysRef.current.right = false;
           break;
         case "ShiftLeft":
         case "ShiftRight":
           keysRef.current.sprint = false;
+          break;
+        case "ArrowUp":
+          keysRef.current.lookUp = false;
+          break;
+        case "ArrowDown":
+          keysRef.current.lookDown = false;
+          break;
+        case "ArrowLeft":
+          keysRef.current.lookLeft = false;
+          break;
+        case "ArrowRight":
+          keysRef.current.lookRight = false;
+          break;
+        case "KeyT":
+          keysRef.current.up = false;
+          break;
+        case "KeyG":
+          keysRef.current.down = false;
+          break;
+        case "Space":
+          keysRef.current.jump = false;
+          break;
+        case "KeyQ":
+          keysRef.current.spin = false;
           break;
       }
     };

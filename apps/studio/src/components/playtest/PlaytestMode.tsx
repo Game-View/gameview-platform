@@ -209,9 +209,24 @@ function ClickToStartOverlay() {
 
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-      <div className="text-center animate-pulse">
-        <p className="text-white text-xl font-medium">Click to start</p>
-        <p className="text-gv-neutral-400 text-sm mt-2">WASD to move, Mouse to look</p>
+      <div className="text-center bg-black/60 backdrop-blur-sm rounded-lg p-6">
+        <p className="text-white text-xl font-medium mb-4">Click to start</p>
+        <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm text-left">
+          <div className="text-gv-neutral-400">WASD</div>
+          <div className="text-white">Move</div>
+          <div className="text-gv-neutral-400">Mouse / Arrows</div>
+          <div className="text-white">Look around</div>
+          <div className="text-gv-neutral-400">Space</div>
+          <div className="text-white">Jump</div>
+          <div className="text-gv-neutral-400">T / G</div>
+          <div className="text-white">Fly up / down</div>
+          <div className="text-gv-neutral-400">Q</div>
+          <div className="text-white">Spin</div>
+          <div className="text-gv-neutral-400">Shift</div>
+          <div className="text-white">Sprint</div>
+          <div className="text-gv-neutral-400">Esc</div>
+          <div className="text-white">Pause / Exit</div>
+        </div>
       </div>
     </div>
   );
