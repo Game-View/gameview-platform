@@ -1,4 +1,4 @@
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@/lib/auth-server";
 import { createClaudeClient, CLAUDE_MODEL } from "@/lib/claude";
 import { buildSparkSystemPrompt } from "@/lib/spark-prompt";
 import type { CreatorType, ExperienceLevel, CreationGoal, FootageStatus } from "@gameview/types";

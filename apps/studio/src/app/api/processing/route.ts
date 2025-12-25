@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth-server";
 import { getSceneById, updateProcessingStatus, updateScene, type ProcessingStatus } from "@/lib/scenes";
 
 // Processing stages with their progress ranges

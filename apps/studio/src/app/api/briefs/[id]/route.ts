@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth-server";
 import { getBriefById, updateBrief, archiveBrief } from "@/lib/briefs";
 import type { ExtractedBrief } from "@/app/api/brief/extract/route";
 

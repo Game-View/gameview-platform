@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth-server";
 import { getSceneById, addVideoToScene, updateProcessingStatus } from "@/lib/scenes";
 
 // Supported video formats

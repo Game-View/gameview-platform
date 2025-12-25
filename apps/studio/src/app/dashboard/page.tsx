@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { useUser, UserButton } from "@clerk/nextjs";
+import { useUser, UserButton } from "@/lib/auth";
 import Link from "next/link";
 import {
   Plus,

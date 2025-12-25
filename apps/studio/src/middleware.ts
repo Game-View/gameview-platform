@@ -31,7 +31,8 @@ const isOnboardingRoute = createRouteMatcher(["/onboarding(.*)"]);
 const isApiRoute = createRouteMatcher(["/api(.*)"]);
 
 // Test mode middleware - bypasses all auth
-function testModeMiddleware(req: NextRequest) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function testModeMiddleware(_req: NextRequest) {
   // In test mode, allow all routes
   return NextResponse.next();
 }

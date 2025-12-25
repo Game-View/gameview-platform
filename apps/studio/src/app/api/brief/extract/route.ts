@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth-server";
 import { createClaudeClient, CLAUDE_MODEL } from "@/lib/claude";
 import type { ExperienceType } from "@gameview/types";
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/lib/auth";
 import dynamic from "next/dynamic";
 import { Loader2, PanelLeftClose, PanelLeft, PanelRightClose, PanelRight, Box, Volume2, X, Play } from "lucide-react";
 import { ViewerControls } from "@/components/viewer/ViewerControls";

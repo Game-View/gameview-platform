@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth-server";
 import { createScene, getScenesByBrief, getScenesByUser } from "@/lib/scenes";
 
 // GET /api/scenes - Get all scenes (optionally filtered by briefId)

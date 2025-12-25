@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth-server";
 import { getSceneById, updateScene, deleteScene } from "@/lib/scenes";
 
 interface RouteParams {

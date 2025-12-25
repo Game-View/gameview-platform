@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useCallback, useState } from "react";
-import { useUser, UserButton } from "@clerk/nextjs";
+import { useUser, UserButton } from "@/lib/auth";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, RotateCcw, FileText, FolderOpen, Command } from "lucide-react";
