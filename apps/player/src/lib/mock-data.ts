@@ -507,3 +507,113 @@ export function formatDuration(minutes: number): string {
   }
   return `${minutes}m`;
 }
+
+// ============================================
+// Mock User Data (for personalization testing)
+// ============================================
+
+export interface MockUser {
+  id: string;
+  name: string;
+  followedCreatorIds: string[];
+  playHistory: PlayHistoryEntry[];
+}
+
+export interface PlayHistoryEntry {
+  experienceId: string;
+  playedAt: string;
+  completed: boolean;
+}
+
+// Simulated logged-in user for testing personalization
+export const mockCurrentUser: MockUser = {
+  id: "user_1",
+  name: "Test Player",
+  // User follows Zac Brown Band and NASA
+  followedCreatorIds: ["creator_1", "creator_5"],
+  // User has played some experiences
+  playHistory: [
+    { experienceId: "exp_2", playedAt: "2024-12-20", completed: true }, // Backstage Pass
+    { experienceId: "exp_9", playedAt: "2024-12-18", completed: true }, // ISS Spacewalk
+    { experienceId: "exp_10", playedAt: "2024-12-15", completed: false }, // Mars Rover
+  ],
+};
+
+// Get creators the user follows
+export function getFollowedCreators(): Creator[] {
+  return mockCreators.filter((c) => mockCurrentUser.followedCreatorIds.includes(c.id));
+}
+
+// Get creators the user follows in a specific category
+export function getFollowedCreatorsByCategory(category: string): Creator[] {
+  return mockCreators.filter(
+    (c) => mockCurrentUser.followedCreatorIds.includes(c.id) && c.category === category
+  );
+}
+
+// Get experiences from creators the user follows
+export function getExperiencesFromFollowedCreators(category?: string): Experience[] {
+  const followedIds = mockCurrentUser.followedCreatorIds;
+  let experiences = mockExperiences.filter((e) => followedIds.includes(e.creatorId));
+  if (category) {
+    experiences = experiences.filter((e) => e.category === category);
+  }
+  return experiences;
+}
+
+// Get experiences the user has played
+export function getPlayedExperiences(): Experience[] {
+  const playedIds = mockCurrentUser.playHistory.map((h) => h.experienceId);
+  return mockExperiences.filter((e) => playedIds.includes(e.id));
+}
+
+// Get "More Like This" recommendations based on play history
+// Returns experiences with similar tags or from same category that user hasn't played
+export function getMoreLikeRecommendations(category?: string, limit = 6): Experience[] {
+  const playedIds = mockCurrentUser.playHistory.map((h) => h.experienceId);
+  const playedExperiences = getPlayedExperiences();
+
+  // Collect tags from played experiences
+  const playedTags = new Set<string>();
+  playedExperiences.forEach((e) => e.tags.forEach((t) => playedTags.add(t)));
+
+  // Find unplayed experiences with matching tags
+  let recommendations = mockExperiences
+    .filter((e) => !playedIds.includes(e.id))
+    .filter((e) => !category || e.category === category)
+    .map((e) => {
+      // Score by number of matching tags
+      const matchingTags = e.tags.filter((t) => playedTags.has(t)).length;
+      return { experience: e, score: matchingTags };
+    })
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((r) => r.experience);
+
+  return recommendations.slice(0, limit);
+}
+
+// Get popular experiences in category (excluding what user has played)
+export function getPopularInCategory(category: string, limit = 6): Experience[] {
+  const playedIds = mockCurrentUser.playHistory.map((h) => h.experienceId);
+  return mockExperiences
+    .filter((e) => e.category === category && !playedIds.includes(e.id))
+    .sort((a, b) => b.playCount - a.playCount)
+    .slice(0, limit);
+}
+
+// Get new releases in category
+export function getNewInCategory(category: string, limit = 6): Experience[] {
+  return mockExperiences
+    .filter((e) => e.category === category)
+    .sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime())
+    .slice(0, limit);
+}
+
+// Get creators to discover (not followed, in category)
+export function getCreatorsToDiscover(category: string, limit = 4): Creator[] {
+  return mockCreators
+    .filter((c) => c.category === category && !mockCurrentUser.followedCreatorIds.includes(c.id))
+    .sort((a, b) => b.followers - a.followers)
+    .slice(0, limit);
+}
