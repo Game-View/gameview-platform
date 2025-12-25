@@ -10,11 +10,33 @@ export const metadata: Metadata = {
   description: "Create immersive 3D experiences with AI-powered tools",
 };
 
+// Check if we should skip auth (for testing)
+const skipAuth = process.env.NEXT_PUBLIC_SKIP_AUTH === "true";
+
+function AppContent({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className="dark">
+      <body className="min-h-screen bg-gv-neutral-900">
+        <AppProviders>
+          {children}
+        </AppProviders>
+        <ToastContainer />
+      </body>
+    </html>
+  );
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // In test mode, skip ClerkProvider entirely
+  if (skipAuth) {
+    return <AppContent>{children}</AppContent>;
+  }
+
+  // Production mode with Clerk
   return (
     <ClerkProvider
       appearance={{
@@ -27,14 +49,7 @@ export default function RootLayout({
         },
       }}
     >
-      <html lang="en" className="dark">
-        <body className="min-h-screen bg-gv-neutral-900">
-          <AppProviders>
-            {children}
-          </AppProviders>
-          <ToastContainer />
-        </body>
-      </html>
+      <AppContent>{children}</AppContent>
     </ClerkProvider>
   );
 }
