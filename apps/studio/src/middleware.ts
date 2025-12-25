@@ -1,6 +1,9 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { clerkClient } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+
+// Check if we should skip auth (for local testing)
+const skipAuth = process.env.NEXT_PUBLIC_SKIP_AUTH === "true";
 
 // Public routes that don't require authentication
 const isPublicRoute = createRouteMatcher([
@@ -24,7 +27,14 @@ const isOnboardingRoute = createRouteMatcher(["/onboarding(.*)"]);
 // API routes (skip profile check)
 const isApiRoute = createRouteMatcher(["/api(.*)"]);
 
-export default clerkMiddleware(async (auth, req) => {
+// Test mode middleware - bypasses all auth
+function testModeMiddleware(req: NextRequest) {
+  // In test mode, allow all routes
+  return NextResponse.next();
+}
+
+// Production middleware with Clerk auth
+const productionMiddleware = clerkMiddleware(async (auth, req) => {
   const { userId } = await auth();
 
   // Allow public routes
@@ -64,6 +74,9 @@ export default clerkMiddleware(async (auth, req) => {
 
   return NextResponse.next();
 });
+
+// Export the appropriate middleware based on mode
+export default skipAuth ? testModeMiddleware : productionMiddleware;
 
 export const config = {
   matcher: [
