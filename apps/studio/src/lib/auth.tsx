@@ -1,7 +1,15 @@
 "use client";
 
-import { ReactNode } from "react";
-import { User as ClerkUser } from "@clerk/nextjs";
+import { ReactNode, useState } from "react";
+import {
+  useUser as useClerkUser,
+  useAuth as useClerkAuth,
+  useClerk as useClerkInstance,
+  UserButton as ClerkUserButton,
+  SignedIn as ClerkSignedIn,
+  SignedOut as ClerkSignedOut,
+} from "@clerk/nextjs";
+import type { User as ClerkUser } from "@clerk/nextjs";
 
 /**
  * Unified Auth Module
@@ -45,6 +53,8 @@ export const mockUser = {
  * In test mode, returns mock user data
  */
 export function useUser() {
+  const clerkResult = useClerkUser();
+
   if (isTestMode) {
     return {
       isLoaded: true,
@@ -53,10 +63,7 @@ export function useUser() {
     };
   }
 
-  // Dynamic import to avoid Clerk errors in test mode
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const clerk = require("@clerk/nextjs");
-  return clerk.useUser();
+  return clerkResult;
 }
 
 /**
@@ -64,6 +71,8 @@ export function useUser() {
  * In test mode, returns mock auth state
  */
 export function useAuth() {
+  const clerkResult = useClerkAuth();
+
   if (isTestMode) {
     return {
       isLoaded: true,
@@ -76,9 +85,7 @@ export function useAuth() {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const clerk = require("@clerk/nextjs");
-  return clerk.useAuth();
+  return clerkResult;
 }
 
 /**
@@ -86,6 +93,8 @@ export function useAuth() {
  * In test mode, returns mock methods
  */
 export function useClerk() {
+  const clerkResult = useClerkInstance();
+
   if (isTestMode) {
     return {
       signOut: () => {
@@ -98,9 +107,7 @@ export function useClerk() {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const clerk = require("@clerk/nextjs");
-  return clerk.useClerk();
+  return clerkResult;
 }
 
 // ============================================
@@ -122,9 +129,6 @@ export function UserButton({
     return <TestUserButton afterSignOutUrl={afterSignOutUrl} />;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const clerk = require("@clerk/nextjs");
-  const ClerkUserButton = clerk.UserButton;
   return <ClerkUserButton appearance={appearance} afterSignOutUrl={afterSignOutUrl} />;
 }
 
@@ -174,9 +178,6 @@ function TestUserButton({ afterSignOutUrl }: { afterSignOutUrl: string }) {
   );
 }
 
-// Need useState for TestUserButton
-import { useState } from "react";
-
 /**
  * SignedIn component - renders children only when signed in
  * In test mode, always renders children
@@ -186,9 +187,6 @@ export function SignedIn({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const clerk = require("@clerk/nextjs");
-  const ClerkSignedIn = clerk.SignedIn;
   return <ClerkSignedIn>{children}</ClerkSignedIn>;
 }
 
@@ -201,8 +199,5 @@ export function SignedOut({ children }: { children: ReactNode }) {
     return null;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const clerk = require("@clerk/nextjs");
-  const ClerkSignedOut = clerk.SignedOut;
   return <ClerkSignedOut>{children}</ClerkSignedOut>;
 }
