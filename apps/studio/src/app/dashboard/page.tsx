@@ -17,10 +17,16 @@ import {
   Search,
   X,
   Wrench,
+  Video,
 } from "lucide-react";
 import type { StoredBrief } from "@/lib/briefs";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { toast } from "@/stores/toast-store";
+import {
+  NewProductionModal,
+  ProductionProgressList,
+  type Production,
+} from "@/components/production";
 
 const EXPERIENCE_TYPE_LABELS: Record<string, string> = {
   treasure_hunt: "Treasure Hunt",
@@ -64,6 +70,10 @@ export default function DashboardPage() {
     briefName: string;
   }>({ isOpen: false, briefId: null, briefName: "" });
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // New Production modal state
+  const [showNewProductionModal, setShowNewProductionModal] = useState(false);
+  const [productions, setProductions] = useState<Production[]>([]);
 
   const metadata = user?.unsafeMetadata as {
     profileCompleted?: boolean;
@@ -202,6 +212,108 @@ export default function DashboardPage() {
     return date.toLocaleDateString();
   };
 
+  // Handle new production creation
+  const handleCreateProduction = async (settings: {
+    name: string;
+    preset: "fast" | "balanced" | "high";
+    videos: Array<{ id: string; name: string; size: number }>;
+  }) => {
+    // Create a new production entry (would call API in real implementation)
+    const newProduction: Production = {
+      id: `prod_${Date.now()}`,
+      name: settings.name,
+      status: "queued",
+      progress: 0,
+      stageProgress: 0,
+      createdAt: new Date().toISOString(),
+      videoCount: settings.videos.length,
+      preset: settings.preset,
+    };
+
+    setProductions((prev) => [newProduction, ...prev]);
+    toast.success("Production started", `"${settings.name}" is now processing.`);
+
+    // Simulate progress updates (replace with real WebSocket/polling later)
+    simulateProductionProgress(newProduction.id);
+  };
+
+  // Simulate production progress (placeholder for real backend integration)
+  const simulateProductionProgress = (productionId: string) => {
+    const stages: Array<Production["status"]> = [
+      "frame_extraction",
+      "colmap",
+      "brush_processing",
+      "metadata_generation",
+      "completed",
+    ];
+    let stageIndex = 0;
+    let progress = 0;
+
+    const interval = setInterval(() => {
+      progress += Math.random() * 5;
+      const stageProgress = (progress % 25) * 4;
+
+      if (progress >= 25 * (stageIndex + 1) && stageIndex < stages.length - 1) {
+        stageIndex++;
+      }
+
+      if (progress >= 100) {
+        progress = 100;
+        clearInterval(interval);
+        setProductions((prev) =>
+          prev.map((p) =>
+            p.id === productionId
+              ? {
+                  ...p,
+                  status: "completed",
+                  progress: 100,
+                  stageProgress: 100,
+                  completedAt: new Date().toISOString(),
+                }
+              : p
+          )
+        );
+        toast.success("Production complete", "Your 3D scene is ready!");
+        return;
+      }
+
+      setProductions((prev) =>
+        prev.map((p) =>
+          p.id === productionId
+            ? {
+                ...p,
+                status: stages[stageIndex],
+                progress: Math.floor(progress),
+                stageProgress: Math.floor(stageProgress),
+              }
+            : p
+        )
+      );
+    }, 500);
+  };
+
+  // Handle production actions
+  const handleViewProduction = (id: string) => {
+    // Navigate to editor with this production
+    window.location.href = `/project/${id}`;
+  };
+
+  const handleRetryProduction = (id: string) => {
+    setProductions((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? { ...p, status: "queued", progress: 0, stageProgress: 0, errorMessage: undefined }
+          : p
+      )
+    );
+    simulateProductionProgress(id);
+  };
+
+  const handleDeleteProduction = (id: string) => {
+    setProductions((prev) => prev.filter((p) => p.id !== id));
+    toast.success("Production deleted", "The production has been removed.");
+  };
+
   return (
     <div className="min-h-screen bg-gv-neutral-900">
       {/* Header */}
@@ -271,13 +383,16 @@ export default function DashboardPage() {
             </p>
           </Link>
 
-          <button className="group p-6 bg-gv-neutral-800/50 border border-gv-neutral-700 rounded-gv-lg hover:border-gv-neutral-600 transition-all text-left">
+          <button
+            onClick={() => setShowNewProductionModal(true)}
+            className="group p-6 bg-gv-neutral-800/50 border border-gv-neutral-700 rounded-gv-lg hover:border-gv-neutral-600 transition-all text-left"
+          >
             <div className="w-12 h-12 rounded-gv bg-gv-neutral-700 flex items-center justify-center mb-4 group-hover:bg-gv-neutral-600 transition-colors">
-              <Plus className="h-6 w-6 text-gv-neutral-300" />
+              <Video className="h-6 w-6 text-gv-neutral-300" />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-1">New Project</h3>
+            <h3 className="text-lg font-semibold text-white mb-1">New Production</h3>
             <p className="text-gv-neutral-400 text-sm">
-              Create a blank project and build from scratch
+              Transform video footage into a 3D scene
             </p>
           </button>
 
@@ -291,6 +406,21 @@ export default function DashboardPage() {
             </p>
           </button>
         </div>
+
+        {/* Active Productions Section */}
+        {productions.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold text-white mb-6">
+              Active Productions
+            </h2>
+            <ProductionProgressList
+              productions={productions}
+              onView={handleViewProduction}
+              onRetry={handleRetryProduction}
+              onDelete={handleDeleteProduction}
+            />
+          </div>
+        )}
 
         {/* Projects Section */}
         <div>
@@ -512,6 +642,13 @@ export default function DashboardPage() {
         confirmLabel="Delete Project"
         confirmVariant="danger"
         isLoading={isDeleting}
+      />
+
+      {/* New Production Modal */}
+      <NewProductionModal
+        isOpen={showNewProductionModal}
+        onClose={() => setShowNewProductionModal(false)}
+        onSubmit={handleCreateProduction}
       />
     </div>
   );
