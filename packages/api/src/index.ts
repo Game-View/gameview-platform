@@ -1,9 +1,17 @@
 /**
  * @gameview/api
  * API client for Game View platform services
+ *
+ * This package provides:
+ * - REST API client (GameViewApiClient)
+ * - tRPC API layer (import from '@gameview/api/trpc')
  */
 
 import type { ApiResponse, ApiError, Production, AppSettings } from '@gameview/types';
+
+// Re-export tRPC types for convenience
+export type { AppRouter } from './trpc';
+export type { Context, CreateContextOptions } from './trpc/context';
 
 export interface ApiClientConfig {
   baseUrl: string;

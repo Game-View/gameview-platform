@@ -1,0 +1,379 @@
+// Game View Platform - Prisma Schema
+// Database: Neon (Serverless PostgreSQL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // For migrations (bypasses connection pooler)
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  PLAYER
+  CREATOR
+  ADMIN
+}
+
+enum Category {
+  ENTERTAINMENT
+  EDUCATION
+  EXPLORATION
+}
+
+enum ExperienceStatus {
+  DRAFT
+  PROCESSING
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AgeRating {
+  E   // Everyone
+  E10 // Everyone 10+
+  T   // Teen
+  M   // Mature
+}
+
+enum Platform {
+  YOUTUBE
+  TIKTOK
+  TWITCH
+  TWITTER
+  INSTAGRAM
+}
+
+enum PurchaseStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  FAILED
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum JobStage {
+  DOWNLOADING
+  COLMAP
+  SPLATTING
+  UPLOADING
+  FINALIZING
+}
+
+// ============================================
+// CORE MODELS
+// ============================================
+
+model User {
+  id          String   @id @default(cuid())
+  clerkId     String   @unique
+  email       String   @unique
+  displayName String
+  avatarUrl   String?
+  role        UserRole @default(PLAYER)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  creator           Creator?
+  interests         UserInterest[]
+  follows           Follow[]           @relation("Follower")
+  playHistory       PlayHistory[]
+  wishlist          Wishlist[]
+  purchases         Purchase[]
+  connectedAccounts ConnectedAccount[]
+
+  @@index([clerkId])
+  @@index([email])
+}
+
+model Creator {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  username        String   @unique
+  displayName     String
+  bio             String?
+  tagline         String?
+  avatarUrl       String?
+  bannerUrl       String?
+  websiteUrl      String?
+  isVerified      Boolean  @default(false)
+  isPro           Boolean  @default(false)
+  stripeAccountId String? // For payouts
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experiences Experience[]
+  series      Series[]
+  followers   Follow[]     @relation("Following")
+  socialLinks SocialLink[]
+
+  @@index([username])
+  @@index([userId])
+}
+
+model Experience {
+  id           String           @id @default(cuid())
+  creatorId    String
+  seriesId     String?
+  title        String
+  description  String
+  thumbnailUrl String?
+  previewUrl   String? // Short video preview
+  videoUrl     String? // Source 360 video
+  plyUrl       String? // Gaussian splat PLY file
+  camerasJson  String? // cameras.json URL
+  category     Category
+  subcategory  String
+  tags         String[]
+  duration     Int // Duration in seconds
+  price        Decimal          @default(0) @db.Decimal(10, 2)
+  status       ExperienceStatus @default(DRAFT)
+  ageRating    AgeRating        @default(E)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  publishedAt  DateTime?
+
+  // Relations
+  creator       Creator            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  series        Series?            @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  playHistory   PlayHistory[]
+  wishlist      Wishlist[]
+  purchases     Purchase[]
+  analytics     CreatorAnalytics[]
+  processingJob ProcessingJob?
+
+  @@index([creatorId])
+  @@index([category])
+  @@index([status])
+  @@index([publishedAt])
+}
+
+model Series {
+  id           String   @id @default(cuid())
+  creatorId    String
+  title        String
+  description  String?
+  thumbnailUrl String?
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  creator     Creator      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  experiences Experience[]
+
+  @@index([creatorId])
+}
+
+// ============================================
+// USER ACTIVITY MODELS
+// ============================================
+
+model UserInterest {
+  id        String   @id @default(cuid())
+  userId    String
+  interest  String // e.g., "music", "space", "travel"
+  category  Category
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, interest])
+  @@index([userId])
+}
+
+model Follow {
+  id         String   @id @default(cuid())
+  followerId String
+  creatorId  String
+  createdAt  DateTime @default(now())
+
+  // Relations
+  follower User    @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  creator  Creator @relation("Following", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, creatorId])
+  @@index([followerId])
+  @@index([creatorId])
+}
+
+model PlayHistory {
+  id              String    @id @default(cuid())
+  userId          String
+  experienceId    String
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  playTimeSeconds Int       @default(0)
+  lastPosition    Json? // { x, y, z, rotation } for resume
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([experienceId])
+  @@index([userId, experienceId])
+}
+
+model Wishlist {
+  id           String   @id @default(cuid())
+  userId       String
+  experienceId String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, experienceId])
+  @@index([userId])
+}
+
+model ConnectedAccount {
+  id             String    @id @default(cuid())
+  userId         String
+  platform       Platform
+  platformUserId String
+  username       String?
+  avatarUrl      String?
+  accessToken    String? // Encrypted
+  refreshToken   String? // Encrypted
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+  @@unique([platform, platformUserId])
+  @@index([userId])
+}
+
+// ============================================
+// COMMERCE MODELS
+// ============================================
+
+model Purchase {
+  id              String         @id @default(cuid())
+  userId          String
+  experienceId    String
+  amount          Decimal        @db.Decimal(10, 2)
+  currency        String         @default("USD")
+  stripePaymentId String?
+  status          PurchaseStatus @default(PENDING)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  // Relations
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([experienceId])
+  @@index([stripePaymentId])
+}
+
+// ============================================
+// ANALYTICS MODELS (Creator-Private)
+// ============================================
+
+model CreatorAnalytics {
+  id            String   @id @default(cuid())
+  experienceId  String
+  date          DateTime @db.Date
+  plays         Int      @default(0)
+  completions   Int      @default(0)
+  uniqueViewers Int      @default(0)
+  avgPlayTime   Int      @default(0) // seconds
+  revenue       Decimal  @default(0) @db.Decimal(10, 2)
+
+  // Relations
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@unique([experienceId, date])
+  @@index([experienceId])
+  @@index([date])
+}
+
+// ============================================
+// CREATOR PROFILE MODELS
+// ============================================
+
+model SocialLink {
+  id        String   @id @default(cuid())
+  creatorId String
+  platform  String // "twitter", "instagram", "youtube", etc.
+  url       String
+  createdAt DateTime @default(now())
+
+  // Relations
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, platform])
+  @@index([creatorId])
+}
+
+// ============================================
+// PROCESSING ENGINE MODELS
+// ============================================
+
+model ProcessingJob {
+  id           String    @id @default(cuid())
+  experienceId String    @unique
+  status       JobStatus @default(QUEUED)
+  stage        JobStage?
+  progress     Int       @default(0)
+
+  // Processing settings
+  totalSteps      Int @default(5000)
+  maxSplats       Int @default(10000000)
+  imagePercentage Int @default(50)
+  fps             Int @default(10)
+  duration        Int @default(10)
+
+  // Source & output
+  sourceVideoUrl   String
+  outputPlyUrl     String?
+  outputCamerasUrl String?
+  outputThumbnail  String?
+  outputPreview    String?
+
+  // Timing
+  queuedAt       DateTime  @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  processingTime Int? // seconds
+
+  // Worker info
+  workerId      String?
+  lastHeartbeat DateTime?
+
+  // Error handling
+  errorMessage String?
+  retryCount   Int     @default(0)
+  maxRetries   Int     @default(3)
+
+  // Relations
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([queuedAt])
+}

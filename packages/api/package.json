@@ -2,18 +2,34 @@
   "name": "@gameview/api",
   "version": "0.1.0",
   "private": true,
-  "description": "API client for Game View platform",
+  "description": "API layer for Game View platform (tRPC + REST)",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./trpc": {
+      "import": "./dist/trpc/index.mjs",
+      "require": "./dist/trpc/index.js",
+      "types": "./dist/trpc/index.d.ts"
+    }
+  },
   "files": ["dist"],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@gameview/types": "workspace:*"
+    "@gameview/database": "workspace:*",
+    "@gameview/types": "workspace:*",
+    "@trpc/server": "^10.45.0",
+    "superjson": "^2.2.1",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "tsup": "^8.3.5",
