@@ -25,6 +25,8 @@ import {
   BookOpen,
   Check,
   Loader2,
+  Gift,
+  X,
 } from "lucide-react";
 import type {
   CreatorType,
@@ -75,6 +77,14 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Promo code state
+  const [promoCode, setPromoCode] = useState("");
+  const [isRedeemingPromo, setIsRedeemingPromo] = useState(false);
+  const [promoResult, setPromoResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
   // Load current profile from Clerk metadata
   useEffect(() => {
@@ -149,6 +159,44 @@ export default function SettingsPage() {
       setError(err instanceof Error ? err.message : "Failed to save changes");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleRedeemPromo = async () => {
+    if (!promoCode.trim()) return;
+
+    setIsRedeemingPromo(true);
+    setPromoResult(null);
+
+    try {
+      const response = await fetch("/api/trpc/promo.redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ json: { code: promoCode.trim() } }),
+      });
+
+      const data = await response.json();
+
+      if (data.result?.data?.json?.success) {
+        setPromoResult({
+          success: true,
+          message: data.result.data.json.message || "Promo code redeemed successfully!",
+        });
+        setPromoCode("");
+      } else if (data.error) {
+        const errorMessage = data.error.json?.message || data.error.message || "Failed to redeem promo code";
+        setPromoResult({ success: false, message: errorMessage });
+      } else {
+        setPromoResult({ success: false, message: "Failed to redeem promo code" });
+      }
+    } catch (err) {
+      console.error("Failed to redeem promo code:", err);
+      setPromoResult({
+        success: false,
+        message: err instanceof Error ? err.message : "Failed to redeem promo code",
+      });
+    } finally {
+      setIsRedeemingPromo(false);
     }
   };
 
@@ -281,6 +329,69 @@ export default function SettingsPage() {
                     <span className="text-sm font-medium">{option.label}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Promo Code Section */}
+        <section className="mb-12">
+          <h2 className="text-xl font-semibold text-white mb-6">Promo Code</h2>
+          <div className="bg-gv-neutral-800/50 border border-gv-neutral-700 rounded-gv-lg p-6">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-gv bg-gv-primary-500/20 flex items-center justify-center flex-shrink-0">
+                <Gift className="h-6 w-6 text-gv-primary-500" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-medium text-white mb-1">Have a promo code?</h3>
+                <p className="text-gv-neutral-400 text-sm mb-4">
+                  Enter your code below to unlock beta access, credits, or special offers.
+                </p>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={promoCode}
+                    onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                    placeholder="Enter promo code"
+                    className="flex-1 px-4 py-2 bg-gv-neutral-900 border border-gv-neutral-700 rounded-gv text-white placeholder:text-gv-neutral-500 focus:outline-none focus:border-gv-primary-500"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleRedeemPromo();
+                    }}
+                  />
+                  <button
+                    onClick={handleRedeemPromo}
+                    disabled={isRedeemingPromo || !promoCode.trim()}
+                    className={`px-6 py-2 rounded-gv font-medium transition-colors ${
+                      isRedeemingPromo || !promoCode.trim()
+                        ? "bg-gv-neutral-700 text-gv-neutral-400 cursor-not-allowed"
+                        : "bg-gv-primary-500 hover:bg-gv-primary-600 text-white"
+                    }`}
+                  >
+                    {isRedeemingPromo ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      "Redeem"
+                    )}
+                  </button>
+                </div>
+
+                {/* Promo Result */}
+                {promoResult && (
+                  <div
+                    className={`mt-4 p-3 rounded-gv flex items-center gap-2 text-sm ${
+                      promoResult.success
+                        ? "bg-gv-success/10 border border-gv-success/30 text-gv-success"
+                        : "bg-gv-error/10 border border-gv-error/30 text-gv-error"
+                    }`}
+                  >
+                    {promoResult.success ? (
+                      <Check className="h-4 w-4 flex-shrink-0" />
+                    ) : (
+                      <X className="h-4 w-4 flex-shrink-0" />
+                    )}
+                    {promoResult.message}
+                  </div>
+                )}
               </div>
             </div>
           </div>

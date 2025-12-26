@@ -5,6 +5,7 @@ import { experienceRouter } from "./experience";
 import { followRouter } from "./follow";
 import { wishlistRouter } from "./wishlist";
 import { playHistoryRouter } from "./playHistory";
+import { promoRouter } from "./promo";
 
 /**
  * Main application router
@@ -17,6 +18,7 @@ export const appRouter = router({
   follow: followRouter,
   wishlist: wishlistRouter,
   playHistory: playHistoryRouter,
+  promo: promoRouter,
 });
 
 // Export type definition of API
