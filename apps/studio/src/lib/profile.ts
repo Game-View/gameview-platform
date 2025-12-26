@@ -1,11 +1,25 @@
-import { createServerClient } from "./supabase";
+import { db } from "@gameview/database";
+import { clerkClient } from "@clerk/nextjs/server";
 import type {
-  UserProfile,
   CreatorType,
   ExperienceLevel,
   CreationGoal,
   FootageStatus,
 } from "@gameview/types";
+
+export interface UserProfile {
+  id: string;
+  clerkId: string;
+  email: string;
+  displayName?: string;
+  creatorType?: CreatorType;
+  experienceLevel?: ExperienceLevel;
+  creationGoals?: CreationGoal[];
+  footageStatus?: FootageStatus;
+  profileCompleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface CreateProfileData {
   clerkId: string;
@@ -23,66 +37,106 @@ export interface UpdateProfileData {
   experienceLevel?: ExperienceLevel;
   creationGoals?: CreationGoal[];
   footageStatus?: FootageStatus;
-  socialLinks?: UserProfile["socialLinks"];
-  teamSize?: UserProfile["teamSize"];
-  referralSource?: string;
 }
 
 // Get profile by Clerk ID
 export async function getProfileByClerkId(
   clerkId: string
 ): Promise<UserProfile | null> {
-  const supabase = createServerClient();
+  try {
+    // Get user from database
+    const user = await db.user.findUnique({
+      where: { clerkId },
+    });
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("clerkId", clerkId)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") {
-      // No rows returned
+    if (!user) {
       return null;
     }
+
+    // Get Clerk user to check metadata
+    const client = await clerkClient();
+    const clerkUser = await client.users.getUser(clerkId);
+    const metadata = clerkUser.unsafeMetadata || {};
+
+    return {
+      id: user.id,
+      clerkId: user.clerkId,
+      email: user.email,
+      displayName: user.displayName,
+      creatorType: metadata.creatorType as CreatorType | undefined,
+      experienceLevel: metadata.experienceLevel as ExperienceLevel | undefined,
+      creationGoals: metadata.creationGoals as CreationGoal[] | undefined,
+      footageStatus: metadata.footageStatus as FootageStatus | undefined,
+      profileCompleted: Boolean(metadata.profileCompleted),
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+    };
+  } catch (error) {
     console.error("Error fetching profile:", error);
     throw error;
   }
-
-  return data;
 }
 
-// Create a new profile
+// Create a new profile (saves onboarding data to Clerk metadata)
 export async function createProfile(
   data: CreateProfileData
 ): Promise<UserProfile> {
-  const supabase = createServerClient();
+  try {
+    // Ensure user exists in database
+    let user = await db.user.findUnique({
+      where: { clerkId: data.clerkId },
+    });
 
-  const now = new Date().toISOString();
+    if (!user) {
+      // Create user if they don't exist
+      user = await db.user.create({
+        data: {
+          clerkId: data.clerkId,
+          email: data.email,
+          displayName: data.displayName || "Creator",
+          role: "CREATOR",
+        },
+      });
+    } else {
+      // Update user to CREATOR role
+      user = await db.user.update({
+        where: { clerkId: data.clerkId },
+        data: {
+          role: "CREATOR",
+          displayName: data.displayName || user.displayName,
+        },
+      });
+    }
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .insert({
-      clerkId: data.clerkId,
-      email: data.email,
-      displayName: data.displayName,
+    // Save onboarding data to Clerk metadata
+    const client = await clerkClient();
+    await client.users.updateUserMetadata(data.clerkId, {
+      unsafeMetadata: {
+        profileCompleted: true,
+        creatorType: data.creatorType,
+        experienceLevel: data.experienceLevel,
+        creationGoals: data.creationGoals,
+        footageStatus: data.footageStatus,
+      },
+    });
+
+    return {
+      id: user.id,
+      clerkId: user.clerkId,
+      email: user.email,
+      displayName: user.displayName,
       creatorType: data.creatorType,
       experienceLevel: data.experienceLevel,
       creationGoals: data.creationGoals,
       footageStatus: data.footageStatus,
       profileCompleted: true,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .select()
-    .single();
-
-  if (error) {
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+    };
+  } catch (error) {
     console.error("Error creating profile:", error);
     throw error;
   }
-
-  return profile;
 }
 
 // Update an existing profile
@@ -90,28 +144,47 @@ export async function updateProfile(
   clerkId: string,
   data: UpdateProfileData
 ): Promise<UserProfile> {
-  const supabase = createServerClient();
+  try {
+    // Update user in database if displayName changed
+    if (data.displayName) {
+      await db.user.update({
+        where: { clerkId },
+        data: { displayName: data.displayName },
+      });
+    }
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .update({
-      ...data,
-      updatedAt: new Date().toISOString(),
-    })
-    .eq("clerkId", clerkId)
-    .select()
-    .single();
+    // Get current metadata
+    const client = await clerkClient();
+    const clerkUser = await client.users.getUser(clerkId);
+    const currentMetadata = clerkUser.unsafeMetadata || {};
 
-  if (error) {
+    // Update Clerk metadata
+    await client.users.updateUserMetadata(clerkId, {
+      unsafeMetadata: {
+        ...currentMetadata,
+        ...(data.creatorType && { creatorType: data.creatorType }),
+        ...(data.experienceLevel && { experienceLevel: data.experienceLevel }),
+        ...(data.creationGoals && { creationGoals: data.creationGoals }),
+        ...(data.footageStatus && { footageStatus: data.footageStatus }),
+      },
+    });
+
+    // Return updated profile
+    return (await getProfileByClerkId(clerkId))!;
+  } catch (error) {
     console.error("Error updating profile:", error);
     throw error;
   }
-
-  return profile;
 }
 
 // Check if profile exists and is completed
 export async function isProfileCompleted(clerkId: string): Promise<boolean> {
-  const profile = await getProfileByClerkId(clerkId);
-  return profile?.profileCompleted ?? false;
+  try {
+    const client = await clerkClient();
+    const clerkUser = await client.users.getUser(clerkId);
+    return Boolean(clerkUser.unsafeMetadata?.profileCompleted);
+  } catch (error) {
+    console.error("Error checking profile completion:", error);
+    return false;
+  }
 }
