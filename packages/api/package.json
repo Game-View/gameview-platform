@@ -8,14 +8,14 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     },
     "./trpc": {
+      "types": "./dist/trpc/index.d.ts",
       "import": "./dist/trpc/index.mjs",
-      "require": "./dist/trpc/index.js",
-      "types": "./dist/trpc/index.d.ts"
+      "require": "./dist/trpc/index.js"
     }
   },
   "files": ["dist"],
