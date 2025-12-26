@@ -116,11 +116,12 @@ model Creator {
   updatedAt       DateTime @updatedAt
 
   // Relations
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  experiences Experience[]
-  series      Series[]
-  followers   Follow[]     @relation("Following")
-  socialLinks SocialLink[]
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experiences  Experience[]
+  series       Series[]
+  followers    Follow[]             @relation("Following")
+  socialLinks  SocialLink[]
+  subscription CreatorSubscription?
 
   @@index([username])
   @@index([userId])
@@ -376,4 +377,285 @@ model ProcessingJob {
 
   @@index([status])
   @@index([queuedAt])
+}
+
+// ============================================
+// SUBSCRIPTION & PUBLISHING CREDITS
+// ============================================
+
+enum SubscriptionTier {
+  FREE       // Limited publishes, basic features
+  STARTER    // Pay-per-publish model
+  PRO        // Monthly credits, priority processing
+  ENTERPRISE // Unlimited, custom features
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  TRIALING
+}
+
+model CreatorSubscription {
+  id                    String             @id @default(cuid())
+  creatorId             String             @unique
+  tier                  SubscriptionTier   @default(FREE)
+  status                SubscriptionStatus @default(ACTIVE)
+  stripeSubscriptionId  String?
+  stripeCustomerId      String?
+
+  // Publishing credits
+  monthlyCredits        Int                @default(0)  // Credits granted per month
+  rolloverCredits       Int                @default(0)  // Unused credits from previous months
+  creditsUsedThisMonth  Int                @default(0)  // Track monthly usage
+  creditResetDate       DateTime?                       // When credits reset
+
+  // Billing
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  cancelAtPeriodEnd     Boolean            @default(false)
+
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  // Relations
+  creator               Creator            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  creditTransactions    CreditTransaction[]
+
+  @@index([stripeSubscriptionId])
+  @@index([stripeCustomerId])
+}
+
+enum CreditTransactionType {
+  MONTHLY_GRANT      // Monthly subscription credits
+  PURCHASE           // One-time credit purchase
+  PUBLISH_USED       // Credit used for publishing
+  PROMO_CODE         // Credits from promo code
+  REFUND             // Refunded credits
+  ADMIN_ADJUSTMENT   // Manual admin adjustment
+  ROLLOVER           // Unused credits rolled over
+}
+
+model CreditTransaction {
+  id             String                @id @default(cuid())
+  subscriptionId String
+  type           CreditTransactionType
+  amount         Int                   // Positive for grants, negative for usage
+  balance        Int                   // Running balance after transaction
+  description    String?
+  referenceId    String?               // e.g., experienceId for PUBLISH_USED
+  createdAt      DateTime              @default(now())
+
+  // Relations
+  subscription   CreatorSubscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// One-time publish fee tracking (for pay-per-publish model)
+model PublishFee {
+  id              String         @id @default(cuid())
+  creatorId       String
+  experienceId    String         @unique
+  amount          Decimal        @db.Decimal(10, 2)
+  currency        String         @default("USD")
+  stripePaymentId String?
+  status          PurchaseStatus @default(PENDING)
+  waived          Boolean        @default(false)  // True if paid via credits or promo
+  waivedReason    String?                         // "credit", "promo:CODE123", etc.
+  createdAt       DateTime       @default(now())
+  paidAt          DateTime?
+
+  @@index([creatorId])
+  @@index([stripePaymentId])
+}
+
+// ============================================
+// PROMO CODES & BETA ACCESS
+// ============================================
+
+enum PromoCodeType {
+  BETA_ACCESS        // Full platform access for beta testers
+  PUBLISH_CREDITS    // Grant publishing credits
+  SUBSCRIPTION_TRIAL // Extended trial period
+  DISCOUNT           // Percentage or fixed discount
+}
+
+model PromoCode {
+  id              String        @id @default(cuid())
+  code            String        @unique  // e.g., "BETA2025", "EARLYBIRD"
+  type            PromoCodeType
+  description     String?
+
+  // Value based on type
+  creditAmount    Int?          // For PUBLISH_CREDITS type
+  discountPercent Int?          // For DISCOUNT type (0-100)
+  discountAmount  Decimal?      @db.Decimal(10, 2) // Fixed discount
+  trialDays       Int?          // For SUBSCRIPTION_TRIAL type
+
+  // Limits
+  maxRedemptions  Int?          // null = unlimited
+  redemptionCount Int           @default(0)
+  maxPerUser      Int           @default(1)  // How many times one user can use
+
+  // Validity
+  validFrom       DateTime      @default(now())
+  validUntil      DateTime?     // null = never expires
+  isActive        Boolean       @default(true)
+
+  // Targeting
+  requiresEmail   String?       // Only specific email can use
+  requiresDomain  String?       // Only emails from this domain (e.g., "@gameview.app")
+  tier            SubscriptionTier?  // Only for specific tier
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  redemptions     PromoRedemption[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model PromoRedemption {
+  id          String   @id @default(cuid())
+  promoCodeId String
+  userId      String
+  redeemedAt  DateTime @default(now())
+
+  // What was granted
+  creditsGranted Int?
+  accessGranted  String?  // e.g., "beta", "pro_trial"
+
+  // Relations
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+
+  @@unique([promoCodeId, userId])  // Prevent duplicate redemptions
+  @@index([userId])
+}
+
+// Beta tester access tracking
+model BetaAccess {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  grantedAt   DateTime  @default(now())
+  expiresAt   DateTime?              // null = never expires
+  grantedBy   String?                // Admin who granted access
+  promoCodeId String?                // If granted via promo code
+  notes       String?
+
+  // Feature flags for beta features
+  features    Json?     // e.g., { "newEditor": true, "aiAssistant": true }
+
+  // Status
+  isActive    Boolean   @default(true)
+  revokedAt   DateTime?
+  revokedBy   String?
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+// ============================================
+// SOFTWARE VERSIONING & UPDATES
+// ============================================
+
+enum AppType {
+  DESKTOP    // Game View Desktop (gvdw)
+  STUDIO     // Creator Studio web app
+  PLAYER     // Player Platform web app
+}
+
+enum UpdateType {
+  PATCH      // Bug fixes, no user notification needed
+  MINOR      // Small features, notify user
+  MAJOR      // Breaking changes or big features, require user acknowledgment
+  SECURITY   // Security update, force update
+}
+
+model AppVersion {
+  id           String     @id @default(cuid())
+  appType      AppType
+  version      String     // Semantic version: "1.2.3"
+  updateType   UpdateType
+  releaseNotes String?    // Markdown release notes
+  downloadUrl  String?    // For desktop app
+  checksum     String?    // For verifying desktop app downloads
+
+  // Version requirements
+  minOsVersion String?    // Minimum OS version required
+  minVersion   String?    // Minimum previous version that can update to this
+
+  // Rollout control
+  isLatest     Boolean    @default(false)
+  isRequired   Boolean    @default(false)  // Force update
+  rolloutPct   Int        @default(100)    // Gradual rollout percentage
+
+  releasedAt   DateTime   @default(now())
+  createdAt    DateTime   @default(now())
+
+  @@unique([appType, version])
+  @@index([appType, isLatest])
+}
+
+// Track which version users are on (for Desktop app)
+model UserAppVersion {
+  id            String   @id @default(cuid())
+  userId        String
+  appType       AppType
+  version       String
+  lastCheckedAt DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, appType])
+  @@index([appType, version])
+}
+
+// Feature update notifications
+model UpdateNotification {
+  id          String     @id @default(cuid())
+  versionId   String
+  title       String
+  message     String
+  imageUrl    String?
+  actionUrl   String?    // Link to learn more
+  priority    Int        @default(0)  // Higher = more prominent
+
+  createdAt   DateTime   @default(now())
+
+  // Track who has seen/dismissed
+  dismissals  NotificationDismissal[]
+
+  @@index([versionId])
+}
+
+model NotificationDismissal {
+  id             String   @id @default(cuid())
+  notificationId String
+  userId         String
+  dismissedAt    DateTime @default(now())
+
+  // Relations
+  notification   UpdateNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, userId])
+  @@index([userId])
+}
+
+// ============================================
+// ADMIN & SYSTEM CONFIGURATION
+// ============================================
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+  updatedBy String?  // Admin user ID
+
+  @@index([key])
 }
