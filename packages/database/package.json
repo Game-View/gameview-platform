@@ -6,13 +6,21 @@
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
   "files": [
     "dist",
     "prisma"
   ],
   "scripts": {
     "build": "pnpm db:generate && tsup src/index.ts --format cjs,esm --dts",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "dev": "tsup src/index.ts --format cjs,esm --dts && tsup src/index.ts --format cjs,esm --dts --watch",
+    "dev:prepare": "tsup src/index.ts --format cjs,esm --dts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
@@ -22,10 +30,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@prisma/client": "^7.2.0"
+    "@prisma/client": "^5.22.0"
   },
   "devDependencies": {
-    "prisma": "^7.2.0",
+    "prisma": "^5.22.0",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
