@@ -212,13 +212,62 @@ export default function DashboardPage() {
     return date.toLocaleDateString();
   };
 
-  // Handle new production creation
+  // Handle new production creation - calls real tRPC API when available
   const handleCreateProduction = async (settings: {
     name: string;
     preset: "fast" | "balanced" | "high";
-    videos: Array<{ id: string; name: string; size: number }>;
+    videos: Array<{ id: string; name: string; size: number; url?: string; path?: string }>;
   }) => {
-    // Create a new production entry (would call API in real implementation)
+    // Check if we have uploaded URLs (real upload) or mock data (simulated)
+    const hasRealUploads = settings.videos.every((v) => v.url && !v.url.startsWith("/mock"));
+
+    if (hasRealUploads) {
+      // Use real tRPC API
+      try {
+        const response = await fetch("/api/trpc/production.create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            json: {
+              name: settings.name,
+              preset: settings.preset,
+              sourceVideos: settings.videos.map((v) => ({
+                url: v.url!,
+                filename: v.name,
+                size: v.size,
+              })),
+            },
+          }),
+        });
+
+        const data = await response.json();
+        if (data.result?.data?.json) {
+          const production = data.result.data.json;
+          const newProduction: Production = {
+            id: production.id,
+            name: production.name,
+            status: "queued",
+            progress: 0,
+            stageProgress: 0,
+            createdAt: production.createdAt,
+            videoCount: production.videoCount,
+            preset: production.preset,
+          };
+
+          setProductions((prev) => [newProduction, ...prev]);
+          toast.success("Production started", `"${settings.name}" is now processing.`);
+
+          // Subscribe to SSE for real-time progress
+          subscribeToProgress(production.id);
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to create production via API:", error);
+        // Fall through to simulation mode
+      }
+    }
+
+    // Simulation mode (for development without backend)
     const newProduction: Production = {
       id: `prod_${Date.now()}`,
       name: settings.name,
@@ -232,9 +281,47 @@ export default function DashboardPage() {
 
     setProductions((prev) => [newProduction, ...prev]);
     toast.success("Production started", `"${settings.name}" is now processing.`);
-
-    // Simulate progress updates (replace with real WebSocket/polling later)
     simulateProductionProgress(newProduction.id);
+  };
+
+  // Subscribe to Server-Sent Events for real-time progress
+  const subscribeToProgress = (productionId: string) => {
+    const eventSource = new EventSource(`/api/productions/progress/${productionId}`);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const progress = JSON.parse(event.data);
+        setProductions((prev) =>
+          prev.map((p) =>
+            p.id === productionId
+              ? {
+                  ...p,
+                  status: progress.stage,
+                  progress: progress.progress,
+                  stageProgress: progress.progress,
+                  ...(progress.stage === "completed" && {
+                    completedAt: new Date().toISOString(),
+                  }),
+                }
+              : p
+          )
+        );
+
+        if (progress.stage === "completed") {
+          toast.success("Production complete", "Your 3D scene is ready!");
+          eventSource.close();
+        } else if (progress.stage === "failed") {
+          toast.error("Production failed", progress.message || "Please try again.");
+          eventSource.close();
+        }
+      } catch {
+        // Ignore heartbeats and invalid messages
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
   };
 
   // Simulate production progress (placeholder for real backend integration)

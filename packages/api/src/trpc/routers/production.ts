@@ -1,0 +1,525 @@
+import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { router, creatorProcedure, protectedProcedure } from "../trpc";
+
+/**
+ * Production Router
+ *
+ * Manages video-to-3D production jobs:
+ * - Create new productions
+ * - Get production status
+ * - List creator's productions
+ * - Cancel/retry productions
+ *
+ * Note: The actual queue operations are handled via REST API
+ * to avoid importing BullMQ in the tRPC bundle.
+ */
+
+const productionPreset = z.enum(["fast", "balanced", "high"]);
+
+const productionStatus = z.enum([
+  "queued",
+  "downloading",
+  "frame_extraction",
+  "colmap",
+  "brush",
+  "uploading",
+  "finalizing",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+export const productionRouter = router({
+  /**
+   * Create a new production
+   *
+   * Creates a ProcessingJob record and triggers the queue.
+   */
+  create: creatorProcedure
+    .input(
+      z.object({
+        name: z.string().min(1).max(200),
+        experienceId: z.string().optional(), // Create new or link to existing
+        sourceVideos: z.array(
+          z.object({
+            url: z.string().url(),
+            filename: z.string(),
+            size: z.number(),
+          })
+        ).min(2, "At least 2 camera angles required"),
+        preset: productionPreset.default("balanced"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Create or get experience
+      let experienceId = input.experienceId;
+
+      if (!experienceId) {
+        // Create a draft experience for this production
+        const experience = await ctx.db.experience.create({
+          data: {
+            creatorId: ctx.creatorId,
+            title: input.name,
+            description: `Production created on ${new Date().toLocaleDateString()}`,
+            category: "MUSIC", // Default category
+            subcategory: "performance",
+            duration: 60,
+            status: "PROCESSING",
+          },
+        });
+        experienceId = experience.id;
+      }
+
+      // Get quality settings based on preset
+      const presetSettings = {
+        fast: { totalSteps: 5000, maxSplats: 5000000, imagePercentage: 30, fps: 5, duration: 5 },
+        balanced: { totalSteps: 15000, maxSplats: 10000000, imagePercentage: 50, fps: 10, duration: 10 },
+        high: { totalSteps: 30000, maxSplats: 20000000, imagePercentage: 75, fps: 15, duration: 15 },
+      };
+
+      const settings = presetSettings[input.preset];
+
+      // Create ProcessingJob record
+      const job = await ctx.db.processingJob.create({
+        data: {
+          experienceId,
+          status: "QUEUED",
+          sourceVideoUrl: JSON.stringify(input.sourceVideos), // Store as JSON for now
+          ...settings,
+        },
+        include: {
+          experience: true,
+        },
+      });
+
+      // Trigger queue via internal API (avoids importing BullMQ here)
+      // The API route will handle adding to BullMQ
+      try {
+        const queueResponse = await fetch(
+          `${process.env.INTERNAL_API_URL || "http://localhost:3000"}/api/productions/queue`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              productionId: job.id,
+              experienceId,
+              creatorId: ctx.creatorId,
+              sourceVideos: input.sourceVideos,
+              preset: input.preset,
+            }),
+          }
+        );
+
+        if (!queueResponse.ok) {
+          throw new Error("Failed to queue production");
+        }
+      } catch (error) {
+        // Mark job as failed if queue fails
+        await ctx.db.processingJob.update({
+          where: { id: job.id },
+          data: {
+            status: "FAILED",
+            errorMessage: "Failed to queue job",
+          },
+        });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to start production",
+        });
+      }
+
+      return {
+        id: job.id,
+        experienceId,
+        status: "queued",
+        name: input.name,
+        preset: input.preset,
+        videoCount: input.sourceVideos.length,
+        createdAt: job.queuedAt,
+      };
+    }),
+
+  /**
+   * Get a single production by ID
+   */
+  get: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const job = await ctx.db.processingJob.findUnique({
+        where: { id: input.id },
+        include: {
+          experience: {
+            include: {
+              creator: {
+                select: { userId: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (!job) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Production not found",
+        });
+      }
+
+      // Verify ownership
+      if (job.experience.creator.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Not authorized to view this production",
+        });
+      }
+
+      // Parse source videos
+      let sourceVideos = [];
+      try {
+        sourceVideos = JSON.parse(job.sourceVideoUrl || "[]");
+      } catch {
+        sourceVideos = [{ url: job.sourceVideoUrl, filename: "video.mp4", size: 0 }];
+      }
+
+      return {
+        id: job.id,
+        experienceId: job.experienceId,
+        name: job.experience.title,
+        status: job.status.toLowerCase(),
+        stage: job.stage?.toLowerCase(),
+        progress: job.progress,
+        sourceVideos,
+        preset: getPresetFromSettings(job),
+        outputs: job.status === "COMPLETED"
+          ? {
+              plyUrl: job.outputPlyUrl,
+              camerasUrl: job.outputCamerasUrl,
+              thumbnailUrl: job.outputThumbnail,
+              previewUrl: job.outputPreview,
+            }
+          : null,
+        error: job.errorMessage,
+        createdAt: job.queuedAt,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        processingTime: job.processingTime,
+      };
+    }),
+
+  /**
+   * List productions for the authenticated creator
+   */
+  list: creatorProcedure
+    .input(
+      z.object({
+        status: productionStatus.optional(),
+        limit: z.number().min(1).max(100).default(20),
+        cursor: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const where = {
+        experience: {
+          creatorId: ctx.creatorId,
+        },
+        ...(input.status && {
+          status: input.status.toUpperCase() as any,
+        }),
+      };
+
+      const jobs = await ctx.db.processingJob.findMany({
+        where,
+        include: {
+          experience: {
+            select: {
+              id: true,
+              title: true,
+              thumbnailUrl: true,
+            },
+          },
+        },
+        orderBy: { queuedAt: "desc" },
+        take: input.limit + 1,
+        ...(input.cursor && {
+          cursor: { id: input.cursor },
+          skip: 1,
+        }),
+      });
+
+      let nextCursor: string | undefined;
+      if (jobs.length > input.limit) {
+        const nextItem = jobs.pop();
+        nextCursor = nextItem?.id;
+      }
+
+      return {
+        items: jobs.map((job) => ({
+          id: job.id,
+          experienceId: job.experienceId,
+          name: job.experience.title,
+          thumbnailUrl: job.experience.thumbnailUrl || job.outputThumbnail,
+          status: job.status.toLowerCase(),
+          stage: job.stage?.toLowerCase(),
+          progress: job.progress,
+          preset: getPresetFromSettings(job),
+          videoCount: getVideoCount(job.sourceVideoUrl),
+          error: job.errorMessage,
+          createdAt: job.queuedAt,
+          completedAt: job.completedAt,
+        })),
+        nextCursor,
+      };
+    }),
+
+  /**
+   * Get production progress (for polling)
+   */
+  progress: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const job = await ctx.db.processingJob.findUnique({
+        where: { id: input.id },
+        select: {
+          id: true,
+          status: true,
+          stage: true,
+          progress: true,
+          errorMessage: true,
+          lastHeartbeat: true,
+        },
+      });
+
+      if (!job) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Production not found",
+        });
+      }
+
+      return {
+        id: job.id,
+        status: job.status.toLowerCase(),
+        stage: job.stage?.toLowerCase(),
+        progress: job.progress,
+        error: job.errorMessage,
+        lastUpdate: job.lastHeartbeat,
+      };
+    }),
+
+  /**
+   * Cancel a production
+   */
+  cancel: creatorProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const job = await ctx.db.processingJob.findUnique({
+        where: { id: input.id },
+        include: {
+          experience: {
+            include: { creator: { select: { id: true } } },
+          },
+        },
+      });
+
+      if (!job) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Production not found",
+        });
+      }
+
+      if (job.experience.creator.id !== ctx.creatorId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Not authorized to cancel this production",
+        });
+      }
+
+      if (job.status === "COMPLETED" || job.status === "CANCELLED") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Production cannot be cancelled",
+        });
+      }
+
+      // Cancel in queue
+      try {
+        await fetch(
+          `${process.env.INTERNAL_API_URL || "http://localhost:3000"}/api/productions/cancel`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productionId: input.id }),
+          }
+        );
+      } catch {
+        // Continue even if queue cancel fails
+      }
+
+      // Update database
+      await ctx.db.processingJob.update({
+        where: { id: input.id },
+        data: { status: "CANCELLED" },
+      });
+
+      return { success: true };
+    }),
+
+  /**
+   * Retry a failed production
+   */
+  retry: creatorProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const job = await ctx.db.processingJob.findUnique({
+        where: { id: input.id },
+        include: {
+          experience: {
+            include: { creator: { select: { id: true } } },
+          },
+        },
+      });
+
+      if (!job) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Production not found",
+        });
+      }
+
+      if (job.experience.creator.id !== ctx.creatorId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Not authorized to retry this production",
+        });
+      }
+
+      if (job.status !== "FAILED") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only failed productions can be retried",
+        });
+      }
+
+      if (job.retryCount >= job.maxRetries) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Maximum retry attempts reached",
+        });
+      }
+
+      // Reset job status
+      await ctx.db.processingJob.update({
+        where: { id: input.id },
+        data: {
+          status: "QUEUED",
+          stage: null,
+          progress: 0,
+          errorMessage: null,
+          retryCount: { increment: 1 },
+        },
+      });
+
+      // Re-queue
+      const sourceVideos = JSON.parse(job.sourceVideoUrl || "[]");
+      const preset = getPresetFromSettings(job);
+
+      try {
+        await fetch(
+          `${process.env.INTERNAL_API_URL || "http://localhost:3000"}/api/productions/queue`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              productionId: job.id,
+              experienceId: job.experienceId,
+              creatorId: ctx.creatorId,
+              sourceVideos,
+              preset,
+            }),
+          }
+        );
+      } catch {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to re-queue production",
+        });
+      }
+
+      return { success: true };
+    }),
+
+  /**
+   * Delete a production
+   */
+  delete: creatorProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const job = await ctx.db.processingJob.findUnique({
+        where: { id: input.id },
+        include: {
+          experience: {
+            include: { creator: { select: { id: true } } },
+          },
+        },
+      });
+
+      if (!job) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Production not found",
+        });
+      }
+
+      if (job.experience.creator.id !== ctx.creatorId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Not authorized to delete this production",
+        });
+      }
+
+      // Cancel if still running
+      if (job.status === "PROCESSING" || job.status === "QUEUED") {
+        try {
+          await fetch(
+            `${process.env.INTERNAL_API_URL || "http://localhost:3000"}/api/productions/cancel`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ productionId: input.id }),
+            }
+          );
+        } catch {
+          // Continue
+        }
+      }
+
+      // Delete the job (cascades from experience delete would also work)
+      await ctx.db.processingJob.delete({
+        where: { id: input.id },
+      });
+
+      return { success: true };
+    }),
+});
+
+// Helper functions
+function getPresetFromSettings(job: {
+  totalSteps: number;
+  maxSplats: number;
+}): "fast" | "balanced" | "high" {
+  if (job.totalSteps <= 5000) return "fast";
+  if (job.totalSteps <= 15000) return "balanced";
+  return "high";
+}
+
+function getVideoCount(sourceVideoUrl: string | null): number {
+  if (!sourceVideoUrl) return 0;
+  try {
+    const videos = JSON.parse(sourceVideoUrl);
+    return Array.isArray(videos) ? videos.length : 1;
+  } catch {
+    return 1;
+  }
+}

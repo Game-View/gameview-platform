@@ -32,6 +32,10 @@ interface VideoFile {
   thumbnail?: string;
   uploadProgress: number;
   status: "pending" | "uploading" | "ready" | "error";
+  // Added for real upload
+  url?: string;
+  path?: string;
+  error?: string;
 }
 
 interface ProductionSettings {
@@ -223,13 +227,102 @@ export function NewProductionModal({
 
     setVideos((prev) => [...prev, ...newVideos]);
 
-    // Simulate upload for each file
+    // Upload each file
     newVideos.forEach((video) => {
-      simulateUpload(video.id);
+      handleVideoUpload(video.id, video.file);
     });
   };
 
-  // Simulate file upload (replace with real upload later)
+  // Real file upload to Supabase Storage
+  const uploadVideo = async (videoId: string, file: File) => {
+    setVideos((prev) =>
+      prev.map((v) =>
+        v.id === videoId ? { ...v, status: "uploading" as const } : v
+      )
+    );
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // Use XMLHttpRequest for progress tracking
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) {
+          const progress = Math.round((event.loaded / event.total) * 100);
+          setVideos((prev) =>
+            prev.map((v) =>
+              v.id === videoId ? { ...v, uploadProgress: progress } : v
+            )
+          );
+        }
+      });
+
+      const response = await new Promise<{
+        success: boolean;
+        url?: string;
+        path?: string;
+        error?: string;
+      }>((resolve) => {
+        xhr.onload = () => {
+          try {
+            const result = JSON.parse(xhr.responseText);
+            resolve(result);
+          } catch {
+            resolve({ success: false, error: "Invalid response" });
+          }
+        };
+        xhr.onerror = () => {
+          resolve({ success: false, error: "Upload failed" });
+        };
+        xhr.open("POST", "/api/productions/upload");
+        xhr.send(formData);
+      });
+
+      if (response.success && response.url) {
+        setVideos((prev) =>
+          prev.map((v) =>
+            v.id === videoId
+              ? {
+                  ...v,
+                  uploadProgress: 100,
+                  status: "ready" as const,
+                  url: response.url,
+                  path: response.path,
+                }
+              : v
+          )
+        );
+      } else {
+        setVideos((prev) =>
+          prev.map((v) =>
+            v.id === videoId
+              ? {
+                  ...v,
+                  status: "error" as const,
+                  error: response.error || "Upload failed",
+                }
+              : v
+          )
+        );
+      }
+    } catch (error) {
+      setVideos((prev) =>
+        prev.map((v) =>
+          v.id === videoId
+            ? {
+                ...v,
+                status: "error" as const,
+                error: error instanceof Error ? error.message : "Upload failed",
+              }
+            : v
+        )
+      );
+    }
+  };
+
+  // Simulated upload for development/testing when Supabase is not configured
   const simulateUpload = (videoId: string) => {
     setVideos((prev) =>
       prev.map((v) =>
@@ -246,7 +339,12 @@ export function NewProductionModal({
         setVideos((prev) =>
           prev.map((v) =>
             v.id === videoId
-              ? { ...v, uploadProgress: 100, status: "ready" as const }
+              ? {
+                  ...v,
+                  uploadProgress: 100,
+                  status: "ready" as const,
+                  url: `/mock-uploads/${videoId}/${v.name}`, // Mock URL
+                }
               : v
           )
         );
@@ -258,6 +356,17 @@ export function NewProductionModal({
         );
       }
     }, 200);
+  };
+
+  // Use real upload if Supabase is configured, otherwise simulate
+  const handleVideoUpload = (videoId: string, file: File) => {
+    // Check if we should use real upload (environment check)
+    const useRealUpload = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (useRealUpload) {
+      uploadVideo(videoId, file);
+    } else {
+      simulateUpload(videoId);
+    }
   };
 
   // Remove video

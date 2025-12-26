@@ -6,6 +6,7 @@ import { followRouter } from "./follow";
 import { wishlistRouter } from "./wishlist";
 import { playHistoryRouter } from "./playHistory";
 import { promoRouter } from "./promo";
+import { productionRouter } from "./production";
 
 /**
  * Main application router
@@ -19,6 +20,7 @@ export const appRouter = router({
   wishlist: wishlistRouter,
   playHistory: playHistoryRouter,
   promo: promoRouter,
+  production: productionRouter,
 });
 
 // Export type definition of API
