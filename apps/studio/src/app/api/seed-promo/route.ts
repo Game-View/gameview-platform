@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { db } from "@gameview/database";
+
+// Dynamic import to avoid build-time issues
+async function getDb() {
+  const { db } = await import("@gameview/database");
+  return db;
+}
 
 /**
  * Seed promo codes for testing
@@ -14,6 +19,8 @@ export async function GET() {
   }
 
   try {
+    const db = await getDb();
+
     const promoCodes = [
       {
         id: "promo_beta2025",
