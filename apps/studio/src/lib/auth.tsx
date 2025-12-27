@@ -9,7 +9,7 @@ import {
   SignedIn as ClerkSignedIn,
   SignedOut as ClerkSignedOut,
 } from "@clerk/nextjs";
-import type { User as ClerkUser } from "@clerk/nextjs";
+import type { UserResource as ClerkUser } from "@clerk/types";
 
 /**
  * Unified Auth Module
