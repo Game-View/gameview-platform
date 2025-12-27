@@ -18,9 +18,10 @@
     "prisma"
   ],
   "scripts": {
-    "build": "pnpm db:generate && tsup src/index.ts --format cjs,esm --dts",
-    "dev": "tsup src/index.ts --format cjs,esm --dts && tsup src/index.ts --format cjs,esm --dts --watch",
-    "dev:prepare": "tsup src/index.ts --format cjs,esm --dts",
+    "build": "pnpm db:generate && tsup",
+    "build:skip-prisma": "tsup",
+    "dev": "tsup && tsup --watch",
+    "dev:prepare": "tsup",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
@@ -29,11 +30,9 @@
     "db:seed": "tsx prisma/seed.ts",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@prisma/client": "^5.22.0"
-  },
   "devDependencies": {
-    "prisma": "^5.22.0",
+    "@prisma/client": "^7.2.0",
+    "prisma": "^7.2.0",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
