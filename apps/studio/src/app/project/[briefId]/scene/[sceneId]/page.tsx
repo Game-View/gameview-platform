@@ -240,9 +240,8 @@ export default function SceneEditorPage() {
 
   useKeyboardShortcut({
     key: "s",
-    ctrl: true,
-    callback: (e) => {
-      e.preventDefault();
+    modifiers: ["ctrl"],
+    callback: () => {
       saveObjects();
     },
   });
