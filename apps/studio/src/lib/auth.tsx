@@ -9,7 +9,9 @@ import {
   SignedIn as ClerkSignedIn,
   SignedOut as ClerkSignedOut,
 } from "@clerk/nextjs";
-import type { UserResource as ClerkUser } from "@clerk/types";
+
+// Type for mock user (matches Clerk's User shape)
+type MockUser = ReturnType<typeof useClerkUser>["user"];
 
 /**
  * Unified Auth Module
@@ -42,7 +44,7 @@ export const mockUser = {
   },
   publicMetadata: {},
   privateMetadata: {},
-} as unknown as ClerkUser;
+} as MockUser;
 
 // ============================================
 // HOOKS
