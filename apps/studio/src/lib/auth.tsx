@@ -44,7 +44,7 @@ export const mockUser = {
   },
   publicMetadata: {},
   privateMetadata: {},
-} as MockUser;
+} as unknown as MockUser;
 
 // ============================================
 // HOOKS
