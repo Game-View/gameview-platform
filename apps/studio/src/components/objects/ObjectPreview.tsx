@@ -15,7 +15,8 @@ interface ObjectPreviewProps {
 
 export function ObjectPreview({ object, onClose, className = "" }: ObjectPreviewProps) {
   const [autoRotate, setAutoRotate] = useState(true);
-  const controlsRef = useRef<typeof OrbitControls>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const controlsRef = useRef<any>(null);
 
   if (!object) {
     return (
@@ -123,7 +124,8 @@ function LoadingFallback() {
 interface ModelViewerProps {
   url: string;
   autoRotate?: boolean;
-  controlsRef?: React.RefObject<typeof OrbitControls>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  controlsRef?: React.RefObject<any>;
 }
 
 function ModelViewer({ url, autoRotate = true, controlsRef }: ModelViewerProps) {
@@ -149,7 +151,7 @@ function ModelViewer({ url, autoRotate = true, controlsRef }: ModelViewerProps) 
         <ambientLight intensity={0.5} />
         <directionalLight position={[5, 5, 5]} intensity={1} />
         <OrbitControls
-          ref={controlsRef as React.RefObject<typeof OrbitControls>}
+          ref={controlsRef}
           enableDamping
           dampingFactor={0.05}
           minDistance={0.5}
@@ -173,7 +175,7 @@ function ModelViewer({ url, autoRotate = true, controlsRef }: ModelViewerProps) 
       <ambientLight intensity={0.5} />
       <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
       <OrbitControls
-        ref={controlsRef as React.RefObject<typeof OrbitControls>}
+        ref={controlsRef}
         enableDamping
         dampingFactor={0.05}
         minDistance={0.5}
