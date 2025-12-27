@@ -50,7 +50,6 @@ export function GaussianSplats({
       focalAdjustment: 1.0,
       logLevel: GaussianSplats3D.LogLevel.None,
       sphericalHarmonicsDegree: 0,
-      rootElement: gl.domElement.parentElement || undefined,
     });
 
     viewerRef.current = viewer;
