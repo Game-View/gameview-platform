@@ -47,7 +47,8 @@ export function PortalMesh({ portal, isNearby = false }: PortalVisualsProps) {
     // Pulse animation
     if (visuals.pulseAnimation && glowRef.current) {
       const pulse = 0.8 + Math.sin(timeRef.current * 2) * 0.2;
-      glowRef.current.material.opacity = pulse * 0.5;
+      const material = glowRef.current.material as THREE.MeshBasicMaterial;
+      material.opacity = pulse * 0.5;
     }
 
     // Particle rotation
