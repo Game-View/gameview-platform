@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useThree, useFrame } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
 
@@ -82,13 +82,6 @@ export function GaussianSplats({
       }
     };
   }, [url, gl, camera, position, rotation, scale, onLoad, onError, onProgress]);
-
-  // Update viewer each frame
-  useFrame(() => {
-    if (viewerRef.current) {
-      viewerRef.current.update();
-    }
-  });
 
   return <group ref={groupRef} />;
 }
