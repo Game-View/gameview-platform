@@ -90,7 +90,8 @@ function EditorScene({ splatUrl }: EditorSceneProps) {
   } = useEditorStore();
 
   const transformRef = useRef<THREE.Group>(null);
-  const orbitRef = useRef<typeof OrbitControls>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const orbitRef = useRef<any>(null);
 
   // Get selected object
   const selectedObject = placedObjects.find((o) => o.instanceId === selectedObjectId);
@@ -157,7 +158,7 @@ function EditorScene({ splatUrl }: EditorSceneProps) {
 
       {/* Orbit Controls */}
       <OrbitControls
-        ref={orbitRef as React.RefObject<typeof OrbitControls>}
+        ref={orbitRef}
         makeDefault
         enableDamping
         dampingFactor={0.05}
