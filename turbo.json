@@ -1,18 +1,17 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["DATABASE_URL", "DIRECT_URL"],
+  "globalEnv": ["DATABASE_URL", "DIRECT_URL", "SKIP_PRISMA_GENERATE"],
   "tasks": {
     "build": {
-      "dependsOn": ["^build", "db:generate"],
+      "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "dev": {
       "cache": false,
       "persistent": true,
-      "dependsOn": ["^dev:prepare", "db:generate"]
+      "dependsOn": ["^dev:prepare"]
     },
     "dev:prepare": {
-      "dependsOn": ["db:generate"],
       "outputs": ["dist/**"]
     },
     "lint": {
