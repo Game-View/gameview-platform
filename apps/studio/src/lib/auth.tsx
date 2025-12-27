@@ -10,8 +10,8 @@ import {
   SignedOut as ClerkSignedOut,
 } from "@clerk/nextjs";
 
-// Type for mock user (matches Clerk's User shape)
-type MockUser = ReturnType<typeof useClerkUser>["user"];
+// Type for mock user (matches Clerk's User shape, excluding null)
+type MockUser = NonNullable<ReturnType<typeof useClerkUser>["user"]>;
 
 /**
  * Unified Auth Module
