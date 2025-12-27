@@ -15,7 +15,8 @@ interface PortalVisualsProps {
  * Renders a single portal in the 3D scene
  */
 export function PortalMesh({ portal, isNearby = false }: PortalVisualsProps) {
-  const meshRef = useRef<THREE.Mesh>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const meshRef = useRef<any>(null);
   const glowRef = useRef<THREE.Mesh>(null);
   const particlesRef = useRef<THREE.Points>(null);
   const timeRef = useRef(0);
@@ -82,7 +83,7 @@ export function PortalMesh({ portal, isNearby = false }: PortalVisualsProps) {
 
       case "archway":
         return (
-          <group ref={meshRef as React.RefObject<THREE.Group>}>
+          <group ref={meshRef}>
             {/* Left pillar */}
             <mesh position={[-size.width / 2 + 0.15, 0, 0]}>
               <boxGeometry args={[0.3, size.height, 0.3]} />
