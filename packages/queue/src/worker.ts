@@ -2,6 +2,7 @@ import { Worker, Job } from "bullmq";
 import { spawn } from "child_process";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { createClient } from "@supabase/supabase-js";
 import { createNewConnection } from "./connection";
 import {
   QUEUE_NAME,
@@ -10,6 +11,20 @@ import {
   ProductionStage,
   ProductionProgress,
 } from "./production-queue";
+
+// Supabase client for storage uploads
+function getSupabaseClient() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error(
+      "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for uploads"
+    );
+  }
+
+  return createClient(url, key);
+}
 
 /**
  * Production Worker
@@ -219,14 +234,15 @@ async function uploadOutputs(
   await updateProgress(ctx, "uploading", 90, "Uploading outputs to storage...");
 
   const { productionId } = ctx.job.data;
+  const supabase = getSupabaseClient();
+  const bucket = "production-outputs"; // Public bucket for outputs
 
-  // In production, upload to Supabase storage
-  // For now, simulate with placeholder URLs
-  const baseUrl = process.env.SUPABASE_STORAGE_URL || "https://storage.supabase.co";
-  const bucket = "productions";
-
-  // Read and upload each file
-  const uploadFile = async (localPath: string, remoteName: string): Promise<string> => {
+  // Upload a file and return its public URL
+  const uploadFile = async (
+    localPath: string,
+    remoteName: string,
+    contentType: string
+  ): Promise<string> => {
     const exists = await fs
       .access(localPath)
       .then(() => true)
@@ -234,26 +250,44 @@ async function uploadOutputs(
 
     if (!exists) {
       console.warn(`[Worker] Output file not found: ${localPath}`);
-      return `${baseUrl}/${bucket}/${productionId}/${remoteName}`;
+      throw new Error(`Output file not found: ${localPath}`);
     }
 
-    // TODO: Implement actual Supabase upload
-    // const buffer = await fs.readFile(localPath);
-    // const supabase = createServerClient();
-    // const { data, error } = await supabase.storage
-    //   .from(bucket)
-    //   .upload(`${productionId}/${remoteName}`, buffer);
+    const buffer = await fs.readFile(localPath);
+    const remotePath = `${productionId}/${remoteName}`;
 
-    return `${baseUrl}/${bucket}/${productionId}/${remoteName}`;
+    console.log(`[Worker] Uploading ${remoteName} (${buffer.length} bytes)...`);
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(remotePath, buffer, {
+        contentType,
+        upsert: true, // Overwrite if exists
+      });
+
+    if (error) {
+      throw new Error(`Failed to upload ${remoteName}: ${error.message}`);
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(remotePath);
+
+    console.log(`[Worker] Uploaded ${remoteName} → ${urlData.publicUrl}`);
+    return urlData.publicUrl;
   };
 
-  const [plyUrl, camerasUrl, thumbnailUrl] = await Promise.all([
-    uploadFile(outputs.plyPath, "scene.ply"),
-    uploadFile(outputs.camerasPath, "cameras.json"),
-    uploadFile(outputs.thumbnailPath, "thumbnail.jpg"),
-  ]);
+  await updateProgress(ctx, "uploading", 91, "Uploading PLY file...");
+  const plyUrl = await uploadFile(outputs.plyPath, "scene.ply", "application/octet-stream");
 
-  await updateProgress(ctx, "uploading", 95, "Outputs uploaded");
+  await updateProgress(ctx, "uploading", 93, "Uploading cameras.json...");
+  const camerasUrl = await uploadFile(outputs.camerasPath, "cameras.json", "application/json");
+
+  await updateProgress(ctx, "uploading", 95, "Uploading thumbnail...");
+  const thumbnailUrl = await uploadFile(outputs.thumbnailPath, "thumbnail.jpg", "image/jpeg");
+
+  await updateProgress(ctx, "uploading", 96, "All outputs uploaded");
 
   return { plyUrl, camerasUrl, thumbnailUrl };
 }

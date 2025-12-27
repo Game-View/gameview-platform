@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@gameview/database": "workspace:*",
+    "@supabase/supabase-js": "^2.45.0",
     "bullmq": "^5.34.0",
     "ioredis": "^5.4.1"
   },
