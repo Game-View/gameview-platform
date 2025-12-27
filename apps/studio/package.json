@@ -15,6 +15,7 @@
     "@gameview/api": "workspace:*",
     "@gameview/database": "workspace:*",
     "@gameview/queue": "workspace:*",
+    "ioredis": "^5.4.1",
     "@gameview/types": "workspace:*",
     "@gameview/ui": "workspace:*",
     "@tanstack/react-query": "^5.60.0",
