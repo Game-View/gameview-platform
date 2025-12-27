@@ -60,7 +60,7 @@ export function GaussianSplats({
         showLoadingUI: false,
         progressiveLoad: true,
         position: position,
-        rotation: new THREE.Euler(rotation[0], rotation[1], rotation[2]),
+        rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
         scale: [scale, scale, scale],
         onProgress: (percent: number) => {
           onProgress?.(percent);
