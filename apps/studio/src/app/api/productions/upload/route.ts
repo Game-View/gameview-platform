@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(storagePath, buffer, {
         contentType: file.type,
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Retry upload
-        const { data: retryData, error: retryError } = await supabase.storage
+        const { error: retryError } = await supabase.storage
           .from(BUCKET_NAME)
           .upload(storagePath, buffer, {
             contentType: file.type,

@@ -11,7 +11,6 @@ import {
   ChevronLeft,
   Sparkles,
   HelpCircle,
-  Settings2,
   Zap,
   Scale,
   Star,

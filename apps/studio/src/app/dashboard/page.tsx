@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo } from "react";
 import { useUser, UserButton } from "@/lib/auth";
 import Link from "next/link";
 import {
-  Plus,
   Sparkles,
   FolderOpen,
   Settings,

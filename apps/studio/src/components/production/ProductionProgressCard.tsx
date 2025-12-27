@@ -179,7 +179,7 @@ export function ProductionProgressCard({
           {/* Stage indicators */}
           <div className="flex gap-1 mt-2">
             {["frame_extraction", "colmap", "brush_processing", "metadata_generation"].map(
-              (stage, i) => {
+              (stage) => {
                 const [stageStart] = STAGE_PROGRESS_RANGES[stage as ProductionStage];
                 const isActive = production.status === stage;
                 const isComplete = production.progress > stageStart;

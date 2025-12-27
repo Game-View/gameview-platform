@@ -24,7 +24,7 @@ export function GaussianSplats({
   onError,
   onProgress,
 }: GaussianSplatsProps) {
-  const { gl, camera, scene } = useThree();
+  const { gl, camera } = useThree();
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
   const groupRef = useRef<THREE.Group>(null);
 

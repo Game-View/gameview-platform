@@ -7,7 +7,7 @@ const isPlaceholderKey = clerkKey === "pk_test_xxx" || clerkKey.length < 20;
 const skipAuth = process.env.NEXT_PUBLIC_SKIP_AUTH === "true" || isPlaceholderKey;
 
 // Test mode middleware - bypasses all auth
-function testModeMiddleware(_req: NextRequest) {
+function testModeMiddleware() {
   // In test mode, allow all routes
   return NextResponse.next();
 }
@@ -17,8 +17,8 @@ let productionMiddleware: (req: NextRequest) => Promise<NextResponse> | NextResp
 
 if (!skipAuth) {
   // Dynamic import to avoid loading Clerk in test mode
-  const { clerkMiddleware, createRouteMatcher } = require("@clerk/nextjs/server");
-  const { clerkClient } = require("@clerk/nextjs/server");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { clerkMiddleware, createRouteMatcher, clerkClient } = require("@clerk/nextjs/server");
 
   // Public routes that don't require authentication
   const isPublicRoute = createRouteMatcher([
