@@ -247,8 +247,7 @@ export const useNavigationStore = create<NavigationStore>((set, get) => ({
     get().startTransition(
       nearbyPortal.destinationSceneId,
       nearbyPortal.destinationSpawnId,
-      nearbyPortal.transitionEffect,
-      nearbyPortal.transitionDuration
+      nearbyPortal.transitionEffect
     );
 
     return true;
