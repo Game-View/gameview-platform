@@ -254,7 +254,7 @@ export function extractPreservedState(playerState: {
         { completed: v.completed, progress: v.progress },
       ])
     ),
-    visitedScenes: [...playerState.visitedScenes],
+    visitedScenes: Array.from(playerState.visitedScenes),
     elapsedTime: playerState.elapsedTime,
   };
 }
