@@ -652,6 +652,17 @@ export function NewProductionModal({
                                 Ready
                               </span>
                             )}
+                            {video.status === "error" && (
+                              <span className="text-xs text-gv-error flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {video.error || "Upload failed"}
+                              </span>
+                            )}
+                            {video.status === "pending" && (
+                              <span className="text-xs text-gv-neutral-500">
+                                Waiting...
+                              </span>
+                            )}
                           </div>
                           {video.status === "uploading" && (
                             <div className="mt-1 h-1 bg-gv-neutral-700 rounded-full overflow-hidden">
