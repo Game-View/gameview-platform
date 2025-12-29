@@ -232,7 +232,8 @@ export function NewProductionModal({
     });
   };
 
-  // Real file upload to Supabase Storage
+  // Real file upload to Supabase Storage using signed URLs
+  // This bypasses Vercel's 4.5MB body size limit by uploading directly to Supabase
   const uploadVideo = async (videoId: string, file: File) => {
     setVideos((prev) =>
       prev.map((v) =>
@@ -241,10 +242,23 @@ export function NewProductionModal({
     );
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      // Step 1: Get a signed upload URL from our API (small request)
+      const urlResponse = await fetch("/api/productions/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+        }),
+      });
 
-      // Use XMLHttpRequest for progress tracking
+      const urlData = await urlResponse.json();
+
+      if (!urlData.success || !urlData.uploadUrl) {
+        throw new Error(urlData.error || "Failed to get upload URL");
+      }
+
+      // Step 2: Upload directly to Supabase using the signed URL
       const xhr = new XMLHttpRequest();
 
       xhr.upload.addEventListener("progress", (event) => {
@@ -258,28 +272,23 @@ export function NewProductionModal({
         }
       });
 
-      const response = await new Promise<{
-        success: boolean;
-        url?: string;
-        path?: string;
-        error?: string;
-      }>((resolve) => {
+      const uploadSuccess = await new Promise<boolean>((resolve) => {
         xhr.onload = () => {
-          try {
-            const result = JSON.parse(xhr.responseText);
-            resolve(result);
-          } catch {
-            resolve({ success: false, error: "Invalid response" });
-          }
+          resolve(xhr.status >= 200 && xhr.status < 300);
         };
         xhr.onerror = () => {
-          resolve({ success: false, error: "Upload failed" });
+          resolve(false);
         };
-        xhr.open("POST", "/api/productions/upload");
-        xhr.send(formData);
+        xhr.open("PUT", urlData.uploadUrl);
+        xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
+        xhr.send(file);
       });
 
-      if (response.success && response.url) {
+      if (uploadSuccess) {
+        // Generate the public URL for the uploaded file
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const fileUrl = `${supabaseUrl}/storage/v1/object/production-videos/${urlData.path}`;
+
         setVideos((prev) =>
           prev.map((v) =>
             v.id === videoId
@@ -287,8 +296,8 @@ export function NewProductionModal({
                   ...v,
                   uploadProgress: 100,
                   status: "ready" as const,
-                  url: response.url,
-                  path: response.path,
+                  url: fileUrl,
+                  path: urlData.path,
                 }
               : v
           )
@@ -300,7 +309,7 @@ export function NewProductionModal({
               ? {
                   ...v,
                   status: "error" as const,
-                  error: response.error || "Upload failed",
+                  error: "Upload to storage failed",
                 }
               : v
           )
