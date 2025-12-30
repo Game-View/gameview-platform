@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { filename, contentType } = await request.json();
+    const { filename } = await request.json();
 
     if (!filename) {
       return NextResponse.json({ error: "filename is required" }, { status: 400 });
