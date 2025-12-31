@@ -77,6 +77,39 @@ export async function getProfileByClerkId(
   }
 }
 
+// Generate a unique username from display name or email
+async function generateUniqueUsername(baseUsername: string): Promise<string> {
+  // Sanitize: lowercase, alphanumeric and underscores only
+  let username = baseUsername
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 20);
+
+  // Ensure minimum length
+  if (username.length < 3) {
+    username = "creator";
+  }
+
+  // Check if username exists, if so add random suffix
+  let finalUsername = username;
+  let attempts = 0;
+  while (attempts < 10) {
+    const existing = await db.creator.findUnique({
+      where: { username: finalUsername },
+    });
+    if (!existing) break;
+
+    // Add random suffix
+    const suffix = Math.random().toString(36).slice(2, 6);
+    finalUsername = `${username}_${suffix}`;
+    attempts++;
+  }
+
+  return finalUsername;
+}
+
 // Create a new profile (saves onboarding data to Clerk metadata)
 export async function createProfile(
   data: CreateProfileData
@@ -85,6 +118,7 @@ export async function createProfile(
     // Ensure user exists in database
     let user = await db.user.findUnique({
       where: { clerkId: data.clerkId },
+      include: { creator: true },
     });
 
     if (!user) {
@@ -96,6 +130,7 @@ export async function createProfile(
           displayName: data.displayName || "Creator",
           role: "CREATOR",
         },
+        include: { creator: true },
       });
     } else {
       // Update user to CREATOR role
@@ -104,6 +139,23 @@ export async function createProfile(
         data: {
           role: "CREATOR",
           displayName: data.displayName || user.displayName,
+        },
+        include: { creator: true },
+      });
+    }
+
+    // Create Creator record if it doesn't exist
+    // This is required for production creation and other creator features
+    if (!user.creator) {
+      const displayName = data.displayName || "Creator";
+      const usernameBase = displayName || data.email.split("@")[0];
+      const username = await generateUniqueUsername(usernameBase);
+
+      await db.creator.create({
+        data: {
+          userId: user.id,
+          username,
+          displayName,
         },
       });
     }
