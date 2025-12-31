@@ -146,18 +146,25 @@ export async function createProfile(
 
     // Create Creator record if it doesn't exist
     // This is required for production creation and other creator features
+    // If this fails, onboarding still completes - Creator will be created on first tRPC call
     if (!user.creator) {
-      const displayName = data.displayName || "Creator";
-      const usernameBase = displayName || data.email.split("@")[0];
-      const username = await generateUniqueUsername(usernameBase);
+      try {
+        const displayName = data.displayName || "Creator";
+        const usernameBase = data.email.split("@")[0] || displayName;
+        const username = await generateUniqueUsername(usernameBase);
 
-      await db.creator.create({
-        data: {
-          userId: user.id,
-          username,
-          displayName,
-        },
-      });
+        await db.creator.create({
+          data: {
+            userId: user.id,
+            username,
+            displayName,
+          },
+        });
+        console.log("[Profile] Created Creator record for user:", user.id);
+      } catch (creatorError) {
+        // Log but don't fail - Creator will be created via tRPC fallback
+        console.error("[Profile] Failed to create Creator record (will retry later):", creatorError);
+      }
     }
 
     // Save onboarding data to Clerk metadata

@@ -84,8 +84,15 @@ export async function POST(request: Request) {
     return NextResponse.json(profile, { status: 201 });
   } catch (error) {
     console.error("Error in POST /api/profile:", error);
+    // Return more detailed error in development/preview
+    const errorMessage = error instanceof Error ? error.message : "Internal server error";
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        details: errorMessage,
+        // Include stack trace for debugging (remove in production)
+        stack: error instanceof Error ? error.stack : undefined,
+      },
       { status: 500 }
     );
   }
