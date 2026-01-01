@@ -240,6 +240,15 @@ export default function DashboardPage() {
         });
 
         const data = await response.json();
+        console.log("[Production] API Response:", JSON.stringify(data, null, 2));
+
+        // Check for tRPC error response
+        if (data.error) {
+          console.error("[Production] tRPC Error:", data.error);
+          toast.error("Production failed", data.error.message || "Failed to create production");
+          return;
+        }
+
         if (data.result?.data?.json) {
           const production = data.result.data.json;
           const newProduction: Production = {
@@ -259,14 +268,28 @@ export default function DashboardPage() {
           // Subscribe to SSE for real-time progress
           subscribeToProgress(production.id);
           return;
+        } else {
+          // Unexpected response format
+          console.error("[Production] Unexpected response format:", data);
+          toast.error("Production failed", "Unexpected response from server. Check console for details.");
+          return;
         }
       } catch (error) {
         console.error("Failed to create production via API:", error);
-        // Fall through to simulation mode
+        toast.error("Production failed", error instanceof Error ? error.message : "Network error");
+        return;
       }
     }
 
-    // Simulation mode (for development without backend)
+    // Simulation mode - only for local development with mock uploads
+    // In production, if we reach here it means real uploads failed somehow
+    if (process.env.NODE_ENV === "production") {
+      toast.error("Production failed", "Videos were uploaded but production could not be started. Please try again.");
+      return;
+    }
+
+    // Development simulation mode
+    console.log("[Production] Running in simulation mode (development only)");
     const newProduction: Production = {
       id: `prod_${Date.now()}`,
       name: settings.name,
@@ -279,7 +302,7 @@ export default function DashboardPage() {
     };
 
     setProductions((prev) => [newProduction, ...prev]);
-    toast.success("Production started", `"${settings.name}" is now processing.`);
+    toast.success("Production started (dev mode)", `"${settings.name}" is simulating processing.`);
     simulateProductionProgress(newProduction.id);
   };
 
