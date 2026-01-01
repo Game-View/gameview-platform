@@ -50,6 +50,36 @@ export default function RootLayout({
           colorInputBackground: "#0f172a",
           colorInputText: "#f8fafc",
         },
+        elements: {
+          // Hide Clerk branding globally
+          footer: "hidden",
+          poweredByClerk: "hidden",
+        },
+      }}
+      localization={{
+        // Customize user-facing text to use Game View branding
+        signIn: {
+          start: {
+            title: "Welcome back",
+            subtitle: "Sign in to Game View Studio",
+          },
+        },
+        signUp: {
+          start: {
+            title: "Create your account",
+            subtitle: "Join Game View to start creating",
+          },
+        },
+        userButton: {
+          action__signOut: "Sign out",
+          action__manageAccount: "Account settings",
+        },
+        userProfile: {
+          start: {
+            headerTitle__account: "Account",
+            headerTitle__security: "Security",
+          },
+        },
       }}
     >
       <AppContent>{children}</AppContent>

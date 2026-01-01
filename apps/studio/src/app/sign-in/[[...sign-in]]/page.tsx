@@ -17,11 +17,32 @@ export default function SignInPage() {
             elements: {
               rootBox: "mx-auto",
               card: "bg-gv-neutral-800 border border-gv-neutral-700 shadow-gv-lg",
+              headerTitle: "text-white",
+              headerSubtitle: "text-gv-neutral-400",
+              socialButtonsBlockButton: "bg-gv-neutral-700 border-gv-neutral-600 text-white hover:bg-gv-neutral-600",
+              socialButtonsBlockButtonText: "text-white font-medium",
+              dividerLine: "bg-gv-neutral-700",
+              dividerText: "text-gv-neutral-500",
+              formFieldLabel: "text-gv-neutral-300",
+              formFieldInput: "bg-gv-neutral-900 border-gv-neutral-700 text-white",
+              formButtonPrimary: "bg-gv-primary-500 hover:bg-gv-primary-600",
+              footerActionLink: "text-gv-primary-500 hover:text-gv-primary-400",
+              identityPreviewText: "text-white",
+              identityPreviewEditButton: "text-gv-primary-500",
+              // Hide Clerk branding
+              footer: "hidden",
+            },
+            layout: {
+              socialButtonsPlacement: "top",
+              socialButtonsVariant: "blockButton",
             },
           }}
           afterSignInUrl="/dashboard"
           signUpUrl="/sign-up"
         />
+        <p className="text-center text-gv-neutral-500 text-xs mt-6">
+          Powered by Game View
+        </p>
       </div>
     </div>
   );
