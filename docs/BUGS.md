@@ -6,7 +6,7 @@
 - **Priority:** 🔴 Critical
 - **Reporter:** CEO
 - **Date:** 2025-12-31
-- **Status:** Investigating
+- **Status:** Fixed (pending verification)
 - **Steps:**
   1. Sign up with new email
   2. Complete steps 1-3 of onboarding
@@ -14,7 +14,8 @@
   4. Click "Complete Setup"
 - **Expected:** Profile created, redirect to dashboard
 - **Actual:** "Internal server error" displayed
-- **Notes:** Need to check Vercel function logs for actual error. Likely database connection or schema issue.
+- **Root Cause:** Race condition between Clerk webhook creating User record and onboarding calling Clerk API. When `getProfileByClerkId` found an existing User (from webhook), it tried to fetch Clerk metadata which could fail, causing the whole request to fail even though the User record existed.
+- **Fix:** Made `getProfileByClerkId` resilient to Clerk API failures (non-blocking) and fixed profile exists check to distinguish between webhook-created User records and completed onboarding profiles.
 
 ---
 
@@ -48,10 +49,10 @@
 
 ---
 ### BUG-004: internal error at onboarding process
-- **Priority:**  🟠 High 
+- **Priority:**  🟠 High
 - **Reporter:** james
 - **Date:** 2026-01-01
-- **Status:** Open 
+- **Status:** Fixed (pending verification) - Duplicate of BUG-001
 - **Steps:**
   1. signs up using google account
   2. Starts and complets onboarding questions clicking continue for each question
@@ -59,9 +60,9 @@
   4. "set up complete"
   5. can create first project or engage spark
 - **Expected:** process should flow without error, pofile built for new user, who can now can user service
-- **Actual:** WUser see's "internal error", if they log out they can then log back in and their profile is saved, but they aren't recognized as full user, but can create. 
-- **Screenshot:** screenshot is available 
-- **Notes:** No payment was asked for or promo code used at signup or setup. 
+- **Actual:** WUser see's "internal error", if they log out they can then log back in and their profile is saved, but they aren't recognized as full user, but can create.
+- **Screenshot:** screenshot is available
+- **Notes:** Same root cause as BUG-001 - fixed by making Clerk API calls non-blocking. 
 ## Fixed Bugs (Verified)
 
 _None yet - awaiting verification after deployment_
