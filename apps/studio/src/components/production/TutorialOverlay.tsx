@@ -181,7 +181,31 @@ export function TutorialOverlay({
   );
 }
 
-// Placeholder tutorial content - will be updated with actual videos
+/**
+ * Tutorial Video Configuration
+ *
+ * HOW TO ADD YOUR VIDEOS:
+ * 1. Create your videos using OBS + ElevenLabs (see docs/TUTORIAL_SCRIPTS.md)
+ * 2. Upload videos to Supabase Storage or your preferred CDN
+ * 3. Set NEXT_PUBLIC_TUTORIAL_VIDEO_URL env var to your base URL
+ *    Example: NEXT_PUBLIC_TUTORIAL_VIDEO_URL=https://your-bucket.supabase.co/storage/v1/object/public/tutorials
+ * 4. Videos will automatically load using the naming convention below
+ *
+ * Expected file names:
+ * - tutorial-production-01-welcome.mp4
+ * - tutorial-production-02-naming.mp4
+ * - tutorial-production-03-adding-videos.mp4
+ * - tutorial-production-04-quality-settings.mp4
+ * - tutorial-production-05-start-processing.mp4
+ */
+const TUTORIAL_VIDEO_BASE_URL = process.env.NEXT_PUBLIC_TUTORIAL_VIDEO_URL || "";
+
+function getVideoUrl(filename: string): string | undefined {
+  if (!TUTORIAL_VIDEO_BASE_URL) return undefined;
+  return `${TUTORIAL_VIDEO_BASE_URL}/${filename}`;
+}
+
+// Production Tutorial Steps
 export const PRODUCTION_TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: "intro",
@@ -189,6 +213,7 @@ export const PRODUCTION_TUTORIAL_STEPS: TutorialStep[] = [
     description:
       "A Production is where your video footage gets transformed into a 3D scene. This tutorial will walk you through creating your first Production.",
     duration: "0:45",
+    videoUrl: getVideoUrl("tutorial-production-01-welcome.mp4"),
   },
   {
     id: "naming",
@@ -196,6 +221,7 @@ export const PRODUCTION_TUTORIAL_STEPS: TutorialStep[] = [
     description:
       "Give your Production a descriptive name so you can easily find it later. Good names include the project or venue name and date.",
     duration: "0:30",
+    videoUrl: getVideoUrl("tutorial-production-02-naming.mp4"),
   },
   {
     id: "adding-videos",
@@ -203,6 +229,7 @@ export const PRODUCTION_TUTORIAL_STEPS: TutorialStep[] = [
     description:
       "Drag and drop your video files or select from your library. For best results, use synchronized footage from multiple camera angles covering the same scene.",
     duration: "1:15",
+    videoUrl: getVideoUrl("tutorial-production-03-adding-videos.mp4"),
   },
   {
     id: "quality-settings",
@@ -210,6 +237,7 @@ export const PRODUCTION_TUTORIAL_STEPS: TutorialStep[] = [
     description:
       "Choose a quality preset: Fast Preview for quick iterations, Balanced for most projects, or High Quality for final productions. Higher quality takes longer to process.",
     duration: "0:45",
+    videoUrl: getVideoUrl("tutorial-production-04-quality-settings.mp4"),
   },
   {
     id: "start-processing",
@@ -217,5 +245,6 @@ export const PRODUCTION_TUTORIAL_STEPS: TutorialStep[] = [
     description:
       "Review your settings and click 'Start Processing'. The system will extract frames, reconstruct the 3D scene, and generate your viewable content. This typically takes 30-60 minutes.",
     duration: "0:30",
+    videoUrl: getVideoUrl("tutorial-production-05-start-processing.mp4"),
   },
 ];
