@@ -172,19 +172,24 @@ export default function OnboardingPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Failed to save profile");
+        throw new Error(data.details || data.error || "Failed to save profile");
       }
 
-      // Also update Clerk metadata for quick checks
-      await user.update({
-        unsafeMetadata: {
-          profileCompleted: true,
-          creatorType,
-          experienceLevel,
-          creationGoals,
-          footageStatus,
-        },
-      });
+      // Also update Clerk metadata for quick checks (non-blocking)
+      try {
+        await user.update({
+          unsafeMetadata: {
+            profileCompleted: true,
+            creatorType,
+            experienceLevel,
+            creationGoals,
+            footageStatus,
+          },
+        });
+      } catch (clerkError) {
+        // Log but don't fail - profile is already saved to database
+        console.error("Failed to update Clerk metadata (non-blocking):", clerkError);
+      }
 
       // Redirect based on goals
       if (creationGoals.includes("still_exploring")) {
