@@ -168,16 +168,23 @@ export async function createProfile(
     }
 
     // Save onboarding data to Clerk metadata
-    const client = await clerkClient();
-    await client.users.updateUserMetadata(data.clerkId, {
-      unsafeMetadata: {
-        profileCompleted: true,
-        creatorType: data.creatorType,
-        experienceLevel: data.experienceLevel,
-        creationGoals: data.creationGoals,
-        footageStatus: data.footageStatus,
-      },
-    });
+    // If this fails, profile is still created - user can still use the service
+    try {
+      const client = await clerkClient();
+      await client.users.updateUserMetadata(data.clerkId, {
+        unsafeMetadata: {
+          profileCompleted: true,
+          creatorType: data.creatorType,
+          experienceLevel: data.experienceLevel,
+          creationGoals: data.creationGoals,
+          footageStatus: data.footageStatus,
+        },
+      });
+      console.log("[Profile] Updated Clerk metadata for user:", data.clerkId);
+    } catch (clerkError) {
+      // Log but don't fail - user can still use the service without Clerk metadata
+      console.error("[Profile] Failed to update Clerk metadata (non-blocking):", clerkError);
+    }
 
     return {
       id: user.id,
