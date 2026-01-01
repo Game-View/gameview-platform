@@ -33,7 +33,7 @@ export async function GET() {
   }
 }
 
-// POST /api/profile - Create a new profile
+// POST /api/profile - Create a new profile (onboarding)
 export async function POST(request: Request) {
   try {
     const { userId } = await auth();
@@ -62,9 +62,10 @@ export async function POST(request: Request) {
       }
     }
 
-    // Check if profile already exists
+    // Check if profile is already completed (has CREATOR role + Creator record)
+    // Note: User record may exist from Clerk webhook, but that doesn't mean onboarding is done
     const existingProfile = await getProfileByClerkId(userId);
-    if (existingProfile) {
+    if (existingProfile?.profileCompleted) {
       return NextResponse.json(
         { error: "Profile already exists" },
         { status: 409 }

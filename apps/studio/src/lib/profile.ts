@@ -44,19 +44,31 @@ export async function getProfileByClerkId(
   clerkId: string
 ): Promise<UserProfile | null> {
   try {
-    // Get user from database
+    // Get user from database with Creator record
     const user = await db.user.findUnique({
       where: { clerkId },
+      include: { creator: true },
     });
 
     if (!user) {
       return null;
     }
 
-    // Get Clerk user to check metadata
-    const client = await clerkClient();
-    const clerkUser = await client.users.getUser(clerkId);
-    const metadata = clerkUser.unsafeMetadata || {};
+    // Try to get Clerk metadata, but don't fail if unavailable
+    let metadata: Record<string, unknown> = {};
+    try {
+      const client = await clerkClient();
+      const clerkUser = await client.users.getUser(clerkId);
+      metadata = clerkUser.unsafeMetadata || {};
+    } catch (clerkError) {
+      console.warn("[Profile] Could not fetch Clerk metadata (non-blocking):", clerkError);
+      // Continue without Clerk metadata - database data is still valid
+    }
+
+    // Profile is completed if user has CREATOR role and Creator record
+    const hasCreatorRole = user.role === "CREATOR";
+    const hasCreatorRecord = Boolean(user.creator);
+    const profileCompleted = Boolean(metadata.profileCompleted) || (hasCreatorRole && hasCreatorRecord);
 
     return {
       id: user.id,
@@ -67,7 +79,7 @@ export async function getProfileByClerkId(
       experienceLevel: metadata.experienceLevel as ExperienceLevel | undefined,
       creationGoals: metadata.creationGoals as CreationGoal[] | undefined,
       footageStatus: metadata.footageStatus as FootageStatus | undefined,
-      profileCompleted: Boolean(metadata.profileCompleted),
+      profileCompleted,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
     };
