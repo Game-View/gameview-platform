@@ -70,6 +70,9 @@ export async function getProfileByClerkId(
     const hasCreatorRecord = Boolean(user.creator);
     const profileCompleted = Boolean(metadata.profileCompleted) || (hasCreatorRole && hasCreatorRecord);
 
+    // Safely convert dates (fallback to current time if somehow undefined)
+    const now = new Date().toISOString();
+
     return {
       id: user.id,
       clerkId: user.clerkId,
@@ -80,8 +83,8 @@ export async function getProfileByClerkId(
       creationGoals: metadata.creationGoals as CreationGoal[] | undefined,
       footageStatus: metadata.footageStatus as FootageStatus | undefined,
       profileCompleted,
-      createdAt: user.createdAt.toISOString(),
-      updatedAt: user.updatedAt.toISOString(),
+      createdAt: user.createdAt?.toISOString?.() || now,
+      updatedAt: user.updatedAt?.toISOString?.() || now,
     };
   } catch (error) {
     console.error("Error fetching profile:", error);
@@ -198,6 +201,9 @@ export async function createProfile(
       console.error("[Profile] Failed to update Clerk metadata (non-blocking):", clerkError);
     }
 
+    // Safely convert dates (fallback to current time if somehow undefined)
+    const now = new Date().toISOString();
+
     return {
       id: user.id,
       clerkId: user.clerkId,
@@ -208,8 +214,8 @@ export async function createProfile(
       creationGoals: data.creationGoals,
       footageStatus: data.footageStatus,
       profileCompleted: true,
-      createdAt: user.createdAt.toISOString(),
-      updatedAt: user.updatedAt.toISOString(),
+      createdAt: user.createdAt?.toISOString?.() || now,
+      updatedAt: user.updatedAt?.toISOString?.() || now,
     };
   } catch (error) {
     console.error("Error creating profile:", error);
