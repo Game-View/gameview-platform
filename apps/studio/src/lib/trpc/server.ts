@@ -49,17 +49,57 @@ export async function handleTRPCRequest(req: Request) {
 
   // Look up the user in our database if they're authenticated
   let userId: string | null = null;
+  let userEmail: string | null = null;
+
   if (clerkId) {
-    const user = await db.user.findUnique({
+    let user = await db.user.findUnique({
       where: { clerkId },
       select: { id: true, email: true },
     });
+
+    // If user doesn't exist in database, create them (webhook fallback)
+    if (!user) {
+      console.log("[tRPC] User not in database, fetching from Clerk:", clerkId);
+      try {
+        // Dynamically import Clerk to get user data
+        const { clerkClient } = await import("@clerk/nextjs/server");
+        const client = await clerkClient();
+        const clerkUser = await client.users.getUser(clerkId);
+
+        const primaryEmail = clerkUser.emailAddresses.find(
+          (email) => email.id === clerkUser.primaryEmailAddressId
+        );
+
+        if (primaryEmail) {
+          const displayName = [clerkUser.firstName, clerkUser.lastName]
+            .filter(Boolean)
+            .join(" ")
+            .trim() || "User";
+
+          user = await db.user.create({
+            data: {
+              clerkId,
+              email: primaryEmail.emailAddress,
+              displayName,
+              avatarUrl: clerkUser.imageUrl,
+              role: "CREATOR", // Default to creator for Studio app
+            },
+            select: { id: true, email: true },
+          });
+          console.log("[tRPC] Created user in database:", user.id);
+        }
+      } catch (createError) {
+        console.error("[tRPC] Failed to create user from Clerk:", createError);
+      }
+    }
+
     userId = user?.id ?? null;
+    userEmail = user?.email ?? null;
 
     // Ensure Creator record exists for users who completed onboarding before this fix
-    if (userId && user?.email) {
+    if (userId && userEmail) {
       try {
-        await ensureCreatorExists(userId, user.email);
+        await ensureCreatorExists(userId, userEmail);
       } catch (error) {
         console.error("Failed to ensure creator exists:", error);
         // Don't block the request if this fails
