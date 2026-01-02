@@ -1,0 +1,75 @@
+# Game View Platform - Local Development Docker Compose
+# Run: docker-compose up -d
+#
+# This provides Redis for local development. Use Upstash for production.
+
+version: '3.8'
+
+services:
+  # Redis for BullMQ job queue
+  redis:
+    image: redis:7-alpine
+    container_name: gv-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # BullMQ Board - Visual job monitoring dashboard (optional)
+  # Access at http://localhost:3080
+  # bull-board:
+  #   image: deadly0/bull-board
+  #   container_name: gv-bull-board
+  #   ports:
+  #     - "3080:3000"
+  #   environment:
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #   depends_on:
+  #     - redis
+
+  # Processing Worker (for local testing without GPU)
+  # Uncomment to run worker in Docker
+  # worker:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.worker
+  #   container_name: gv-worker
+  #   environment:
+  #     - REDIS_URL=redis://redis:6379
+  #     - DATABASE_URL=${DATABASE_URL}
+  #     - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+  #     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+  #     - WORKER_CONCURRENCY=1
+  #   volumes:
+  #     - /tmp/gv-processing:/tmp/gv-processing
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+
+volumes:
+  redis_data:
+
+# Usage:
+#
+# 1. Start Redis:
+#    docker-compose up -d redis
+#
+# 2. Run your app locally with:
+#    REDIS_URL=redis://localhost:6379 pnpm dev
+#
+# 3. Start worker (separate terminal):
+#    cd packages/queue
+#    REDIS_URL=redis://localhost:6379 pnpm worker
+#
+# 4. Stop everything:
+#    docker-compose down
+#
+# 5. Stop and remove data:
+#    docker-compose down -v

@@ -1,0 +1,57 @@
+# Game View Processing Worker
+# Docker image for running the BullMQ worker that processes video-to-3D jobs
+
+FROM node:20-slim AS base
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pnpm
+RUN npm install -g pnpm@9
+
+# Set working directory
+WORKDIR /app
+
+# Copy workspace configuration
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY turbo.json ./
+
+# Copy package sources
+COPY packages/queue/package.json ./packages/queue/
+COPY packages/database/package.json ./packages/database/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY packages/queue ./packages/queue
+COPY packages/database ./packages/database
+
+# Build packages
+RUN pnpm --filter @gameview/database build
+RUN pnpm --filter @gameview/queue build
+
+# Generate Prisma client
+RUN cd packages/database && pnpm prisma generate
+
+# Set working directory to queue package
+WORKDIR /app/packages/queue
+
+# Create working directory for processing
+RUN mkdir -p /tmp/gv-processing
+
+# Default environment variables (override at runtime)
+ENV NODE_ENV=production
+ENV WORKER_CONCURRENCY=1
+ENV WORK_DIR=/tmp/gv-processing
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "const Redis = require('ioredis'); const r = new Redis(process.env.REDIS_URL, {maxRetriesPerRequest: null}); r.ping().then(() => { r.quit(); process.exit(0); }).catch(() => process.exit(1));"
+
+# Run the worker
+CMD ["node", "dist/worker.js"]
