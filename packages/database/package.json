@@ -18,7 +18,7 @@
     "prisma"
   ],
   "scripts": {
-    "build": "pnpm db:generate && tsup",
+    "build": "prisma generate && tsup",
     "build:skip-prisma": "tsup",
     "dev": "tsup && tsup --watch",
     "dev:prepare": "tsup",
@@ -28,14 +28,13 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "typecheck": "tsc --noEmit",
-    "postinstall": "prisma generate || true"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@prisma/client": "^6.0.0"
+    "@prisma/client": "^6.0.0",
+    "prisma": "^6.0.0"
   },
   "devDependencies": {
-    "prisma": "^6.0.0",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
