@@ -58,7 +58,43 @@ const isAuthenticated = middleware(async ({ ctx, next }) => {
 export const protectedProcedure = t.procedure.use(isAuthenticated);
 
 /**
+ * Generate a unique username from display name or email
+ */
+async function generateUniqueUsername(db: Context["db"], baseUsername: string): Promise<string> {
+  // Sanitize: lowercase, alphanumeric and underscores only
+  let username = baseUsername
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 20);
+
+  // Ensure minimum length
+  if (username.length < 3) {
+    username = "creator";
+  }
+
+  // Check if username exists, if so add random suffix
+  let finalUsername = username;
+  let attempts = 0;
+  while (attempts < 10) {
+    const existing = await db.creator.findUnique({
+      where: { username: finalUsername },
+    });
+    if (!existing) break;
+
+    // Add random suffix
+    const suffix = Math.random().toString(36).slice(2, 6);
+    finalUsername = `${username}_${suffix}`;
+    attempts++;
+  }
+
+  return finalUsername;
+}
+
+/**
  * Reusable middleware to ensure user is a creator
+ * Auto-creates Creator record if user has CREATOR role but missing Creator record
  */
 const isCreator = middleware(async ({ ctx, next }) => {
   if (!ctx.userId) {
@@ -68,15 +104,41 @@ const isCreator = middleware(async ({ ctx, next }) => {
     });
   }
 
-  const user = await ctx.db.user.findUnique({
+  let user = await ctx.db.user.findUnique({
     where: { id: ctx.userId },
     include: { creator: true },
   });
 
+  // Auto-create Creator record if user has CREATOR role but no Creator record
+  // This handles race conditions where onboarding sets role but Creator creation failed
+  if (user && user.role === "CREATOR" && !user.creator) {
+    try {
+      console.log("[tRPC] Auto-creating Creator record for user:", user.id);
+      const displayName = user.displayName || "Creator";
+      const usernameBase = user.email.split("@")[0] || displayName;
+      const username = await generateUniqueUsername(ctx.db, usernameBase);
+
+      const creator = await ctx.db.creator.create({
+        data: {
+          userId: user.id,
+          username,
+          displayName,
+        },
+      });
+
+      // Update user object with new creator
+      user = { ...user, creator };
+      console.log("[tRPC] Created Creator record:", creator.id);
+    } catch (creatorError) {
+      console.error("[tRPC] Failed to auto-create Creator:", creatorError);
+      // Fall through to the error below if creation fails
+    }
+  }
+
   if (!user?.creator) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "You must be a creator to access this resource",
+      message: "You must be a creator to access this resource. Please complete onboarding first.",
     });
   }
 

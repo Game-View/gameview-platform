@@ -20,11 +20,13 @@ export async function GET() {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
+    // Log error but return empty array so dashboard still loads
+    // This handles cases where briefs table might not exist yet
     console.error("GET /api/briefs error:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to fetch briefs" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
 

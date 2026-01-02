@@ -110,11 +110,22 @@ export async function PATCH(request: Request) {
 
     const body: UpdateProfileData = await request.json();
 
-    // Check if profile exists
-    const existingProfile = await getProfileByClerkId(userId);
+    // Check if profile exists - handle errors gracefully
+    let existingProfile;
+    try {
+      existingProfile = await getProfileByClerkId(userId);
+    } catch (profileError) {
+      console.error("[Profile PATCH] Error checking profile:", profileError);
+      // Continue - the profile might exist but Clerk check failed
+    }
+
     if (!existingProfile) {
+      console.warn("[Profile PATCH] Profile not found for clerkId:", userId);
       return NextResponse.json(
-        { error: "Profile not found" },
+        {
+          error: "Profile not found",
+          details: "Please complete onboarding or try refreshing the page"
+        },
         { status: 404 }
       );
     }
@@ -124,8 +135,12 @@ export async function PATCH(request: Request) {
     return NextResponse.json(profile);
   } catch (error) {
     console.error("Error in PATCH /api/profile:", error);
+    const errorMessage = error instanceof Error ? error.message : "Internal server error";
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        details: errorMessage
+      },
       { status: 500 }
     );
   }
