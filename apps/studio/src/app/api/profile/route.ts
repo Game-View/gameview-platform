@@ -1,5 +1,7 @@
 import { auth } from "@/lib/auth-server";
 import { NextResponse } from "next/server";
+import { clerkClient } from "@clerk/nextjs/server";
+import { db } from "@gameview/database";
 import {
   getProfileByClerkId,
   createProfile,
@@ -7,6 +9,41 @@ import {
   type CreateProfileData,
   type UpdateProfileData,
 } from "@/lib/profile";
+
+/**
+ * Fallback user creation - creates user in DB if they exist in Clerk but not DB
+ * This handles the case where Clerk webhook didn't fire
+ */
+async function ensureUserExists(clerkId: string): Promise<void> {
+  const existingUser = await db.user.findUnique({
+    where: { clerkId },
+  });
+
+  if (!existingUser) {
+    console.log("[Profile] User not found in DB, creating from Clerk data...");
+    try {
+      const client = await clerkClient();
+      const clerkUser = await client.users.getUser(clerkId);
+      const email = clerkUser.emailAddresses[0]?.emailAddress || `${clerkId}@unknown.com`;
+      const displayName = clerkUser.firstName
+        ? `${clerkUser.firstName} ${clerkUser.lastName || ""}`.trim()
+        : email.split("@")[0];
+
+      await db.user.create({
+        data: {
+          clerkId,
+          email,
+          displayName,
+          role: "PLAYER",
+        },
+      });
+      console.log("[Profile] Created fallback user:", clerkId);
+    } catch (createError) {
+      console.error("[Profile] Failed to create fallback user:", createError);
+      throw createError;
+    }
+  }
+}
 
 // GET /api/profile - Get current user's profile
 export async function GET() {
@@ -16,6 +53,9 @@ export async function GET() {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    // Ensure user exists in DB (fallback for missing Clerk webhook)
+    await ensureUserExists(userId);
 
     const profile = await getProfileByClerkId(userId);
 
@@ -109,6 +149,9 @@ export async function PATCH(request: Request) {
     }
 
     const body: UpdateProfileData = await request.json();
+
+    // Ensure user exists in DB (fallback for missing Clerk webhook)
+    await ensureUserExists(userId);
 
     // Check if profile exists - handle errors gracefully
     let existingProfile;
