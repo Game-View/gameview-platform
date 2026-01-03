@@ -15,6 +15,23 @@ import { router, creatorProcedure, protectedProcedure } from "../trpc";
  * to avoid importing BullMQ in the tRPC bundle.
  */
 
+/**
+ * Get the base URL for internal API calls
+ * Works in both local development and Vercel deployment
+ */
+function getInternalApiUrl(): string {
+  // Explicit override takes priority
+  if (process.env.INTERNAL_API_URL) {
+    return process.env.INTERNAL_API_URL;
+  }
+  // Vercel deployment URL (automatically set by Vercel)
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  // Local development
+  return "http://localhost:3000";
+}
+
 const productionPreset = z.enum(["fast", "balanced", "high"]);
 
 const productionStatus = z.enum([
@@ -97,7 +114,7 @@ export const productionRouter = router({
       // The API route will handle adding to BullMQ
       try {
         const queueResponse = await fetch(
-          `${process.env.INTERNAL_API_URL || "http://localhost:3000"}/api/productions/queue`,
+          `${getInternalApiUrl()}/api/productions/queue`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -346,7 +363,7 @@ export const productionRouter = router({
       // Cancel in queue
       try {
         await fetch(
-          `${process.env.INTERNAL_API_URL || "http://localhost:3000"}/api/productions/cancel`,
+          `${getInternalApiUrl()}/api/productions/cancel`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -427,7 +444,7 @@ export const productionRouter = router({
 
       try {
         await fetch(
-          `${process.env.INTERNAL_API_URL || "http://localhost:3000"}/api/productions/queue`,
+          `${getInternalApiUrl()}/api/productions/queue`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -483,7 +500,7 @@ export const productionRouter = router({
       if (job.status === "PROCESSING" || job.status === "QUEUED") {
         try {
           await fetch(
-            `${process.env.INTERNAL_API_URL || "http://localhost:3000"}/api/productions/cancel`,
+            `${getInternalApiUrl()}/api/productions/cancel`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
