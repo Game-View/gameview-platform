@@ -105,7 +105,7 @@ const isCreator = middleware(async ({ ctx, next }) => {
   }
 
   let user = await ctx.db.user.findUnique({
-    where: { id: ctx.userId },
+    where: { clerkId: ctx.userId },
     include: { creator: true },
   });
 
@@ -169,7 +169,7 @@ const isAdmin = middleware(async ({ ctx, next }) => {
   }
 
   const user = await ctx.db.user.findUnique({
-    where: { id: ctx.userId },
+    where: { clerkId: ctx.userId },
   });
 
   if (user?.role !== "ADMIN") {
