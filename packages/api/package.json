@@ -33,6 +33,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@clerk/nextjs": "^6.0.0",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2"
   }
