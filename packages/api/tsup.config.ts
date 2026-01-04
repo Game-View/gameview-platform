@@ -10,5 +10,5 @@ export default defineConfig({
   clean: true,
   splitting: false,
   sourcemap: true,
-  external: ["@gameview/database"],
+  external: ["@gameview/database", "@clerk/nextjs", "@clerk/nextjs/server"],
 });
