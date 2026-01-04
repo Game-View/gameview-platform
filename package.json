@@ -4,6 +4,7 @@
   "private": true,
   "description": "Game View unified platform monorepo",
   "scripts": {
+    "postinstall": "prisma generate --schema=./packages/database/prisma/schema.prisma || echo 'Prisma postinstall skipped'",
     "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",
@@ -17,9 +18,11 @@
   "license": "PROPRIETARY",
   "packageManager": "pnpm@10.25.0",
   "devDependencies": {
+    "@prisma/client": "^6.0.0",
     "@types/node": "^22.0.0",
     "next": "14.2.35",
     "prettier": "^3.4.2",
+    "prisma": "^6.0.0",
     "turbo": "^2.7.1",
     "typescript": "^5.7.2"
   },

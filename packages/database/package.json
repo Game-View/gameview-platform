@@ -18,6 +18,7 @@
     "prisma"
   ],
   "scripts": {
+    "postinstall": "prisma generate || echo 'Prisma postinstall skipped'",
     "build": "prisma generate && tsup",
     "build:skip-prisma": "tsup",
     "dev": "tsup && tsup --watch",
