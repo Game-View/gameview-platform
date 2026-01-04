@@ -1,5 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
+import { clerkClient } from "@clerk/nextjs/server";
 import type { Context } from "./context";
 
 /**
@@ -108,6 +109,36 @@ const isCreator = middleware(async ({ ctx, next }) => {
     where: { clerkId: ctx.userId },
     include: { creator: true },
   });
+
+  // Fallback: Create user if they exist in Clerk but not in DB (webhook didn't fire)
+  if (!user) {
+    try {
+      console.log("[tRPC] User not found in DB, creating from Clerk data:", ctx.userId);
+      const client = await clerkClient();
+      const clerkUser = await client.users.getUser(ctx.userId);
+      const email = clerkUser.emailAddresses[0]?.emailAddress || `${ctx.userId}@unknown.com`;
+      const displayName = clerkUser.firstName
+        ? `${clerkUser.firstName} ${clerkUser.lastName || ""}`.trim()
+        : email.split("@")[0];
+
+      user = await ctx.db.user.create({
+        data: {
+          clerkId: ctx.userId,
+          email,
+          displayName,
+          role: "PLAYER", // Default role, will be upgraded during onboarding
+        },
+        include: { creator: true },
+      });
+      console.log("[tRPC] Created fallback user:", user.id);
+    } catch (createError) {
+      console.error("[tRPC] Failed to create fallback user:", createError);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to initialize user account. Please try again.",
+      });
+    }
+  }
 
   // Auto-create Creator record if user has CREATOR role but no Creator record
   // This handles race conditions where onboarding sets role but Creator creation failed
