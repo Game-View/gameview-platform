@@ -106,7 +106,7 @@ const isCreator = middleware(async ({ ctx, next }) => {
 
   // ctx.userId is the DATABASE id (UUID), not the Clerk ID
   // The server.ts already handled user lookup/creation before passing the id here
-  const user = await ctx.db.user.findUnique({
+  let user = await ctx.db.user.findUnique({
     where: { id: ctx.userId },
     include: { creator: true },
   });
