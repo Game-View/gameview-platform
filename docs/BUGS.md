@@ -69,19 +69,27 @@ _None yet - awaiting verification after deployment_
 
 ---
 ### BUG-005: projects not saved, anywhere
-- **Priority:**  🟠 High 
+- **Priority:**  🔴 Critical
 - **Reporter:** james
 - **Date:** 2026-01-01
-- **Status:** Open 
+- **Status:** Fixed (pending verification)
 - **Steps:**
   1. start new project
   2. follow modal to name project & add videos & submit
   3. files upload
   4. submit for processing & rendering
-  5. project created 
+  5. project created
 - **Expected:** process should flow without error, new project created, 3D scene should render in background with a progress bar showing progress, should be available in "drafts" after being named and/or files loaded step, should be available in "in progress" while processing and rendreing, should be available with notification when ready in "ready" folder (1,2,3, ready notification above "ready" tab), should be available archived if archived. should also be available in "open project" after completion
 - **Actual:** user can name, load videos, and submit through modal process, process bar shows it is processing, but it doesn't process, it does not show it in supabase anywhere, it is not shown in any folder, the project just completely disappears
-- **Screenshot:**  
+- **Screenshot:**
+- **Root Cause:** Prisma client was falling back to mock in Vercel serverless production. The database package was using a try/catch with `require("@prisma/client")` that failed silently in Vercel's bundling environment, causing ALL database operations to use a no-op mock client.
+- **Fix (2026-01-05):**
+  1. Changed Prisma to use custom output location (`../generated/client`)
+  2. Removed mock fallback - direct import from generated client
+  3. Added postinstall script to generate Prisma client during Vercel builds
+  4. Added `experimental.serverComponentsExternalPackages` to Next.js configs
+  5. Fixed API package to export types from source (avoiding tsup DTS issues with Prisma)
+  6. Fixed invalid Category enum value (`MUSIC` → `ENTERTAINMENT`)
 - **Notes:** No payment was asked for or promo code used at signup or setup. 
 ## Fixed Bugs (Verified)
 ## How to Add a Bug

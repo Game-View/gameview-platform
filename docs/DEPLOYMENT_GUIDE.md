@@ -166,6 +166,38 @@ This allows unlimited file sizes while staying within Vercel's limits.
 
 ---
 
+## Technical Configuration Notes
+
+### Prisma Client in Vercel Serverless
+
+The platform uses a custom Prisma configuration to work correctly in Vercel's serverless environment:
+
+1. **Custom Output Location**: Prisma generates to `packages/database/generated/client` instead of the default `node_modules/.prisma/client`. This ensures the client is bundled correctly.
+
+2. **Postinstall Script**: The root `package.json` includes a postinstall script that generates the Prisma client during deployment:
+   ```json
+   "postinstall": "prisma generate --schema=./packages/database/prisma/schema.prisma"
+   ```
+
+3. **Next.js Configuration**: Both Studio and Player apps configure Prisma as an external package in `next.config.mjs`/`.js`:
+   ```javascript
+   experimental: {
+     serverComponentsExternalPackages: ["@prisma/client", "prisma"],
+   }
+   ```
+   **Note**: For Next.js 14.x, use `experimental.serverComponentsExternalPackages`. The non-experimental `serverExternalPackages` is only available in Next.js 15+.
+
+4. **API Package Types**: The API package exports types from source files (not built `.d.ts`) to avoid compatibility issues with Prisma's TypeScript syntax.
+
+### Important Build Order
+
+When Vercel builds the monorepo:
+1. `pnpm install` runs postinstall → generates Prisma client
+2. Turbo builds packages in dependency order
+3. Next.js bundles the app with Prisma as external
+
+---
+
 ## Troubleshooting
 
 ### "No Next.js version detected"
@@ -200,6 +232,23 @@ Enable Output Directory override in Vercel and set to `apps/studio/.next`.
 
 - Check Deployment Protection settings (disable for public access)
 - Verify Framework Preset is "Next.js" not "Other"
+
+### "Prisma client not available" / Mock fallback in production
+
+If you see `[database] Prisma client not available, using mock` in logs:
+
+1. Verify `postinstall` script exists in root `package.json`
+2. Check that `packages/database/generated/client` directory exists after build
+3. Ensure Next.js config has `experimental.serverComponentsExternalPackages: ["@prisma/client", "prisma"]`
+4. Redeploy with fresh build (not from cache)
+
+### TypeScript/Build errors with Prisma types
+
+If you see errors about `ImportEquals` or Prisma type exports:
+
+1. The API package disables tsup DTS generation (`dts: false` in tsup.config.ts)
+2. Types are exported directly from source files, not built declarations
+3. This is intentional - Prisma's generated types use syntax not supported by tsup's rollup plugin
 
 ---
 
