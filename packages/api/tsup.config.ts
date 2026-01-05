@@ -6,11 +6,8 @@ export default defineConfig({
     "trpc/index": "src/trpc/index.ts",
   },
   format: ["cjs", "esm"],
-  // Generate DTS but don't bundle/resolve external types
-  // This avoids the Prisma 'import =' syntax issue
-  dts: {
-    resolve: false,
-  },
+  // Disable tsup's DTS - use tsc instead (handles Prisma's import= syntax)
+  dts: false,
   clean: true,
   splitting: false,
   sourcemap: true,
