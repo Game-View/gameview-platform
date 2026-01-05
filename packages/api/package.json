@@ -5,22 +5,22 @@
   "description": "API layer for Game View platform (tRPC + REST)",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./src/index.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
     "./trpc": {
-      "types": "./dist/trpc/index.d.ts",
+      "types": "./src/trpc/index.ts",
       "import": "./dist/trpc/index.mjs",
       "require": "./dist/trpc/index.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "src"],
   "scripts": {
-    "build": "tsup && tsc --emitDeclarationOnly",
+    "build": "tsup",
     "dev": "tsup --watch",
     "dev:prepare": "tsup",
     "typecheck": "tsc --noEmit"
