@@ -106,7 +106,45 @@ USING (bucket_id = 'production-outputs');
 
 ---
 
-## 4. Upstash Redis (Queue)
+## 4. Modal GPU Processing (Recommended)
+
+Modal provides serverless GPU processing - scales to zero when idle.
+
+### Setup
+- [ ] Modal account created (modal.com)
+- [ ] Modal CLI installed (`pip install modal`)
+- [ ] Authenticated (`modal token new`)
+
+### Create Supabase Secret in Modal
+```bash
+modal secret create supabase-credentials \
+  SUPABASE_URL="https://your-project.supabase.co" \
+  SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+```
+- [ ] Secret created successfully
+
+### Deploy Worker
+```bash
+cd packages/processing
+modal deploy modal_worker.py
+```
+- [ ] Worker deployed to Modal
+
+### Environment Variables (Vercel)
+- [ ] `MODAL_API_TOKEN` - Format: `token-id:token-secret`
+  ```
+  ak-xxxxx:as-xxxxx
+  ```
+
+### Verification
+- [ ] Worker visible at modal.com/apps
+- [ ] Test production triggers Modal (check Modal logs)
+
+---
+
+## 4b. Upstash Redis (Optional - Legacy Queue)
+
+Only needed if NOT using Modal for processing.
 
 ### Setup
 - [ ] Upstash database created
@@ -119,16 +157,6 @@ USING (bucket_id = 'production-outputs');
   rediss://default:[password]@[host].upstash.io:6379
   ```
   **Note**: Must be `rediss://` (double 's') for TLS
-
-### Verification
-```bash
-# Test connection (run locally with env var)
-node -e "
-const Redis = require('ioredis');
-const r = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: null });
-r.ping().then(res => { console.log('Redis:', res); r.quit(); });
-"
-```
 
 ---
 

@@ -229,13 +229,52 @@ vercel --prod
 
 ---
 
-## 5. Processing Worker Setup
+## 5. GPU Processing Setup (Modal - Recommended)
 
-The worker processes video-to-3D jobs. It requires:
-- Node.js 18+
-- Redis connection
-- gvcore-cli binary
-- GPU (for 3DGS training)
+Modal provides serverless GPU processing that scales to zero when idle. This is the recommended approach for production.
+
+### Prerequisites
+- Modal account (modal.com)
+- Python 3.11+ installed locally
+- Modal CLI authenticated
+
+### Step 1: Install Modal CLI
+```bash
+pip install modal
+modal token new  # Opens browser to authenticate
+```
+
+### Step 2: Create Supabase Secret in Modal
+```bash
+modal secret create supabase-credentials \
+  SUPABASE_URL="https://your-project.supabase.co" \
+  SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+```
+
+### Step 3: Deploy the Worker
+```bash
+cd packages/processing
+modal deploy modal_worker.py
+```
+
+### Step 4: Add Modal Token to Vercel
+1. Go to Modal Dashboard → Settings → API Tokens
+2. Create a new token
+3. Add to Vercel environment variables:
+   - `MODAL_API_TOKEN` = `token-id:token-secret` format
+
+### Modal Pricing
+- **T4 GPU**: ~$0.10/hr (~$0.05-0.15 per production)
+- **A10G GPU**: ~$0.30/hr (~$0.15-0.30 per production)
+- **A100 GPU**: ~$2.00/hr (~$0.50-1.00 per production)
+
+Modal only charges when processing - zero cost when idle.
+
+---
+
+## 5b. Alternative: Self-hosted Worker (Legacy)
+
+For self-hosted GPU processing, use the BullMQ worker:
 
 ### Option A: Local Development
 ```bash
@@ -427,8 +466,11 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
 NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/onboarding
 
-# Redis
+# Redis (optional if using Modal)
 REDIS_URL=
+
+# Modal GPU Processing (Recommended)
+MODAL_API_TOKEN=
 
 # URLs
 NEXT_PUBLIC_APP_URL=

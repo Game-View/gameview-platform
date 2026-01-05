@@ -52,8 +52,19 @@ This guide covers deploying Game View Studio and Player apps to Vercel with Supa
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Supabase → Settings → API |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key | Supabase → Settings → API |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role | Supabase → Settings → API |
-| `UPSTASH_REDIS_REST_URL` | Upstash Redis URL | Upstash Dashboard |
-| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis token | Upstash Dashboard |
+| `MODAL_API_TOKEN` | Modal GPU processing token | Modal → Settings → API Tokens |
+| `UPSTASH_REDIS_REST_URL` | Upstash Redis URL (optional) | Upstash Dashboard |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis token (optional) | Upstash Dashboard |
+
+### GPU Processing (Modal)
+
+Modal is the recommended solution for GPU processing. Format: `token-id:token-secret`
+
+```
+MODAL_API_TOKEN=ak-xxxxx:as-xxxxx
+```
+
+See `packages/processing/README.md` for full Modal setup instructions.
 
 ### Connection String Formats
 
