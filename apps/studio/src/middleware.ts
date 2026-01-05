@@ -26,6 +26,9 @@ if (!skipAuth) {
     "/sign-in(.*)",
     "/sign-up(.*)",
     "/api/webhooks(.*)",
+    "/api/productions/queue",     // Internal API - called by tRPC
+    "/api/productions/cancel",    // Internal API - called by tRPC
+    "/api/processing/callback",   // Modal callback - called by Modal worker
   ]);
 
   // Routes that require a completed profile
