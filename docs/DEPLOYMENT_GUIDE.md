@@ -57,15 +57,17 @@ This guide covers deploying Game View Studio and Player apps to Vercel with Supa
 
 ### Connection String Formats
 
-**Transaction Pooler (for app - port 6543):**
+**Transaction Pooler (DATABASE_URL - port 6543):**
 ```
-postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true
 ```
+⚠️ **CRITICAL:** The `?pgbouncer=true` parameter is **required** for Vercel serverless functions. Without it, Prisma will fail with "Error occurred during query" errors.
 
-**Session Pooler (for migrations - port 5432):**
+**Session Pooler (DIRECT_URL - port 5432):**
 ```
 postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
 ```
+Used for migrations only. Does not need pgbouncer parameter.
 
 ---
 
@@ -227,6 +229,22 @@ Enable Output Directory override in Vercel and set to `apps/studio/.next`.
 - Check `DATABASE_URL` has correct password (not placeholder)
 - Verify database tables exist (run migration)
 - Check `CLERK_SECRET_KEY` is set
+
+### "Error occurred during query" / PrismaClientUnknownRequestError
+
+This error in Vercel logs means Prisma can connect but queries fail:
+
+```
+PrismaClientUnknownRequestError: Invalid 'prisma.user.findUnique()' invocation:
+Error occurred during query
+```
+
+**Fix:** Your `DATABASE_URL` is missing `?pgbouncer=true`. In Vercel:
+1. Go to Project Settings → Environment Variables
+2. Edit `DATABASE_URL`
+3. Ensure it uses **port 6543** (not 5432) and ends with `?pgbouncer=true`
+
+Example: `postgresql://postgres.xxx:password@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true`
 
 ### 404 on deployed site
 
