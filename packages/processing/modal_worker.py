@@ -63,6 +63,7 @@ processing_image = (
         "plyfile",
         "tqdm",
         "supabase",
+        "fastapi",  # Required for web endpoints
     ])
     .run_commands([
         # Install COLMAP
@@ -313,7 +314,7 @@ def process_production(
     image=processing_image,
     secrets=[supabase_secret],
 )
-@modal.web_endpoint(method="POST")
+@modal.fastapi_endpoint(method="POST")
 def trigger(data: dict) -> dict:
     """
     HTTP endpoint to trigger processing.
