@@ -1,25 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth-server";
 import { db } from "@gameview/database";
 
 /**
  * POST /api/productions/queue
  *
  * Triggers GPU processing for a production job.
- * Called by the tRPC production.create mutation.
+ * Called internally by the tRPC production.create mutation.
+ *
+ * NOTE: This is an internal API route - auth is handled by the calling tRPC
+ * procedure. The middleware allows this route without auth to enable internal calls.
  *
  * Processing options (in order of preference):
- * 1. Modal - if MODAL_API_TOKEN is configured
+ * 1. Modal - if MODAL_ENDPOINT_URL is configured
  * 2. BullMQ - if REDIS_URL is configured (legacy)
  * 3. Pending - marks job for manual processing
  */
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const body = await request.json();
     const { productionId, experienceId, creatorId, sourceVideos, preset } = body;
 
