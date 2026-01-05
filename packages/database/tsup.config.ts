@@ -4,7 +4,8 @@ export default defineConfig({
   entry: ["src/index.ts"],
   format: ["cjs", "esm"],
   dts: true,
-  external: ["@prisma/client", ".prisma/client"],
+  // Mark generated client as external - it will be imported at runtime
+  external: [/\.\.\/generated\/client/, "@prisma/client", ".prisma/client"],
   noExternal: [],
   clean: true,
 });

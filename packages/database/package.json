@@ -15,7 +15,8 @@
   },
   "files": [
     "dist",
-    "prisma"
+    "prisma",
+    "generated"
   ],
   "scripts": {
     "postinstall": "prisma generate || echo 'Prisma postinstall skipped'",
