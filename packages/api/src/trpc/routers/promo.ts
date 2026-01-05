@@ -292,7 +292,7 @@ export const promoRouter = router({
         validUntil: z.date().optional(),
         requiresEmail: z.string().email().optional(),
         requiresDomain: z.string().optional(),
-        tier: z.enum(["FREE", "INDIE", "PRO", "STUDIO"]).optional(),
+        tier: z.enum(["FREE", "STARTER", "PRO", "ENTERPRISE"]).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
