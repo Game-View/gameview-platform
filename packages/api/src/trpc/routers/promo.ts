@@ -200,17 +200,24 @@ export const promoRouter = router({
             break;
 
           case "PUBLISH_CREDITS":
-            // Grant publishing credits to creator
+            // Grant publishing credits to creator's subscription
             if (promo.creditAmount) {
               const user = await tx.user.findUnique({
                 where: { id: ctx.userId },
-                include: { creator: true },
+                include: { creator: { include: { subscription: true } } },
               });
 
               if (user?.creator) {
-                await tx.creator.update({
-                  where: { id: user.creator.id },
-                  data: { publishCredits: { increment: promo.creditAmount } },
+                // Upsert subscription and add credits to rolloverCredits (bonus credits)
+                await tx.creatorSubscription.upsert({
+                  where: { creatorId: user.creator.id },
+                  create: {
+                    creatorId: user.creator.id,
+                    rolloverCredits: promo.creditAmount,
+                  },
+                  update: {
+                    rolloverCredits: { increment: promo.creditAmount },
+                  },
                 });
                 creditsGranted = promo.creditAmount;
               }
