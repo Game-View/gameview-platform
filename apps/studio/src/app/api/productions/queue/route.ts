@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-server";
+import { db } from "@gameview/database";
 
 /**
  * POST /api/productions/queue
  *
- * Adds a production job to the BullMQ queue.
+ * Triggers GPU processing for a production job.
  * Called by the tRPC production.create mutation.
  *
- * Note: BullMQ is imported dynamically to avoid bundling issues.
- * If Redis is not configured, jobs are marked as queued for later processing.
+ * Processing options (in order of preference):
+ * 1. Modal - if MODAL_API_TOKEN is configured
+ * 2. BullMQ - if REDIS_URL is configured (legacy)
+ * 3. Pending - marks job for manual processing
  */
 export async function POST(request: NextRequest) {
   try {
@@ -27,50 +30,125 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if Redis is configured
+    // Option 1: Use Modal for GPU processing (preferred)
+    const modalToken = process.env.MODAL_API_TOKEN;
+    if (modalToken) {
+      console.log("[API] Triggering Modal processing for:", productionId);
+
+      try {
+        // Get the processing job for settings
+        const job = await db.processingJob.findUnique({
+          where: { id: productionId },
+        });
+
+        if (!job) {
+          return NextResponse.json(
+            { error: "Processing job not found" },
+            { status: 404 }
+          );
+        }
+
+        // Build callback URL
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
+          (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+        const callbackUrl = `${baseUrl}/api/processing/callback`;
+
+        // Prepare Modal payload
+        const modalPayload = {
+          production_id: productionId,
+          experience_id: experienceId,
+          source_videos: sourceVideos,
+          settings: {
+            totalSteps: job.totalSteps,
+            maxSplats: job.maxSplats,
+            imagePercentage: job.imagePercentage,
+            fps: job.fps,
+            duration: job.duration,
+          },
+          callback_url: callbackUrl,
+        };
+
+        // Trigger Modal function asynchronously
+        const modalResponse = await fetch(
+          "https://api.modal.com/v1/apps/gameview-processing/functions/process_production/spawn",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${modalToken}`,
+            },
+            body: JSON.stringify({ args: modalPayload }),
+          }
+        );
+
+        if (modalResponse.ok) {
+          const modalResult = await modalResponse.json();
+
+          // Update job status to processing
+          await db.processingJob.update({
+            where: { id: productionId },
+            data: {
+              status: "PROCESSING",
+              stage: "DOWNLOADING",
+              startedAt: new Date(),
+              workerId: modalResult.function_call_id || "modal",
+            },
+          });
+
+          return NextResponse.json({
+            success: true,
+            jobId: productionId,
+            productionId,
+            processor: "modal",
+            callId: modalResult.function_call_id,
+          });
+        } else {
+          const errorText = await modalResponse.text();
+          console.error("[API] Modal trigger failed:", errorText);
+          // Fall through to other options
+        }
+      } catch (modalError) {
+        console.error("[API] Modal error:", modalError);
+        // Fall through to other options
+      }
+    }
+
+    // Option 2: Use BullMQ queue (legacy, if Redis configured)
     const redisUrl = process.env.REDIS_URL;
-    if (!redisUrl) {
-      // No Redis configured - return success so the production is created
-      // Jobs will remain in QUEUED status until a worker picks them up
-      console.log("[API] Redis not configured - production queued for manual processing:", productionId);
-      return NextResponse.json({
-        success: true,
-        jobId: productionId,
-        productionId,
-        queued: "pending", // Indicates no active queue
-        message: "Production created. Processing will begin when the processing service is available.",
-      });
+    if (redisUrl) {
+      try {
+        const { addProductionJob } = await import("@gameview/queue");
+
+        const job = await addProductionJob({
+          productionId,
+          experienceId,
+          creatorId,
+          sourceVideos,
+          preset,
+        });
+
+        return NextResponse.json({
+          success: true,
+          jobId: job.id,
+          productionId,
+          processor: "bullmq",
+        });
+      } catch (queueError) {
+        console.error("[API] BullMQ unavailable:", queueError);
+        // Fall through to pending
+      }
     }
 
-    // Dynamic import to avoid bundling BullMQ in Next.js client bundle
-    try {
-      const { addProductionJob } = await import("@gameview/queue");
+    // Option 3: Mark as pending for manual processing
+    console.log("[API] No processor available - production queued for manual processing:", productionId);
+    return NextResponse.json({
+      success: true,
+      jobId: productionId,
+      productionId,
+      processor: "pending",
+      message: "Production created. Processing will begin when the processing service is available.",
+    });
 
-      const job = await addProductionJob({
-        productionId,
-        experienceId,
-        creatorId,
-        sourceVideos,
-        preset,
-      });
-
-      return NextResponse.json({
-        success: true,
-        jobId: job.id,
-        productionId,
-      });
-    } catch (queueError) {
-      // BullMQ/Redis connection failed - still mark as success
-      // The production record exists, just not queued in Redis
-      console.error("[API] Queue unavailable, production saved:", queueError);
-      return NextResponse.json({
-        success: true,
-        jobId: productionId,
-        productionId,
-        queued: "pending",
-        message: "Production created. Processing queue temporarily unavailable.",
-      });
-    }
   } catch (error) {
     console.error("[API] Failed to queue production:", error);
     return NextResponse.json(
