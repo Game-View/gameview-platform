@@ -6,7 +6,9 @@ export default defineConfig({
     "trpc/index": "src/trpc/index.ts",
   },
   format: ["cjs", "esm"],
-  dts: true,
+  // Skip DTS bundling - Prisma's generated types use 'import =' syntax
+  // which tsup's DTS rollup plugin doesn't support
+  dts: false,
   clean: true,
   splitting: false,
   sourcemap: true,
