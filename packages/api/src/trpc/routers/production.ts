@@ -79,7 +79,7 @@ export const productionRouter = router({
             creatorId: ctx.creatorId,
             title: input.name,
             description: `Production created on ${new Date().toLocaleDateString()}`,
-            category: "MUSIC", // Default category
+            category: "ENTERTAINMENT", // Default category
             subcategory: "performance",
             duration: 60,
             status: "PROCESSING",
