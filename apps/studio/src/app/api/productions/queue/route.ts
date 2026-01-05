@@ -33,6 +33,9 @@ export async function POST(request: NextRequest) {
     // Option 1: Use Modal for GPU processing (preferred)
     // MODAL_ENDPOINT_URL format: https://<username>--gameview-processing-trigger.modal.run
     const modalEndpointUrl = process.env.MODAL_ENDPOINT_URL;
+    console.log("[API] Queue route called for production:", productionId);
+    console.log("[API] MODAL_ENDPOINT_URL:", modalEndpointUrl ? `${modalEndpointUrl.substring(0, 30)}...` : "NOT SET");
+
     if (modalEndpointUrl) {
       console.log("[API] Triggering Modal processing for:", productionId);
 
@@ -78,8 +81,11 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify(modalPayload),
         });
 
+        console.log("[API] Modal response status:", modalResponse.status);
+
         if (modalResponse.ok) {
           const modalResult = await modalResponse.json();
+          console.log("[API] Modal success - call_id:", modalResult.call_id);
 
           // Update job status to processing
           await db.processingJob.update({
