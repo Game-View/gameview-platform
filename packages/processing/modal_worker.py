@@ -309,6 +309,46 @@ def process_production(
     return result
 
 
+@app.function(
+    image=processing_image,
+    secrets=[supabase_secret],
+)
+@modal.web_endpoint(method="POST")
+def trigger(data: dict) -> dict:
+    """
+    HTTP endpoint to trigger processing.
+
+    This creates a web endpoint at:
+    https://<username>--gameview-processing-trigger.modal.run
+
+    POST body:
+    {
+        "production_id": "...",
+        "experience_id": "...",
+        "source_videos": [...],
+        "settings": {...},
+        "callback_url": "..."
+    }
+    """
+    print(f"[trigger] Received request for production: {data.get('production_id')}")
+
+    # Spawn the GPU processing function asynchronously
+    call = process_production.spawn(
+        production_id=data["production_id"],
+        experience_id=data["experience_id"],
+        source_videos=data["source_videos"],
+        settings=data["settings"],
+        callback_url=data["callback_url"],
+    )
+
+    return {
+        "success": True,
+        "message": "Processing started",
+        "call_id": call.object_id,
+        "production_id": data["production_id"],
+    }
+
+
 @app.local_entrypoint()
 def main():
     """Test the processing function locally."""

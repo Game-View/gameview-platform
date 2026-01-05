@@ -31,8 +31,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Option 1: Use Modal for GPU processing (preferred)
-    const modalToken = process.env.MODAL_API_TOKEN;
-    if (modalToken) {
+    // MODAL_ENDPOINT_URL format: https://<username>--gameview-processing-trigger.modal.run
+    const modalEndpointUrl = process.env.MODAL_ENDPOINT_URL;
+    if (modalEndpointUrl) {
       console.log("[API] Triggering Modal processing for:", productionId);
 
       try {
@@ -68,18 +69,14 @@ export async function POST(request: NextRequest) {
           callback_url: callbackUrl,
         };
 
-        // Trigger Modal function asynchronously
-        const modalResponse = await fetch(
-          "https://api.modal.com/v1/apps/gameview-processing/functions/process_production/spawn",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${modalToken}`,
-            },
-            body: JSON.stringify({ args: modalPayload }),
-          }
-        );
+        // Trigger Modal web endpoint
+        const modalResponse = await fetch(modalEndpointUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(modalPayload),
+        });
 
         if (modalResponse.ok) {
           const modalResult = await modalResponse.json();
@@ -91,7 +88,7 @@ export async function POST(request: NextRequest) {
               status: "PROCESSING",
               stage: "DOWNLOADING",
               startedAt: new Date(),
-              workerId: modalResult.function_call_id || "modal",
+              workerId: modalResult.call_id || "modal",
             },
           });
 
@@ -100,7 +97,7 @@ export async function POST(request: NextRequest) {
             jobId: productionId,
             productionId,
             processor: "modal",
-            callId: modalResult.function_call_id,
+            callId: modalResult.call_id,
           });
         } else {
           const errorText = await modalResponse.text();
