@@ -27,17 +27,25 @@ import urllib.parse
 # Modal app definition
 app = modal.App("gameview-processing")
 
-# GPU image with all dependencies
-# Note: Building COLMAP from source is complex. Using pre-built package instead.
+# GPU image with COLMAP + CUDA support via conda
 processing_image = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.from_registry("nvidia/cuda:12.1.0-devel-ubuntu22.04", add_python="3.11")
     .apt_install([
         "ffmpeg",
         "libgl1-mesa-glx",
         "libglib2.0-0",
         "wget",
         "git",
-        "colmap",  # Pre-built COLMAP package
+    ])
+    .run_commands([
+        # Install Miniconda
+        "wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh",
+        "bash /tmp/miniconda.sh -b -p /opt/conda",
+        "rm /tmp/miniconda.sh",
+        # Install COLMAP with CUDA support from conda-forge
+        "/opt/conda/bin/conda install -y -c conda-forge colmap",
+        # Add conda to PATH
+        "ln -s /opt/conda/bin/colmap /usr/local/bin/colmap",
     ])
     .pip_install([
         "numpy",
@@ -47,7 +55,7 @@ processing_image = (
         "plyfile",
         "tqdm",
         "supabase",
-        "fastapi",  # Required for web endpoints
+        "fastapi",
     ])
 )
 
@@ -151,21 +159,21 @@ def process_production(
         print(f"[{production_id}] Running COLMAP feature extraction...")
         database_path = colmap_dir / "database.db"
 
-        # Feature extraction (CPU mode - pre-built package doesn't have GPU support)
+        # Feature extraction (GPU accelerated)
         subprocess.run([
             "colmap", "feature_extractor",
             "--database_path", str(database_path),
             "--image_path", str(colmap_images),
             "--ImageReader.single_camera", "1",
-            "--SiftExtraction.use_gpu", "0",
+            "--SiftExtraction.use_gpu", "1",
         ], check=True, capture_output=True)
 
-        # Feature matching (CPU mode)
+        # Feature matching (GPU accelerated)
         print(f"[{production_id}] Running COLMAP feature matching...")
         subprocess.run([
             "colmap", "exhaustive_matcher",
             "--database_path", str(database_path),
-            "--SiftMatching.use_gpu", "0",
+            "--SiftMatching.use_gpu", "1",
         ], check=True, capture_output=True)
 
         # Sparse reconstruction
