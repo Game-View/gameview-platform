@@ -161,21 +161,33 @@ def process_production(
         database_path = colmap_dir / "database.db"
 
         # Feature extraction (CPU mode for reliability - GPU optimization TODO)
-        subprocess.run([
-            "colmap", "feature_extractor",
-            "--database_path", str(database_path),
-            "--image_path", str(colmap_images),
-            "--ImageReader.single_camera", "1",
-            "--SiftExtraction.use_gpu", "0",
-        ], check=True, capture_output=True)
+        try:
+            result_fe = subprocess.run([
+                "colmap", "feature_extractor",
+                "--database_path", str(database_path),
+                "--image_path", str(colmap_images),
+                "--ImageReader.single_camera", "1",
+                "--SiftExtraction.use_gpu", "0",
+            ], check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            print(f"[{production_id}] COLMAP feature_extractor failed:")
+            print(f"  stdout: {e.stdout}")
+            print(f"  stderr: {e.stderr}")
+            raise
 
         # Feature matching (CPU mode for reliability)
         print(f"[{production_id}] Running COLMAP feature matching...")
-        subprocess.run([
-            "colmap", "exhaustive_matcher",
-            "--database_path", str(database_path),
-            "--SiftMatching.use_gpu", "0",
-        ], check=True, capture_output=True)
+        try:
+            result_fm = subprocess.run([
+                "colmap", "exhaustive_matcher",
+                "--database_path", str(database_path),
+                "--SiftMatching.use_gpu", "0",
+            ], check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            print(f"[{production_id}] COLMAP exhaustive_matcher failed:")
+            print(f"  stdout: {e.stdout}")
+            print(f"  stderr: {e.stderr}")
+            raise
 
         # Sparse reconstruction
         print(f"[{production_id}] Running COLMAP sparse reconstruction...")
