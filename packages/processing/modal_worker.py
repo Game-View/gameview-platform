@@ -151,21 +151,21 @@ def process_production(
         print(f"[{production_id}] Running COLMAP feature extraction...")
         database_path = colmap_dir / "database.db"
 
-        # Feature extraction
+        # Feature extraction (CPU mode - pre-built package doesn't have GPU support)
         subprocess.run([
             "colmap", "feature_extractor",
             "--database_path", str(database_path),
             "--image_path", str(colmap_images),
             "--ImageReader.single_camera", "1",
-            "--SiftExtraction.use_gpu", "1",
+            "--SiftExtraction.use_gpu", "0",
         ], check=True, capture_output=True)
 
-        # Feature matching
+        # Feature matching (CPU mode)
         print(f"[{production_id}] Running COLMAP feature matching...")
         subprocess.run([
             "colmap", "exhaustive_matcher",
             "--database_path", str(database_path),
-            "--SiftMatching.use_gpu", "1",
+            "--SiftMatching.use_gpu", "0",
         ], check=True, capture_output=True)
 
         # Sparse reconstruction
