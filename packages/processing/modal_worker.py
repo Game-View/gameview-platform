@@ -28,6 +28,7 @@ import urllib.parse
 app = modal.App("gameview-processing")
 
 # GPU image with all dependencies
+# Note: Building COLMAP from source is complex. Using pre-built package instead.
 processing_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install([
@@ -36,41 +37,17 @@ processing_image = (
         "libglib2.0-0",
         "wget",
         "git",
-        "cmake",
-        "ninja-build",
-        "build-essential",
-        "libboost-all-dev",
-        "libeigen3-dev",
-        "libflann-dev",
-        "libfreeimage-dev",
-        "libmetis-dev",
-        "libgoogle-glog-dev",
-        "libgtest-dev",
-        "libsqlite3-dev",
-        "libglew-dev",
-        "qtbase5-dev",
-        "libqt5opengl5-dev",
-        "libcgal-dev",
-        "libceres-dev",
+        "colmap",  # Pre-built COLMAP package
     ])
     .pip_install([
         "numpy",
         "opencv-python-headless",
         "Pillow",
         "requests",
-        "torch",
-        "torchvision",
         "plyfile",
         "tqdm",
         "supabase",
         "fastapi",  # Required for web endpoints
-    ])
-    .run_commands([
-        # Install COLMAP
-        "git clone https://github.com/colmap/colmap.git /opt/colmap",
-        "cd /opt/colmap && mkdir build && cd build && cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release && ninja && ninja install",
-        # Install gsplat (efficient 3DGS implementation)
-        "pip install gsplat",
     ])
 )
 
