@@ -49,10 +49,12 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Build callback URL
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
+        // Build callback URL - use INTERNAL_API_URL for stable production URL
+        const baseUrl = process.env.INTERNAL_API_URL ||
+          process.env.NEXT_PUBLIC_APP_URL ||
           (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
         const callbackUrl = `${baseUrl}/api/processing/callback`;
+        console.log("[API] Callback URL:", callbackUrl);
 
         // Prepare Modal payload
         const modalPayload = {
