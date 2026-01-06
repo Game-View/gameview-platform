@@ -297,15 +297,20 @@ def process_production(
 
     # Send callback
     if callback_url:
+        print(f"[{production_id}] Sending callback to: {callback_url}")
+        print(f"[{production_id}] Callback payload: success={result['success']}, outputs={list(result.get('outputs', {}).keys()) if result.get('outputs') else None}")
         try:
-            requests.post(
+            callback_response = requests.post(
                 callback_url,
                 json=result,
                 headers={"Content-Type": "application/json"},
                 timeout=30,
             )
+            print(f"[{production_id}] Callback response: {callback_response.status_code} - {callback_response.text[:200]}")
         except Exception as e:
             print(f"[{production_id}] Callback failed: {e}")
+    else:
+        print(f"[{production_id}] No callback URL provided!")
 
     return result
 
