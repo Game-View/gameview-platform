@@ -10,6 +10,7 @@ import {
   RotateCcw,
   Trash2,
   ChevronRight,
+  StopCircle,
 } from "lucide-react";
 
 // Production stages matching gvcore-cli pipeline
@@ -43,6 +44,7 @@ interface ProductionProgressCardProps {
   onView?: (id: string) => void;
   onRetry?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onCancel?: (id: string) => void;
 }
 
 const STAGE_LABELS: Record<ProductionStage, string> = {
@@ -78,6 +80,7 @@ export function ProductionProgressCard({
   onView,
   onRetry,
   onDelete,
+  onCancel,
 }: ProductionProgressCardProps) {
   const isProcessing = !["completed", "failed", "cancelled"].includes(
     production.status
@@ -231,10 +234,21 @@ export function ProductionProgressCard({
             Retry
           </button>
         )}
+        {isProcessing && onCancel && (
+          <button
+            onClick={() => onCancel(production.id)}
+            className="flex items-center justify-center gap-2 px-4 py-2 text-gv-neutral-400 hover:text-gv-warning-500 hover:bg-gv-neutral-700 rounded-gv text-sm transition-colors"
+            title="Cancel production"
+          >
+            <StopCircle className="h-4 w-4" />
+            Cancel
+          </button>
+        )}
         {!isProcessing && onDelete && (
           <button
             onClick={() => onDelete(production.id)}
             className="flex items-center justify-center gap-2 px-3 py-2 text-gv-neutral-400 hover:text-gv-error hover:bg-gv-neutral-700 rounded-gv text-sm transition-colors"
+            title="Delete production"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -260,6 +274,7 @@ interface ProductionProgressListProps {
   onView?: (id: string) => void;
   onRetry?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onCancel?: (id: string) => void;
 }
 
 export function ProductionProgressList({
@@ -267,6 +282,7 @@ export function ProductionProgressList({
   onView,
   onRetry,
   onDelete,
+  onCancel,
 }: ProductionProgressListProps) {
   if (productions.length === 0) {
     return null;
@@ -290,6 +306,7 @@ export function ProductionProgressList({
           onView={onView}
           onRetry={onRetry}
           onDelete={onDelete}
+          onCancel={onCancel}
         />
       ))}
     </div>

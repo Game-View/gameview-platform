@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useUser, UserButton } from "@/lib/auth";
 import Link from "next/link";
 import {
@@ -79,24 +79,126 @@ export default function DashboardPage() {
     creatorType?: string;
   } | undefined;
 
-  // Fetch briefs on mount
+  // Fetch briefs and productions on mount
   useEffect(() => {
-    async function fetchBriefs() {
+    async function fetchData() {
       try {
-        const response = await fetch("/api/briefs");
-        if (response.ok) {
-          const data = await response.json();
-          setBriefs(data);
+        // Fetch briefs and productions in parallel
+        const [briefsRes, productionsRes] = await Promise.all([
+          fetch("/api/briefs"),
+          fetch("/api/trpc/production.list", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ json: { limit: 50 } }),
+          }),
+        ]);
+
+        if (briefsRes.ok) {
+          const briefsData = await briefsRes.json();
+          setBriefs(briefsData);
+        }
+
+        if (productionsRes.ok) {
+          const prodData = await productionsRes.json();
+          if (prodData.result?.data?.json?.items) {
+            const items = prodData.result.data.json.items;
+            // Map database items to Production type
+            const mappedProductions: Production[] = items.map((item: {
+              id: string;
+              name: string;
+              status: string;
+              stage?: string;
+              progress: number;
+              createdAt: string;
+              completedAt?: string;
+              videoCount: number;
+              preset: "fast" | "balanced" | "high";
+              error?: string;
+              thumbnailUrl?: string;
+            }) => ({
+              id: item.id,
+              name: item.name,
+              status: item.stage || item.status,
+              progress: item.progress,
+              stageProgress: item.progress,
+              createdAt: item.createdAt,
+              completedAt: item.completedAt,
+              videoCount: item.videoCount,
+              preset: item.preset,
+              errorMessage: item.error,
+              thumbnailUrl: item.thumbnailUrl,
+            }));
+            setProductions(mappedProductions);
+          }
         }
       } catch (error) {
-        console.error("Failed to fetch briefs:", error);
+        console.error("Failed to fetch data:", error);
         toast.error("Failed to load projects", "Please try refreshing the page.");
       } finally {
         setIsLoading(false);
       }
     }
-    fetchBriefs();
+    fetchData();
   }, []);
+
+  // Track SSE subscriptions to avoid duplicates
+  const subscribedIdsRef = useRef<Set<string>>(new Set());
+
+  // Subscribe to Server-Sent Events for real-time progress
+  const subscribeToProgress = useCallback((productionId: string) => {
+    const eventSource = new EventSource(`/api/productions/progress/${productionId}`);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const progress = JSON.parse(event.data);
+        setProductions((prev) =>
+          prev.map((p) =>
+            p.id === productionId
+              ? {
+                  ...p,
+                  status: progress.stage,
+                  progress: progress.progress,
+                  stageProgress: progress.progress,
+                  ...(progress.stage === "completed" && {
+                    completedAt: new Date().toISOString(),
+                  }),
+                }
+              : p
+          )
+        );
+
+        if (progress.stage === "completed") {
+          toast.success("Production complete", "Your 3D scene is ready!");
+          eventSource.close();
+          subscribedIdsRef.current.delete(productionId);
+        } else if (progress.stage === "failed") {
+          toast.error("Production failed", progress.message || "Please try again.");
+          eventSource.close();
+          subscribedIdsRef.current.delete(productionId);
+        }
+      } catch {
+        // Ignore heartbeats and invalid messages
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+      subscribedIdsRef.current.delete(productionId);
+    };
+  }, []);
+
+  // Subscribe to SSE for in-progress productions
+  useEffect(() => {
+    productions.forEach((prod) => {
+      const isActive = !["completed", "failed", "cancelled"].includes(prod.status);
+      const alreadySubscribed = subscribedIdsRef.current.has(prod.id);
+
+      if (isActive && !alreadySubscribed) {
+        subscribedIdsRef.current.add(prod.id);
+        subscribeToProgress(prod.id);
+      }
+    });
+  }, [productions, subscribeToProgress]);
 
   // Filter and search briefs
   const filteredBriefs = useMemo(() => {
@@ -306,46 +408,6 @@ export default function DashboardPage() {
     simulateProductionProgress(newProduction.id);
   };
 
-  // Subscribe to Server-Sent Events for real-time progress
-  const subscribeToProgress = (productionId: string) => {
-    const eventSource = new EventSource(`/api/productions/progress/${productionId}`);
-
-    eventSource.onmessage = (event) => {
-      try {
-        const progress = JSON.parse(event.data);
-        setProductions((prev) =>
-          prev.map((p) =>
-            p.id === productionId
-              ? {
-                  ...p,
-                  status: progress.stage,
-                  progress: progress.progress,
-                  stageProgress: progress.progress,
-                  ...(progress.stage === "completed" && {
-                    completedAt: new Date().toISOString(),
-                  }),
-                }
-              : p
-          )
-        );
-
-        if (progress.stage === "completed") {
-          toast.success("Production complete", "Your 3D scene is ready!");
-          eventSource.close();
-        } else if (progress.stage === "failed") {
-          toast.error("Production failed", progress.message || "Please try again.");
-          eventSource.close();
-        }
-      } catch {
-        // Ignore heartbeats and invalid messages
-      }
-    };
-
-    eventSource.onerror = () => {
-      eventSource.close();
-    };
-  };
-
   // Simulate production progress (placeholder for real backend integration)
   const simulateProductionProgress = (productionId: string) => {
     const stages: Array<Production["status"]> = [
@@ -407,20 +469,84 @@ export default function DashboardPage() {
     window.location.href = `/project/${id}`;
   };
 
-  const handleRetryProduction = (id: string) => {
-    setProductions((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? { ...p, status: "queued", progress: 0, stageProgress: 0, errorMessage: undefined }
-          : p
-      )
-    );
-    simulateProductionProgress(id);
+  const handleRetryProduction = async (id: string) => {
+    try {
+      // Call tRPC to retry the production
+      const response = await fetch("/api/trpc/production.retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ json: { id } }),
+      });
+
+      if (response.ok) {
+        setProductions((prev) =>
+          prev.map((p) =>
+            p.id === id
+              ? { ...p, status: "queued" as const, progress: 0, stageProgress: 0, errorMessage: undefined }
+              : p
+          )
+        );
+        // Subscribe to SSE for progress updates
+        subscribeToProgress(id);
+        toast.success("Retry started", "The production is being reprocessed.");
+      } else {
+        const data = await response.json();
+        throw new Error(data.error?.message || "Failed to retry");
+      }
+    } catch (error) {
+      console.error("Failed to retry production:", error);
+      toast.error("Retry failed", error instanceof Error ? error.message : "Could not retry. Please try again.");
+    }
   };
 
-  const handleDeleteProduction = (id: string) => {
-    setProductions((prev) => prev.filter((p) => p.id !== id));
-    toast.success("Production deleted", "The production has been removed.");
+  const handleDeleteProduction = async (id: string) => {
+    try {
+      // Call tRPC to delete from database
+      const response = await fetch("/api/trpc/production.delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ json: { id } }),
+      });
+
+      if (response.ok) {
+        setProductions((prev) => prev.filter((p) => p.id !== id));
+        toast.success("Production deleted", "The production has been removed.");
+      } else {
+        throw new Error("Failed to delete");
+      }
+    } catch (error) {
+      console.error("Failed to delete production:", error);
+      toast.error("Delete failed", "Could not delete the production. Please try again.");
+    }
+  };
+
+  const handleCancelProduction = async (id: string) => {
+    try {
+      // Call tRPC to cancel the production
+      const response = await fetch("/api/trpc/production.cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ json: { id } }),
+      });
+
+      if (response.ok) {
+        setProductions((prev) =>
+          prev.map((p) =>
+            p.id === id
+              ? { ...p, status: "cancelled" as const, progress: 0 }
+              : p
+          )
+        );
+        // Remove from SSE subscriptions
+        subscribedIdsRef.current.delete(id);
+        toast.success("Production cancelled", "The production has been stopped.");
+      } else {
+        throw new Error("Failed to cancel");
+      }
+    } catch (error) {
+      console.error("Failed to cancel production:", error);
+      toast.error("Cancel failed", "Could not cancel the production. Please try again.");
+    }
   };
 
   return (
@@ -527,6 +653,7 @@ export default function DashboardPage() {
               onView={handleViewProduction}
               onRetry={handleRetryProduction}
               onDelete={handleDeleteProduction}
+              onCancel={handleCancelProduction}
             />
           </div>
         )}
