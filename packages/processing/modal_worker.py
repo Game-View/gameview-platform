@@ -174,15 +174,15 @@ def process_production(
             print(f"  stderr: {e.stderr}")
             raise
 
-        # Feature matching
+        # Feature matching (sequential matcher is much faster for video frames)
         print(f"[{production_id}] Running COLMAP feature matching...")
         try:
             result_fm = subprocess.run([
-                "colmap", "exhaustive_matcher",
+                "colmap", "sequential_matcher",
                 "--database_path", str(database_path),
             ], check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
-            print(f"[{production_id}] COLMAP exhaustive_matcher failed:")
+            print(f"[{production_id}] COLMAP sequential_matcher failed:")
             print(f"  stdout: {e.stdout}")
             print(f"  stderr: {e.stderr}")
             raise
