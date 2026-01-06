@@ -42,8 +42,9 @@ processing_image = (
         "wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh",
         "bash /tmp/miniconda.sh -b -p /opt/conda",
         "rm /tmp/miniconda.sh",
-        # Install COLMAP with CUDA support from conda-forge
-        "/opt/conda/bin/conda install -y -c conda-forge colmap",
+        # Accept conda TOS and install COLMAP from conda-forge only (skip default channels)
+        "/opt/conda/bin/conda config --set auto_activate_base false",
+        "/opt/conda/bin/conda install -y --override-channels -c conda-forge colmap",
         # Add conda to PATH
         "ln -s /opt/conda/bin/colmap /usr/local/bin/colmap",
     ])
