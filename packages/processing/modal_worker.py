@@ -55,6 +55,13 @@ processing_image = (
         "libsqlite3-dev",
         "libceres-dev",
         "libssl-dev",
+        # OpenGL dependencies (required by COLMAP/GLOMAP)
+        "libgl1-mesa-dev",
+        "libglx-dev",
+        "libglu1-mesa-dev",
+        "libegl1-mesa-dev",
+        "libglew-dev",
+        "libglfw3-dev",
     ])
     .run_commands([
         # Install CMake 3.28+ (required by GLOMAP)
