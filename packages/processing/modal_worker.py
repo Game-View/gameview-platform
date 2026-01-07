@@ -62,6 +62,8 @@ processing_image = (
         "libegl1-mesa-dev",
         "libglew-dev",
         "libglfw3-dev",
+        # CGAL for geometry algorithms
+        "libcgal-dev",
     ])
     .run_commands([
         # Install CMake 3.28+ (required by GLOMAP)
