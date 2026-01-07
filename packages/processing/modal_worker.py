@@ -6,11 +6,17 @@ This Modal app handles video-to-3D Gaussian Splatting processing.
 Pipeline:
 1. Download source videos from Supabase
 2. Extract frames using FFmpeg
-3. Run COLMAP for camera pose estimation
-4. Train Gaussian Splats
-5. Export PLY and metadata
-6. Upload results to Supabase
-7. Callback to notify completion
+3. Run COLMAP for feature extraction + matching
+4. Run GLOMAP for fast sparse reconstruction (10-100x faster than COLMAP mapper)
+5. Train Gaussian Splats
+6. Export PLY and metadata
+7. Upload results to Supabase
+8. Callback to notify completion
+
+Architecture note:
+- GLOMAP is used as an abstraction layer for SfM
+- Can be swapped for DUST3R or other backends in future
+- Apache 2.0 license (commercial-ready)
 """
 
 import modal
@@ -27,7 +33,7 @@ import urllib.parse
 # Modal app definition
 app = modal.App("gameview-processing")
 
-# GPU image with COLMAP + CUDA support via conda
+# GPU image with COLMAP + GLOMAP for fast SfM
 processing_image = (
     modal.Image.from_registry("nvidia/cuda:12.1.0-devel-ubuntu22.04", add_python="3.11")
     .apt_install([
@@ -36,17 +42,32 @@ processing_image = (
         "libglib2.0-0",
         "wget",
         "git",
+        # GLOMAP build dependencies
+        "cmake",
+        "ninja-build",
+        "build-essential",
+        "libboost-all-dev",
+        "libeigen3-dev",
+        "libflann-dev",
+        "libfreeimage-dev",
+        "libmetis-dev",
+        "libgoogle-glog-dev",
+        "libgtest-dev",
+        "libsqlite3-dev",
+        "libceres-dev",
     ])
     .run_commands([
-        # Install Miniconda
+        # Install Miniconda for COLMAP
         "wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh",
         "bash /tmp/miniconda.sh -b -p /opt/conda",
         "rm /tmp/miniconda.sh",
-        # Accept conda TOS and install COLMAP from conda-forge only (skip default channels)
         "/opt/conda/bin/conda config --set auto_activate_base false",
         "/opt/conda/bin/conda install -y --override-channels -c conda-forge colmap",
-        # Add conda to PATH
         "ln -s /opt/conda/bin/colmap /usr/local/bin/colmap",
+        # Build GLOMAP from source (Apache 2.0 license)
+        "git clone --recursive https://github.com/colmap/glomap.git /opt/glomap",
+        "cd /opt/glomap && mkdir build && cd build && cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release && ninja",
+        "ln -s /opt/glomap/build/glomap /usr/local/bin/glomap",
     ])
     .pip_install([
         "numpy",
@@ -187,17 +208,24 @@ def process_production(
             print(f"  stderr: {e.stderr}")
             raise
 
-        # Sparse reconstruction
-        print(f"[{production_id}] Running COLMAP sparse reconstruction...")
+        # Sparse reconstruction using GLOMAP (10-100x faster than COLMAP mapper)
+        print(f"[{production_id}] Running GLOMAP sparse reconstruction...")
         sparse_dir = colmap_dir / "sparse"
         sparse_dir.mkdir(exist_ok=True)
 
-        subprocess.run([
-            "colmap", "mapper",
-            "--database_path", str(database_path),
-            "--image_path", str(colmap_images),
-            "--output_path", str(sparse_dir),
-        ], check=True, capture_output=True)
+        try:
+            result_mapper = subprocess.run([
+                "glomap", "mapper",
+                "--database_path", str(database_path),
+                "--image_path", str(colmap_images),
+                "--output_path", str(sparse_dir),
+            ], check=True, capture_output=True, text=True)
+            print(f"[{production_id}] GLOMAP mapper completed successfully")
+        except subprocess.CalledProcessError as e:
+            print(f"[{production_id}] GLOMAP mapper failed:")
+            print(f"  stdout: {e.stdout}")
+            print(f"  stderr: {e.stderr}")
+            raise
 
         # Stage 4: Train Gaussian Splats
         print(f"[{production_id}] Training Gaussian Splats...")
