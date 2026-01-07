@@ -43,7 +43,6 @@ processing_image = (
         "wget",
         "git",
         # GLOMAP build dependencies
-        "cmake",
         "ninja-build",
         "build-essential",
         "libboost-all-dev",
@@ -55,8 +54,14 @@ processing_image = (
         "libgtest-dev",
         "libsqlite3-dev",
         "libceres-dev",
+        "libssl-dev",
     ])
     .run_commands([
+        # Install CMake 3.28+ (required by GLOMAP)
+        "wget -q https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz -O /tmp/cmake.tar.gz",
+        "tar -xzf /tmp/cmake.tar.gz -C /opt",
+        "ln -s /opt/cmake-3.28.3-linux-x86_64/bin/cmake /usr/local/bin/cmake",
+        "rm /tmp/cmake.tar.gz",
         # Install Miniconda for COLMAP
         "wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh",
         "bash /tmp/miniconda.sh -b -p /opt/conda",
@@ -66,7 +71,7 @@ processing_image = (
         "ln -s /opt/conda/bin/colmap /usr/local/bin/colmap",
         # Build GLOMAP from source (Apache 2.0 license)
         "git clone --recursive https://github.com/colmap/glomap.git /opt/glomap",
-        "cd /opt/glomap && mkdir build && cd build && cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release && ninja",
+        "cd /opt/glomap && mkdir build && cd build && /usr/local/bin/cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release && ninja",
         "ln -s /opt/glomap/build/glomap /usr/local/bin/glomap",
     ])
     .pip_install([
