@@ -18,6 +18,9 @@ import {
   Eye,
   ChevronRight,
   X,
+  Share2,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "@/stores/toast-store";
 import { GameLogicPanel } from "@/components/game-logic";
@@ -49,6 +52,9 @@ export default function BuildPage() {
   const [showGameLogic, setShowGameLogic] = useState(false);
   const [gameConfig, setGameConfig] = useState<GameConfig>(defaultGameConfig);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [showPublishModal, setShowPublishModal] = useState(false);
 
   // Fetch brief and scenes
   useEffect(() => {
@@ -343,6 +349,44 @@ export default function BuildPage() {
     [briefId]
   );
 
+  // Handle publish
+  const handlePublish = useCallback(async () => {
+    setIsPublishing(true);
+    try {
+      const res = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ briefId }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to publish");
+      }
+
+      setPublishedUrl(data.shareUrl);
+      setShowPublishModal(true);
+      toast.success("Published!", "Your experience is now live");
+    } catch (error) {
+      console.error("Failed to publish:", error);
+      toast.error("Error", error instanceof Error ? error.message : "Failed to publish");
+    } finally {
+      setIsPublishing(false);
+    }
+  }, [briefId]);
+
+  // Copy share URL to clipboard
+  const copyShareUrl = useCallback(() => {
+    if (publishedUrl) {
+      navigator.clipboard.writeText(publishedUrl);
+      toast.success("Copied!", "Link copied to clipboard");
+    }
+  }, [publishedUrl]);
+
+  // Check if any scene is completed
+  const hasCompletedScene = scenes.some(s => s.processingStatus === "completed");
+
   // Format file size
   const formatSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -412,6 +456,20 @@ export default function BuildPage() {
             >
               <Settings className="h-5 w-5" />
             </button>
+            {hasCompletedScene && (
+              <button
+                onClick={handlePublish}
+                disabled={isPublishing}
+                className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded-gv transition-colors disabled:opacity-50"
+              >
+                {isPublishing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Share2 className="h-4 w-4" />
+                )}
+                Publish
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -718,6 +776,72 @@ export default function BuildPage() {
           />
         )}
       </div>
+
+      {/* Publish Success Modal */}
+      {showPublishModal && publishedUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/70"
+            onClick={() => setShowPublishModal(false)}
+          />
+          <div className="relative bg-gv-neutral-900 border border-gv-neutral-700 rounded-gv-lg p-6 max-w-md w-full mx-4 shadow-2xl">
+            <button
+              onClick={() => setShowPublishModal(false)}
+              className="absolute top-4 right-4 p-2 text-gv-neutral-400 hover:text-white transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="h-8 w-8 text-green-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Published!</h2>
+              <p className="text-gv-neutral-400">
+                Your experience is now live and ready to share.
+              </p>
+            </div>
+
+            <div className="bg-gv-neutral-800 rounded-gv p-3 mb-4">
+              <p className="text-sm text-gv-neutral-400 mb-1">Share Link</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={publishedUrl}
+                  className="flex-1 bg-transparent text-white text-sm truncate outline-none"
+                />
+                <button
+                  onClick={copyShareUrl}
+                  className="p-2 text-gv-neutral-400 hover:text-white transition-colors"
+                  title="Copy link"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={copyShareUrl}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gv-neutral-800 hover:bg-gv-neutral-700 text-white font-medium rounded-gv transition-colors"
+              >
+                <Copy className="h-4 w-4" />
+                Copy Link
+              </button>
+              <a
+                href={publishedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gv-primary-500 hover:bg-gv-primary-600 text-white font-medium rounded-gv transition-colors"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Open
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
