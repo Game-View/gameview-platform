@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useCallback, Suspense } from "react";
+import { useRef, useEffect, useCallback, Suspense, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import {
   OrbitControls,
@@ -16,6 +16,7 @@ import { Loader2 } from "lucide-react";
 import { useEditorStore } from "@/stores/editor-store";
 import type { PlacedObject, ObjectTransform } from "@/lib/objects";
 import { TriggerZoneVisualization } from "./TriggerZoneVisualization";
+import { GaussianSplats } from "@/components/viewer/GaussianSplats";
 
 interface SceneEditorProps {
   splatUrl?: string;
@@ -70,9 +71,11 @@ interface EditorSceneProps {
   splatUrl?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function EditorScene({ splatUrl }: EditorSceneProps) {
-  // splatUrl will be used for Gaussian Splat background rendering in future
+  const [splatLoaded, setSplatLoaded] = useState(false);
+  const [splatError, setSplatError] = useState<string | null>(null);
+  const [splatProgress, setSplatProgress] = useState(0);
+
   const {
     placedObjects,
     selectedObjectId,
@@ -225,6 +228,45 @@ function EditorScene({ splatUrl }: EditorSceneProps) {
         <planeGeometry args={[100, 100]} />
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
+
+      {/* Gaussian Splat 3D Scene Background */}
+      {splatUrl && (
+        <GaussianSplats
+          url={splatUrl}
+          onLoad={() => setSplatLoaded(true)}
+          onError={(err) => {
+            console.error("Failed to load Gaussian splats:", err);
+            setSplatError(err.message);
+          }}
+          onProgress={(progress) => setSplatProgress(progress)}
+        />
+      )}
+
+      {/* Splat loading indicator */}
+      {splatUrl && !splatLoaded && !splatError && (
+        <Html center position={[0, 2, 0]}>
+          <div className="bg-black/70 backdrop-blur-sm px-4 py-2 rounded-gv text-center">
+            <div className="text-sm text-white mb-1">Loading 3D scene...</div>
+            <div className="w-32 h-1.5 bg-gv-neutral-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gv-primary-500 transition-all duration-300"
+                style={{ width: `${splatProgress}%` }}
+              />
+            </div>
+            <div className="text-xs text-gv-neutral-400 mt-1">{Math.round(splatProgress)}%</div>
+          </div>
+        </Html>
+      )}
+
+      {/* Splat error indicator */}
+      {splatError && (
+        <Html center position={[0, 2, 0]}>
+          <div className="bg-red-900/80 backdrop-blur-sm px-4 py-2 rounded-gv text-center max-w-xs">
+            <div className="text-sm text-red-200 font-medium">Failed to load 3D scene</div>
+            <div className="text-xs text-red-300 mt-1">{splatError}</div>
+          </div>
+        </Html>
+      )}
     </>
   );
 }
