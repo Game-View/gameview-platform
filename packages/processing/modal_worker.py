@@ -81,8 +81,9 @@ processing_image = (
         # Build GLOMAP from source (Apache 2.0 license)
         "git clone --recursive https://github.com/colmap/glomap.git /opt/glomap",
         "cd /opt/glomap && mkdir build && cd build && /usr/local/bin/cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release && ninja",
-        "chmod +x /opt/glomap/build/glomap",
-        "ln -s /opt/glomap/build/glomap /usr/local/bin/glomap",
+        "chmod 755 /opt/glomap/build/glomap",
+        "cp /opt/glomap/build/glomap /usr/local/bin/glomap",
+        "chmod 755 /usr/local/bin/glomap",
     ])
     .pip_install([
         "numpy",
