@@ -242,17 +242,32 @@ def process_production(
         print(f"[{production_id}] Using GLOMAP binary: {glomap_bin}")
 
         try:
-            result_mapper = subprocess.run([
-                glomap_bin, "mapper",
-                "--database_path", str(database_path),
-                "--image_path", str(colmap_images),
-                "--output_path", str(sparse_dir),
-            ], check=True, capture_output=True, text=True)
+            # Run GLOMAP with real-time output streaming for debugging
+            print(f"[{production_id}] Starting GLOMAP mapper (this may take a while)...")
+            process = subprocess.Popen(
+                [
+                    glomap_bin, "mapper",
+                    "--database_path", str(database_path),
+                    "--image_path", str(colmap_images),
+                    "--output_path", str(sparse_dir),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+
+            # Stream output in real-time
+            for line in process.stdout:
+                print(f"[GLOMAP] {line.rstrip()}")
+
+            return_code = process.wait()
+            if return_code != 0:
+                raise subprocess.CalledProcessError(return_code, glomap_bin)
+
             print(f"[{production_id}] GLOMAP mapper completed successfully")
         except subprocess.CalledProcessError as e:
-            print(f"[{production_id}] GLOMAP mapper failed:")
-            print(f"  stdout: {e.stdout}")
-            print(f"  stderr: {e.stderr}")
+            print(f"[{production_id}] GLOMAP mapper failed with exit code: {e.returncode}")
             raise
 
         # Stage 4: Train Gaussian Splats
