@@ -89,12 +89,10 @@ export const productionRouter = router({
       }
 
       // Get quality settings based on preset
-      // FPS reduced to speed up GLOMAP processing (CPU-based)
-      // ~150-300 frames is optimal for GLOMAP, more takes exponentially longer
       const presetSettings = {
-        fast: { totalSteps: 5000, maxSplats: 5000000, imagePercentage: 30, fps: 1, duration: 5 },
-        balanced: { totalSteps: 15000, maxSplats: 10000000, imagePercentage: 50, fps: 2, duration: 10 },
-        high: { totalSteps: 30000, maxSplats: 20000000, imagePercentage: 75, fps: 3, duration: 15 },
+        fast: { totalSteps: 5000, maxSplats: 5000000, imagePercentage: 30, fps: 15, duration: 5 },
+        balanced: { totalSteps: 15000, maxSplats: 10000000, imagePercentage: 50, fps: 24, duration: 10 },
+        high: { totalSteps: 30000, maxSplats: 20000000, imagePercentage: 75, fps: 30, duration: 15 },
       };
 
       const settings = presetSettings[input.preset];
