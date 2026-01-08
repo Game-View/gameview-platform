@@ -73,8 +73,9 @@ processing_image = (
         "libcgal-dev",
     ])
     .run_commands([
-        # Cache buster: v3 - 2026-01-08
-        "echo 'Building COLMAP with memory header fix v3'",
+        # Cache buster: v5 - FORCE REBUILD 2026-01-08T22:30
+        "echo 'FORCE REBUILD v5: Patching COLMAP memory header'",
+        "date",
 
         # === Install CMake 3.28+ ===
         "wget -q https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz -O /tmp/cmake.tar.gz",
@@ -106,12 +107,14 @@ processing_image = (
 
         # === Build COLMAP with CUDA ===
         # COLMAP 3.9.1 has a bug: missing #include <memory> in line.cc
-        # CRITICAL: Combine clone + patch + build in ONE command to avoid Modal caching issues
-        # Cache buster v4 - 2026-01-08T21:00
+        # Fix: Insert #include <memory> at top of file using pattern match
+        # Cache buster v5 - FORCE REBUILD
         "rm -rf /opt/colmap && "
         "git clone --branch 3.9.1 --depth 1 https://github.com/colmap/colmap.git /opt/colmap && "
-        "sed -i '35a #include <memory>' /opt/colmap/src/colmap/image/line.cc && "
-        "head -40 /opt/colmap/src/colmap/image/line.cc && "
+        "echo 'Patching line.cc to add #include <memory>...' && "
+        "sed -i '1s/^/#include <memory>\\n/' /opt/colmap/src/colmap/image/line.cc && "
+        "head -5 /opt/colmap/src/colmap/image/line.cc && "
+        "echo 'Patch applied successfully' && "
         "mkdir -p /opt/colmap/build && "
         "cd /opt/colmap/build && "
         "/usr/local/bin/cmake .. "
