@@ -38,6 +38,8 @@ app = modal.App("gameview-processing")
 processing_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11")
     .apt_install([
+        # Adding 'file' to invalidate Modal's apt layer cache
+        "file",
         "ffmpeg",
         "libgl1-mesa-glx",
         "libglib2.0-0",
