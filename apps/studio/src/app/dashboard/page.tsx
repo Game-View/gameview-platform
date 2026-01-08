@@ -100,7 +100,16 @@ export default function DashboardPage() {
 
         if (productionsRes.ok) {
           const prodData = await productionsRes.json();
-          if (prodData.result?.data?.json?.items) {
+          console.log("[Dashboard] Productions API response:", prodData);
+
+          // Check for tRPC errors (returned with HTTP 200)
+          if (prodData.error) {
+            console.error("[Dashboard] Productions tRPC error:", prodData.error);
+            // Don't show error toast for FORBIDDEN - user may just need to complete onboarding
+            if (prodData.error.data?.code !== "FORBIDDEN") {
+              toast.error("Failed to load productions", prodData.error.message || "Please try again.");
+            }
+          } else if (prodData.result?.data?.json?.items) {
             const items = prodData.result.data.json.items;
             // Map database items to Production type
             const mappedProductions: Production[] = items.map((item: {
@@ -130,6 +139,9 @@ export default function DashboardPage() {
             }));
             setProductions(mappedProductions);
           }
+        } else {
+          console.error("[Dashboard] Productions fetch failed:", productionsRes.status);
+          toast.error("Failed to load productions", "Please try refreshing the page.");
         }
       } catch (error) {
         console.error("Failed to fetch data:", error);
