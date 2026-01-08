@@ -73,6 +73,9 @@ processing_image = (
         "libcgal-dev",
     ])
     .run_commands([
+        # Cache buster: v3 - 2026-01-08
+        "echo 'Building COLMAP with memory header fix v3'",
+
         # === Install CMake 3.28+ ===
         "wget -q https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz -O /tmp/cmake.tar.gz",
         "tar -xzf /tmp/cmake.tar.gz -C /opt",
@@ -102,10 +105,13 @@ processing_image = (
         "&& make -j$(nproc) && make install",
 
         # === Build COLMAP with CUDA ===
-        # Clone and patch in one step to avoid cache issues
-        # Patch: COLMAP 3.9.1 missing #include <memory> in line.cc (compiler compatibility bug)
+        # COLMAP 3.9.1 has a bug: missing #include <memory> in line.cc
+        # We clone, patch the file, then build - all in one command to ensure fresh state
         "git clone --branch 3.9.1 --depth 1 https://github.com/colmap/colmap.git /opt/colmap && "
-        "sed -i '1i #include <memory>' /opt/colmap/src/colmap/image/line.cc",
+        "echo '#include <memory>' > /tmp/memory_header && "
+        "cat /opt/colmap/src/colmap/image/line.cc >> /tmp/memory_header && "
+        "mv /tmp/memory_header /opt/colmap/src/colmap/image/line.cc && "
+        "head -5 /opt/colmap/src/colmap/image/line.cc",  # Verify patch applied
         "mkdir -p /opt/colmap/build",
         "cd /opt/colmap/build && /usr/local/bin/cmake .. "
         "-DCMAKE_BUILD_TYPE=Release "
