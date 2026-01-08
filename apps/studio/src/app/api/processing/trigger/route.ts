@@ -95,31 +95,19 @@ export async function POST(req: NextRequest) {
       callback_url: callbackUrl,
     };
 
-    // Call Modal API
-    const modalToken = process.env.MODAL_TOKEN_ID && process.env.MODAL_TOKEN_SECRET
-      ? `${process.env.MODAL_TOKEN_ID}:${process.env.MODAL_TOKEN_SECRET}`
-      : process.env.MODAL_API_TOKEN;
+    // Trigger Modal function via webhook
+    const modalWebhookUrl = process.env.MODAL_WEBHOOK_URL || "https://smithjps512--gameview-processing-trigger.modal.run";
 
-    if (!modalToken) {
-      console.error("[Processing] MODAL_API_TOKEN not configured");
-      return NextResponse.json(
-        { error: "Processing service not configured" },
-        { status: 500 }
-      );
-    }
+    console.log("[Processing] Triggering Modal webhook:", modalWebhookUrl);
+    console.log("[Processing] Payload:", JSON.stringify(modalPayload, null, 2));
 
-    // Trigger Modal function
-    const modalResponse = await fetch(
-      "https://api.modal.com/v1/functions/gameview-processing/process_production/call",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${modalToken}`,
-        },
-        body: JSON.stringify(modalPayload),
-      }
-    );
+    const modalResponse = await fetch(modalWebhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(modalPayload),
+    });
 
     if (!modalResponse.ok) {
       const errorText = await modalResponse.text();
