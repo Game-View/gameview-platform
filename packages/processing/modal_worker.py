@@ -102,9 +102,10 @@ processing_image = (
         "&& make -j$(nproc) && make install",
 
         # === Build COLMAP with CUDA ===
-        "git clone --branch 3.9.1 --depth 1 https://github.com/colmap/colmap.git /opt/colmap",
-        # Patch missing #include <memory> in line.cc (COLMAP 3.9.1 bug with newer compilers)
-        "sed -i '35a #include <memory>' /opt/colmap/src/colmap/image/line.cc",
+        # Clone and patch in one step to avoid cache issues
+        # Patch: COLMAP 3.9.1 missing #include <memory> in line.cc (compiler compatibility bug)
+        "git clone --branch 3.9.1 --depth 1 https://github.com/colmap/colmap.git /opt/colmap && "
+        "sed -i '1i #include <memory>' /opt/colmap/src/colmap/image/line.cc",
         "mkdir -p /opt/colmap/build",
         "cd /opt/colmap/build && /usr/local/bin/cmake .. "
         "-DCMAKE_BUILD_TYPE=Release "
