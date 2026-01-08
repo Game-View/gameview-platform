@@ -364,3 +364,92 @@ export function describeInteraction(interaction: Interaction): string {
   const actionTexts = interaction.actions.map((a) => actionLabels[a.type]).join(", ");
   return `When ${triggerText.toLowerCase()}: ${actionTexts}`;
 }
+
+// ============================================
+// SCAVENGER HUNT HELPERS
+// ============================================
+
+/**
+ * Create a collectible interaction for scavenger hunt
+ * Object disappears when collected and adds to score
+ */
+export function createCollectibleInteraction(objectName: string = "Item"): Interaction {
+  return {
+    id: crypto.randomUUID(),
+    name: `Collect ${objectName}`,
+    enabled: true,
+    trigger: {
+      type: "collect",
+      destroyOnCollect: true,
+    },
+    actions: [
+      {
+        type: "add_score",
+        points: 1,
+        scoreType: "collectibles",
+        showPopup: true,
+      },
+      {
+        type: "play_sound",
+        audioUrl: "/sounds/collect.mp3", // Default collect sound
+        volume: 0.7,
+        loop: false,
+        spatial: true,
+      },
+      {
+        type: "emit_particles",
+        particleType: "sparkle",
+        duration: 500,
+        intensity: 0.8,
+      },
+    ],
+    maxTriggers: 1, // Can only be collected once
+  };
+}
+
+/**
+ * Check if an object has a collectible interaction
+ */
+export function isObjectCollectible(interactions: Interaction[]): boolean {
+  return interactions.some(
+    (i) => i.enabled && i.trigger.type === "collect"
+  );
+}
+
+/**
+ * Get the collectible interaction from an object, if any
+ */
+export function getCollectibleInteraction(interactions: Interaction[]): Interaction | undefined {
+  return interactions.find(
+    (i) => i.enabled && i.trigger.type === "collect"
+  );
+}
+
+/**
+ * Toggle collectible status on an object
+ * Returns the updated interactions array
+ */
+export function toggleCollectible(
+  interactions: Interaction[],
+  objectName: string,
+  makeCollectible: boolean
+): Interaction[] {
+  const existingCollectible = getCollectibleInteraction(interactions);
+
+  if (makeCollectible) {
+    // Add collectible interaction if not present
+    if (!existingCollectible) {
+      return [...interactions, createCollectibleInteraction(objectName)];
+    }
+    // Re-enable if disabled
+    return interactions.map((i) =>
+      i.trigger.type === "collect" ? { ...i, enabled: true } : i
+    );
+  } else {
+    // Remove or disable collectible interaction
+    if (existingCollectible) {
+      return interactions.filter((i) => i.id !== existingCollectible.id);
+    }
+  }
+  return interactions;
+}

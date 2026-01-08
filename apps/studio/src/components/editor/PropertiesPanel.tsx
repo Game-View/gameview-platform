@@ -11,11 +11,12 @@ import {
   ChevronRight,
   X,
   Settings2,
+  Star,
 } from "lucide-react";
 import { useEditorStore, type TransformMode } from "@/stores/editor-store";
 import { InteractionPanel } from "./InteractionPanel";
 import type { ObjectTransform } from "@/lib/objects";
-import type { Interaction } from "@/lib/interactions";
+import { type Interaction, isObjectCollectible, toggleCollectible } from "@/lib/interactions";
 
 interface PropertiesPanelProps {
   className?: string;
@@ -117,6 +118,43 @@ export function PropertiesPanel({ className = "", onClose }: PropertiesPanelProp
           className="w-full px-3 py-2 bg-gv-neutral-800 border border-gv-neutral-700 rounded-gv text-white font-medium focus:outline-none focus:ring-2 focus:ring-gv-primary-500"
         />
         <p className="text-xs text-gv-neutral-500 mt-2">ID: {selectedObject.instanceId.slice(0, 8)}...</p>
+      </div>
+
+      {/* Quick Collectible Toggle - For Scavenger Hunt */}
+      <div className="p-4 border-b border-gv-neutral-800">
+        <label className="flex items-center justify-between cursor-pointer group">
+          <span className="flex items-center gap-2">
+            <Star className={`h-4 w-4 ${isObjectCollectible(selectedObject.interactions || []) ? "text-yellow-400 fill-yellow-400" : "text-gv-neutral-500"}`} />
+            <span className="text-sm text-white">Collectible</span>
+          </span>
+          <button
+            onClick={() => {
+              const isCollectible = isObjectCollectible(selectedObject.interactions || []);
+              const newInteractions = toggleCollectible(
+                selectedObject.interactions || [],
+                selectedObject.name,
+                !isCollectible
+              );
+              handleInteractionsChange(newInteractions);
+            }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              isObjectCollectible(selectedObject.interactions || [])
+                ? "bg-yellow-500"
+                : "bg-gv-neutral-700 group-hover:bg-gv-neutral-600"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                isObjectCollectible(selectedObject.interactions || []) ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </label>
+        <p className="text-xs text-gv-neutral-500 mt-2">
+          {isObjectCollectible(selectedObject.interactions || [])
+            ? "Players can collect this object in scavenger hunt mode"
+            : "Enable to make this a scavenger hunt collectible"}
+        </p>
       </div>
 
       {/* Transform Mode Buttons */}
