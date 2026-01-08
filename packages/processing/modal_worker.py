@@ -81,8 +81,8 @@ processing_image = (
         # Build GLOMAP from source (Apache 2.0 license)
         "git clone --recursive https://github.com/colmap/glomap.git /opt/glomap",
         "cd /opt/glomap && mkdir build && cd build && /usr/local/bin/cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release && ninja",
-        "chmod 755 /opt/glomap/build/glomap",
-        "cp /opt/glomap/build/glomap /usr/local/bin/glomap",
+        "chmod 755 /opt/glomap/build/glomap/glomap",
+        "cp /opt/glomap/build/glomap/glomap /usr/local/bin/glomap",
         "chmod 755 /usr/local/bin/glomap",
         # Verify GLOMAP binary works
         "/usr/local/bin/glomap --help || echo 'GLOMAP verification failed'",
@@ -235,7 +235,7 @@ def process_production(
         glomap_bin = "/usr/local/bin/glomap"
         if not os.path.exists(glomap_bin):
             # Fallback to build directory
-            glomap_bin = "/opt/glomap/build/glomap"
+            glomap_bin = "/opt/glomap/build/glomap/glomap"
 
         # Ensure executable permissions at runtime
         os.chmod(glomap_bin, 0o755)
