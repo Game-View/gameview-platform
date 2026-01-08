@@ -106,7 +106,7 @@ supabase_secret = modal.Secret.from_name("supabase-credentials")
 @app.function(
     image=processing_image,
     gpu="T4",  # Can upgrade to A10G or A100 for faster processing
-    timeout=3600,  # 1 hour max
+    timeout=7200,  # 2 hours max (GLOMAP is CPU-only and can take time)
     secrets=[supabase_secret],
 )
 def process_production(
