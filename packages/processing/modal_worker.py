@@ -84,6 +84,8 @@ processing_image = (
         "chmod 755 /opt/glomap/build/glomap",
         "cp /opt/glomap/build/glomap /usr/local/bin/glomap",
         "chmod 755 /usr/local/bin/glomap",
+        # Verify GLOMAP binary works
+        "/usr/local/bin/glomap --help || echo 'GLOMAP verification failed'",
     ])
     .pip_install([
         "numpy",
@@ -229,9 +231,19 @@ def process_production(
         sparse_dir = colmap_dir / "sparse"
         sparse_dir.mkdir(exist_ok=True)
 
+        # Use full path and verify binary is executable
+        glomap_bin = "/usr/local/bin/glomap"
+        if not os.path.exists(glomap_bin):
+            # Fallback to build directory
+            glomap_bin = "/opt/glomap/build/glomap"
+
+        # Ensure executable permissions at runtime
+        os.chmod(glomap_bin, 0o755)
+        print(f"[{production_id}] Using GLOMAP binary: {glomap_bin}")
+
         try:
             result_mapper = subprocess.run([
-                "glomap", "mapper",
+                glomap_bin, "mapper",
                 "--database_path", str(database_path),
                 "--image_path", str(colmap_images),
                 "--output_path", str(sparse_dir),
