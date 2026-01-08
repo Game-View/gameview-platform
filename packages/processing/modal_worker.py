@@ -74,8 +74,6 @@ processing_image = (
         "libqt5opengl5-dev",
         # CGAL for geometry algorithms
         "libcgal-dev",
-        # Clang for pycuda/SLAM3R build
-        "clang",
     ])
     .run_commands([
         # Cache buster: v5 - FORCE REBUILD 2026-01-08T22:30
