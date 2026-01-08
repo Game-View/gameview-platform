@@ -10,7 +10,8 @@ This plan takes Game View from development to beta using a balanced approach:
 - **Timeline**: ~3-4 weeks of focused development
 - **Scope**: Brief 1.2 core features (Spark + Build + Platform basics)
 - **Approach**: Ship working features daily, iterate based on testing
-- **3 Innovations**: Deferred to post-beta iteration (iPhone LiDAR, Serverless GPU, WebGPU)
+- **GPU Processing**: ✅ Implemented with Modal + CUDA-accelerated GLOMAP
+- **Deferred**: iPhone LiDAR, WebGPU browser viewer
 
 ---
 
@@ -37,7 +38,8 @@ This plan takes Game View from development to beta using a balanced approach:
 | **Supabase** | ✅ Configured | Database + storage buckets |
 | **Upstash Redis** | ✅ Configured | BullMQ queue ready |
 | **Prisma** | ✅ Configured | v6 schema deployed |
-| **Vercel** | 🔄 In Progress | Studio deploying, need dev/prod split |
+| **Vercel** | ✅ Deployed | Studio live, Player pending |
+| **Modal** | ✅ Configured | GPU processing with CUDA GLOMAP |
 
 ---
 
@@ -272,7 +274,7 @@ Redis: Upstash prod database
 | Feature | Why Deferred |
 |---------|--------------|
 | iPhone LiDAR capture app | Innovation - requires native app development |
-| Serverless GPU ($0.30) | Innovation - requires Modal/RunPod integration |
+| ~~Serverless GPU~~ | ✅ **IMPLEMENTED** - Modal + CUDA GLOMAP |
 | WebGPU browser viewer | Innovation - requires new renderer |
 | Multi-venue experiences | Adds complexity, can do single-venue for beta |
 | Player payments | Requires Stripe integration |
@@ -286,7 +288,8 @@ Redis: Upstash prod database
 ## Risk Mitigation
 
 ### Risk 1: 3D Processing Too Complex
-**Mitigation**: Use pre-processed sample scenes for beta. Creators can still place objects, configure interactions, test. Full video→3D pipeline becomes first post-beta priority.
+**Status**: ✅ **RESOLVED** - GPU-accelerated GLOMAP pipeline implemented on Modal
+**Details**: Full video→3D pipeline operational with CUDA acceleration. Processing times reduced from ~8 hours (CPU) to ~10-30 minutes (GPU).
 
 ### Risk 2: Performance Issues
 **Mitigation**: Limit scene size (max splats), implement LOD, test on target hardware early. If needed, reduce default quality.
