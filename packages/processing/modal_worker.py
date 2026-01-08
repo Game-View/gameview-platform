@@ -109,15 +109,14 @@ processing_image = (
 
         # === Build COLMAP with CUDA ===
         # COLMAP 3.9.1 has a bug: missing #include <memory> in line.cc
-        # Fix: Use 'sed 1i' to INSERT line before line 1 (correct syntax!)
-        # Cache buster v6 - FIXED SED COMMAND
+        # Fix: Insert BEFORE 'extern "C"' block using pattern match
+        # Cache buster v7 - INSERT BEFORE EXTERN C
         "rm -rf /opt/colmap && "
         "git clone --branch 3.9.1 --depth 1 https://github.com/colmap/colmap.git /opt/colmap && "
         "echo '>>> PATCHING line.cc to add #include <memory> <<<' && "
-        "sed -i '1i #include <memory>' /opt/colmap/src/colmap/image/line.cc && "
-        "echo '>>> FIRST 5 LINES OF PATCHED FILE <<<' && "
-        "head -5 /opt/colmap/src/colmap/image/line.cc && "
-        "grep -n 'memory' /opt/colmap/src/colmap/image/line.cc | head -3 && "
+        "sed -i '/extern .C./i #include <memory>' /opt/colmap/src/colmap/image/line.cc && "
+        "echo '>>> LINES 30-40 OF PATCHED FILE <<<' && "
+        "sed -n '30,40p' /opt/colmap/src/colmap/image/line.cc && "
         "echo '>>> BUILDING COLMAP <<<' && "
         "mkdir -p /opt/colmap/build && "
         "cd /opt/colmap/build && "
