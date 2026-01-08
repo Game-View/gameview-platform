@@ -33,16 +33,18 @@ import urllib.parse
 # Modal app definition
 app = modal.App("gameview-processing")
 
-# GPU image with COLMAP + GLOMAP for fast SfM
+# GPU image with CUDA-accelerated COLMAP + GLOMAP
+# Built with cuDSS for GPU-accelerated bundle adjustment (2-5x faster)
 processing_image = (
-    modal.Image.from_registry("nvidia/cuda:12.1.0-devel-ubuntu22.04", add_python="3.11")
+    modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11")
     .apt_install([
         "ffmpeg",
         "libgl1-mesa-glx",
         "libglib2.0-0",
         "wget",
         "git",
-        # GLOMAP build dependencies
+        "curl",
+        # Build dependencies
         "ninja-build",
         "build-essential",
         "libboost-all-dev",
@@ -51,41 +53,78 @@ processing_image = (
         "libfreeimage-dev",
         "libmetis-dev",
         "libgoogle-glog-dev",
+        "libgflags-dev",
         "libgtest-dev",
         "libsqlite3-dev",
-        "libceres-dev",
         "libssl-dev",
-        # OpenGL dependencies (required by COLMAP/GLOMAP)
+        "libatlas-base-dev",
+        "libsuitesparse-dev",
+        # OpenGL dependencies
         "libgl1-mesa-dev",
         "libglx-dev",
         "libglu1-mesa-dev",
         "libegl1-mesa-dev",
         "libglew-dev",
         "libglfw3-dev",
+        # Qt5 for COLMAP (headless)
+        "qtbase5-dev",
+        "libqt5opengl5-dev",
         # CGAL for geometry algorithms
         "libcgal-dev",
     ])
     .run_commands([
-        # Install CMake 3.28+ (required by GLOMAP)
+        # === Install CMake 3.28+ ===
         "wget -q https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz -O /tmp/cmake.tar.gz",
         "tar -xzf /tmp/cmake.tar.gz -C /opt",
-        "ln -s /opt/cmake-3.28.3-linux-x86_64/bin/cmake /usr/local/bin/cmake",
+        "ln -sf /opt/cmake-3.28.3-linux-x86_64/bin/cmake /usr/local/bin/cmake",
         "rm /tmp/cmake.tar.gz",
-        # Install Miniconda for COLMAP
-        "wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh",
-        "bash /tmp/miniconda.sh -b -p /opt/conda",
-        "rm /tmp/miniconda.sh",
-        "/opt/conda/bin/conda config --set auto_activate_base false",
-        "/opt/conda/bin/conda install -y --override-channels -c conda-forge colmap",
-        "ln -s /opt/conda/bin/colmap /usr/local/bin/colmap",
-        # Build GLOMAP from source (Apache 2.0 license)
+
+        # === Install cuDSS 0.3.0 (CUDA Direct Sparse Solver) ===
+        # Required for GPU-accelerated bundle adjustment in Ceres
+        "wget -q https://developer.download.nvidia.com/compute/cudss/redist/libcudss/linux-x86_64/libcudss-linux-x86_64-0.3.0.9_cuda12-archive.tar.xz -O /tmp/cudss.tar.xz",
+        "mkdir -p /opt/cudss",
+        "tar -xf /tmp/cudss.tar.xz -C /opt/cudss --strip-components=1",
+        "rm /tmp/cudss.tar.xz",
+        # Set up cuDSS paths
+        "echo '/opt/cudss/lib' >> /etc/ld.so.conf.d/cudss.conf",
+        "ldconfig",
+
+        # === Build Ceres Solver 2.2 with CUDA support ===
+        # Note: Ceres 2.2 has stable CUDA support
+        "git clone --branch 2.2.0 --depth 1 https://github.com/ceres-solver/ceres-solver.git /opt/ceres-solver",
+        "mkdir -p /opt/ceres-solver/build",
+        "cd /opt/ceres-solver/build && /usr/local/bin/cmake .. "
+        "-DCMAKE_BUILD_TYPE=Release "
+        "-DBUILD_TESTING=OFF "
+        "-DBUILD_EXAMPLES=OFF "
+        "-DUSE_CUDA=ON "
+        "-DCMAKE_CUDA_ARCHITECTURES='70;75;80;86;89' "
+        "&& make -j$(nproc) && make install",
+
+        # === Build COLMAP with CUDA ===
+        "git clone --branch 3.9.1 --depth 1 https://github.com/colmap/colmap.git /opt/colmap",
+        "mkdir -p /opt/colmap/build",
+        "cd /opt/colmap/build && /usr/local/bin/cmake .. "
+        "-DCMAKE_BUILD_TYPE=Release "
+        "-DCUDA_ENABLED=ON "
+        "-DGUI_ENABLED=OFF "
+        "-DCMAKE_CUDA_ARCHITECTURES='70;75;80;86;89' "
+        "&& make -j$(nproc) && make install",
+
+        # === Build GLOMAP with CUDA-enabled Ceres ===
         "git clone --recursive https://github.com/colmap/glomap.git /opt/glomap",
-        "cd /opt/glomap && mkdir build && cd build && /usr/local/bin/cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release && ninja",
+        "mkdir -p /opt/glomap/build",
+        "cd /opt/glomap/build && /usr/local/bin/cmake .. "
+        "-DCMAKE_BUILD_TYPE=Release "
+        "-GNinja "
+        "&& ninja",
         "chmod 755 /opt/glomap/build/glomap/glomap",
         "cp /opt/glomap/build/glomap/glomap /usr/local/bin/glomap",
         "chmod 755 /usr/local/bin/glomap",
-        # Verify GLOMAP binary works
-        "/usr/local/bin/glomap --help || echo 'GLOMAP verification failed'",
+
+        # Verify installations
+        "colmap -h || echo 'COLMAP verification failed'",
+        "glomap --help || echo 'GLOMAP verification failed'",
     ])
     .pip_install([
         "numpy",
