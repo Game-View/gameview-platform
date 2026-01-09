@@ -77,8 +77,8 @@ processing_image = (
         "libcgal-dev",
     ])
     .run_commands([
-        # Cache buster: v6 - FORCE REBUILD 2026-01-09
-        "echo 'FORCE REBUILD v6: Patching COLMAP memory header'",
+        # Cache buster: v7 - Smart frame capping + COLMAP fallback
+        "echo 'FORCE REBUILD v7: Smart frame extraction with GLOMAP/COLMAP fallback'",
         "date",
 
         # === Install CMake 3.28+ ===
@@ -247,10 +247,14 @@ def process_production(
             urllib.request.urlretrieve(video["url"], str(video_path))
             video_paths.append(video_path)
 
-        # Stage 2: Extract frames
+        # Stage 2: Extract frames with smart capping
+        # Quality insight: Reconstruction quality depends on frame DIVERSITY, not count
+        # 300-500 well-distributed frames produce results equal to 2000+ redundant frames
         send_progress(callback_url, production_id, "frame_extraction", 15, "Extracting frames from videos")
         print(f"[{production_id}] Extracting frames...")
-        fps = settings.get("fps", 10)
+
+        fps = settings.get("fps", 3)  # Lower default: 3fps provides good coverage without redundancy
+        max_frames = settings.get("maxFrames", 500)  # Cap total frames to prevent GLOMAP OOM
         all_frames = []
 
         for i, video_path in enumerate(video_paths):
@@ -269,6 +273,18 @@ def process_production(
             frames = sorted(cam_frames_dir.glob("*.jpg"))
             all_frames.extend(frames)
             print(f"  Extracted {len(frames)} frames from {video_path.name}")
+
+        # Smart frame sampling if over the cap
+        total_extracted = len(all_frames)
+        if total_extracted > max_frames:
+            print(f"[{production_id}] Frame count ({total_extracted}) exceeds cap ({max_frames}), applying smart sampling...")
+
+            # Uniform sampling to maintain temporal coverage
+            step = total_extracted / max_frames
+            sampled_indices = [int(i * step) for i in range(max_frames)]
+            all_frames = [all_frames[i] for i in sampled_indices]
+
+            print(f"[{production_id}] Reduced to {len(all_frames)} frames with uniform sampling")
 
         # Copy all frames to a single directory for COLMAP
         colmap_images = colmap_dir / "images"
@@ -328,6 +344,7 @@ def process_production(
         os.chmod(glomap_bin, 0o755)
         print(f"[{production_id}] Using GLOMAP binary: {glomap_bin}")
 
+        glomap_success = False
         try:
             # Run GLOMAP with real-time output streaming for debugging
             print(f"[{production_id}] Starting GLOMAP mapper (this may take a while)...")
@@ -353,9 +370,32 @@ def process_production(
                 raise subprocess.CalledProcessError(return_code, glomap_bin)
 
             print(f"[{production_id}] GLOMAP mapper completed successfully")
+            glomap_success = True
         except subprocess.CalledProcessError as e:
             print(f"[{production_id}] GLOMAP mapper failed with exit code: {e.returncode}")
-            raise
+            print(f"[{production_id}] Falling back to COLMAP mapper...")
+
+        # Fallback to COLMAP mapper if GLOMAP fails
+        if not glomap_success:
+            send_progress(callback_url, production_id, "glomap", 55, "Using COLMAP fallback reconstruction")
+            try:
+                result_mapper = subprocess.run([
+                    "colmap", "mapper",
+                    "--database_path", str(database_path),
+                    "--image_path", str(colmap_images),
+                    "--output_path", str(sparse_dir),
+                    "--Mapper.ba_global_max_num_iterations", "30",  # Reduce iterations for speed
+                    "--Mapper.ba_global_max_refinements", "2",
+                ], check=True, capture_output=True, text=True, timeout=3600)  # 1hr timeout
+                print(f"[{production_id}] COLMAP mapper completed successfully")
+            except subprocess.CalledProcessError as e:
+                print(f"[{production_id}] COLMAP mapper also failed:")
+                print(f"  stdout: {e.stdout}")
+                print(f"  stderr: {e.stderr}")
+                raise
+            except subprocess.TimeoutExpired:
+                print(f"[{production_id}] COLMAP mapper timed out after 1 hour")
+                raise Exception("Reconstruction timed out - try reducing video count or duration")
 
         # Stage 4: Train Gaussian Splats
         send_progress(callback_url, production_id, "training", 70, "Generating 3D Gaussian Splats")
