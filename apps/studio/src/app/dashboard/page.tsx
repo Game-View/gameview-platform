@@ -212,6 +212,62 @@ export default function DashboardPage() {
     });
   }, [productions, subscribeToProgress]);
 
+  // Poll for progress updates (fallback for when SSE/Redis isn't available)
+  useEffect(() => {
+    const hasActiveProductions = productions.some(
+      (p) => !["completed", "failed", "cancelled"].includes(p.status)
+    );
+
+    if (!hasActiveProductions) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch("/api/trpc/production.list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ json: { limit: 50 } }),
+        });
+
+        if (response.ok) {
+          const prodData = await response.json();
+          if (prodData.result?.data?.json?.items) {
+            const items = prodData.result.data.json.items;
+            const mappedProductions: Production[] = items.map((item: {
+              id: string;
+              name: string;
+              status: string;
+              stage?: string;
+              progress: number;
+              createdAt: string;
+              completedAt?: string;
+              videoCount: number;
+              preset: "fast" | "balanced" | "high";
+              error?: string;
+              thumbnailUrl?: string;
+            }) => ({
+              id: item.id,
+              name: item.name,
+              status: item.stage || item.status,
+              progress: item.progress,
+              stageProgress: item.progress,
+              createdAt: item.createdAt,
+              completedAt: item.completedAt,
+              videoCount: item.videoCount,
+              preset: item.preset,
+              errorMessage: item.error,
+              thumbnailUrl: item.thumbnailUrl,
+            }));
+            setProductions(mappedProductions);
+          }
+        }
+      } catch (error) {
+        console.error("Poll failed:", error);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [productions]);
+
   // Filter and search briefs
   const filteredBriefs = useMemo(() => {
     return briefs.filter((brief) => {

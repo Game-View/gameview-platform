@@ -161,6 +161,30 @@ processing_image = (
 supabase_secret = modal.Secret.from_name("supabase-credentials")
 
 
+def send_progress(callback_url: str, production_id: str, stage: str, progress: int, message: str = ""):
+    """Send progress update to Studio API."""
+    import requests
+
+    # Derive progress URL from callback URL
+    progress_url = callback_url.replace("/api/processing/callback", "/api/processing/progress")
+
+    try:
+        response = requests.post(
+            progress_url,
+            json={
+                "production_id": production_id,
+                "stage": stage,
+                "progress": progress,
+                "message": message,
+            },
+            headers={"Content-Type": "application/json"},
+            timeout=10,
+        )
+        print(f"[{production_id}] Progress update: {stage} {progress}% - {response.status_code}")
+    except Exception as e:
+        print(f"[{production_id}] Progress update failed: {e}")
+
+
 @app.function(
     image=processing_image,
     gpu="T4",  # Can upgrade to A10G or A100 for faster processing
@@ -214,6 +238,7 @@ def process_production(
 
     try:
         # Stage 1: Download videos
+        send_progress(callback_url, production_id, "downloading", 5, "Downloading videos")
         print(f"[{production_id}] Downloading {len(source_videos)} videos...")
         video_paths = []
         for i, video in enumerate(source_videos):
@@ -223,6 +248,7 @@ def process_production(
             video_paths.append(video_path)
 
         # Stage 2: Extract frames
+        send_progress(callback_url, production_id, "frame_extraction", 15, "Extracting frames from videos")
         print(f"[{production_id}] Extracting frames...")
         fps = settings.get("fps", 10)
         all_frames = []
@@ -254,6 +280,7 @@ def process_production(
         print(f"[{production_id}] Total frames: {len(all_frames)}")
 
         # Stage 3: Run COLMAP
+        send_progress(callback_url, production_id, "colmap_features", 25, "Extracting image features")
         print(f"[{production_id}] Running COLMAP feature extraction...")
         database_path = colmap_dir / "database.db"
 
@@ -272,6 +299,7 @@ def process_production(
             raise
 
         # Feature matching (sequential matcher is much faster for video frames)
+        send_progress(callback_url, production_id, "colmap_matching", 35, "Matching features across images")
         print(f"[{production_id}] Running COLMAP feature matching...")
         try:
             result_fm = subprocess.run([
@@ -285,6 +313,7 @@ def process_production(
             raise
 
         # Sparse reconstruction using GLOMAP (10-100x faster than COLMAP mapper)
+        send_progress(callback_url, production_id, "glomap", 50, "Reconstructing 3D structure")
         print(f"[{production_id}] Running GLOMAP sparse reconstruction...")
         sparse_dir = colmap_dir / "sparse"
         sparse_dir.mkdir(exist_ok=True)
@@ -329,6 +358,7 @@ def process_production(
             raise
 
         # Stage 4: Train Gaussian Splats
+        send_progress(callback_url, production_id, "training", 70, "Generating 3D Gaussian Splats")
         print(f"[{production_id}] Training Gaussian Splats...")
         total_steps = settings.get("totalSteps", 15000)
         max_splats = settings.get("maxSplats", 10000000)
@@ -369,6 +399,7 @@ def process_production(
             shutil.copy(all_frames[0], thumbnail_path)
 
         # Stage 5: Upload to Supabase
+        send_progress(callback_url, production_id, "uploading", 90, "Uploading results")
         print(f"[{production_id}] Uploading results...")
         bucket = "production-outputs"
 
