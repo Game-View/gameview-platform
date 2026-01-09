@@ -38,9 +38,10 @@ app = modal.App("gameview-processing")
 processing_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11")
     .apt_install([
-        # Cache buster v2: Adding 'tree' + 'file' to invalidate Modal cache
+        # Cache buster v3: Force rebuild 2026-01-09
         "tree",
         "file",
+        "htop",  # New package to invalidate Modal cache
         "ffmpeg",
         "libgl1-mesa-glx",
         "libglib2.0-0",
@@ -76,8 +77,8 @@ processing_image = (
         "libcgal-dev",
     ])
     .run_commands([
-        # Cache buster: v5 - FORCE REBUILD 2026-01-08T22:30
-        "echo 'FORCE REBUILD v5: Patching COLMAP memory header'",
+        # Cache buster: v6 - FORCE REBUILD 2026-01-09
+        "echo 'FORCE REBUILD v6: Patching COLMAP memory header'",
         "date",
 
         # === Install CMake 3.28+ ===
@@ -110,14 +111,14 @@ processing_image = (
 
         # === Build COLMAP with CUDA ===
         # COLMAP 3.9.1 has a bug: missing #include <memory> in line.cc
-        # Fix: Insert BEFORE 'extern "C"' block using pattern match
-        # Cache buster v7 - INSERT BEFORE EXTERN C
+        # Fix: Insert at line 31 (before extern "C" at line 34)
+        # Cache buster v8 - LINE 31 INSERT
         "rm -rf /opt/colmap && "
         "git clone --branch 3.9.1 --depth 1 https://github.com/colmap/colmap.git /opt/colmap && "
-        "echo '>>> PATCHING line.cc to add #include <memory> <<<' && "
-        "sed -i '/extern .C./i #include <memory>' /opt/colmap/src/colmap/image/line.cc && "
-        "echo '>>> LINES 30-40 OF PATCHED FILE <<<' && "
-        "sed -n '30,40p' /opt/colmap/src/colmap/image/line.cc && "
+        "echo '>>> PATCHING line.cc to add #include <memory> at line 31 <<<' && "
+        "sed -i '31i #include <memory>' /opt/colmap/src/colmap/image/line.cc && "
+        "echo '>>> LINES 28-40 OF PATCHED FILE <<<' && "
+        "sed -n '28,40p' /opt/colmap/src/colmap/image/line.cc && "
         "echo '>>> BUILDING COLMAP <<<' && "
         "mkdir -p /opt/colmap/build && "
         "cd /opt/colmap/build && "
