@@ -13,13 +13,15 @@ import {
   StopCircle,
 } from "lucide-react";
 
-// Production stages matching gvcore-cli pipeline
+// Production stages matching Modal worker pipeline
 export type ProductionStage =
   | "queued"
+  | "downloading"
   | "frame_extraction"
   | "colmap"
-  | "brush_processing"
-  | "metadata_generation"
+  | "reconstruction"
+  | "training"
+  | "uploading"
   | "completed"
   | "failed"
   | "cancelled";
@@ -49,10 +51,12 @@ interface ProductionProgressCardProps {
 
 const STAGE_LABELS: Record<ProductionStage, string> = {
   queued: "Queued",
+  downloading: "Downloading Videos",
   frame_extraction: "Extracting Frames",
-  colmap: "Reconstructing Scene",
-  brush_processing: "Generating 3D",
-  metadata_generation: "Finalizing",
+  colmap: "Feature Matching",
+  reconstruction: "Reconstructing Scene",
+  training: "Training 3D Model",
+  uploading: "Uploading Results",
   completed: "Completed",
   failed: "Failed",
   cancelled: "Cancelled",
@@ -60,10 +64,12 @@ const STAGE_LABELS: Record<ProductionStage, string> = {
 
 const STAGE_PROGRESS_RANGES: Record<ProductionStage, [number, number]> = {
   queued: [0, 0],
-  frame_extraction: [0, 20],
-  colmap: [20, 40],
-  brush_processing: [40, 90],
-  metadata_generation: [90, 100],
+  downloading: [0, 10],
+  frame_extraction: [10, 25],
+  colmap: [25, 45],
+  reconstruction: [45, 60],
+  training: [60, 90],
+  uploading: [90, 100],
   completed: [100, 100],
   failed: [0, 0],
   cancelled: [0, 0],
