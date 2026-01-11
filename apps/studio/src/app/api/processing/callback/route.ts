@@ -105,6 +105,8 @@ export async function POST(req: NextRequest) {
         where: { id: production_id },
         data: {
           status: "FAILED",
+          stage: null, // Clear stage so dashboard shows "failed" status instead of stale stage
+          progress: 0,
           errorMessage,
           completedAt: new Date(),
           retryCount: {
