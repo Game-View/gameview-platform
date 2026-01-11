@@ -32,13 +32,13 @@
     "tailwind-merge": "^2.2.0",
     "zod": "^3.22.4",
     "zustand": "^4.5.0",
-    "@react-three/fiber": "^8.17.10",
-    "@react-three/drei": "^9.117.3",
-    "three": "^0.169.0",
-    "@mkkellogg/gaussian-splats-3d": "^0.4.6"
+    "@react-three/fiber": "^8.18.0",
+    "@react-three/drei": "^9.122.0",
+    "three": "^0.170.0",
+    "@mkkellogg/gaussian-splats-3d": "^0.4.7"
   },
   "devDependencies": {
-    "@types/three": "^0.169.0",
+    "@types/three": "^0.170.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
