@@ -29,6 +29,7 @@ if (!skipAuth) {
     "/api/productions/queue",     // Internal API - called by tRPC
     "/api/productions/cancel",    // Internal API - called by tRPC
     "/api/processing/callback",   // Modal callback - called by Modal worker
+    "/api/processing/progress(.*)", // Modal progress updates - called by Modal worker
   ]);
 
   // Routes that require a completed profile
