@@ -21,30 +21,58 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Map Modal stages to DB stages
+    // Map Modal stages to display-friendly DB stages
+    // Keep stages meaningful for dashboard display
     const stageMap: Record<string, string> = {
-      'downloading': 'queued',
+      'downloading': 'downloading',      // Was 'queued' - now shows actual stage
       'frame_extraction': 'frame_extraction',
       'colmap_features': 'colmap',
       'colmap_matching': 'colmap',
-      'glomap': 'colmap',
-      'training': 'brush_processing',
-      'uploading': 'metadata_generation',
+      'glomap': 'reconstruction',        // More descriptive than 'colmap'
+      'training': 'training',            // Was 'brush_processing'
+      'uploading': 'uploading',          // Was 'metadata_generation'
       'completed': 'completed',
       'failed': 'failed',
     };
 
     const dbStage = stageMap[stage] || stage;
 
+    // Determine the status based on stage
+    const statusForStage = stage === 'failed' ? 'FAILED'
+                         : stage === 'completed' ? 'COMPLETED'
+                         : 'PROCESSING';
+
     // Update processing job in database
     await db.processingJob.update({
       where: { id: production_id },
       data: {
+        status: statusForStage,
         stage: dbStage,
         progress: Math.min(100, Math.max(0, progress)),
-        ...(stage === 'failed' ? { status: 'FAILED', errorMessage: message } : {}),
+        lastHeartbeat: new Date(),
+        ...(stage === 'failed' ? { errorMessage: message } : {}),
+        ...(stage === 'completed' ? { completedAt: new Date() } : {}),
       },
     });
+
+    // Publish to Redis for SSE subscribers (if Redis is available)
+    try {
+      const { getRedisConnection } = await import("@gameview/queue");
+      const redis = getRedisConnection();
+      const progressData = JSON.stringify({
+        productionId: production_id,
+        stage: dbStage,
+        progress,
+        message,
+      });
+      // Store current progress
+      await redis.set(`production:progress:${production_id}`, progressData, 'EX', 3600);
+      // Publish to channel for SSE subscribers
+      await redis.publish('production:progress', progressData);
+    } catch (redisError) {
+      // Redis not available - SSE won't work but DB is updated
+      console.log(`[Progress] Redis unavailable, skipping pub/sub:`, redisError);
+    }
 
     return NextResponse.json({ received: true, stage: dbStage, progress });
 
