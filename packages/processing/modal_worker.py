@@ -411,28 +411,41 @@ def process_production(
 
         # For now, convert COLMAP output to PLY format
         # In production, this would run full Gaussian Splatting training
-        model_dir = sparse_dir / "0"
-        if model_dir.exists():
-            # Export to PLY
-            subprocess.run([
-                "colmap", "model_converter",
-                "--input_path", str(model_dir),
-                "--output_path", str(ply_path),
-                "--output_type", "PLY",
-            ], check=True, capture_output=True)
+        # COLMAP may create sparse/0/, sparse/1/, etc. - find any valid model
+        model_dir = None
+        for subdir in sorted(sparse_dir.iterdir()) if sparse_dir.exists() else []:
+            if subdir.is_dir() and (subdir / "cameras.bin").exists():
+                model_dir = subdir
+                print(f"[{production_id}] Found reconstruction in {subdir.name}")
+                break
 
-            # Export cameras
-            subprocess.run([
-                "colmap", "model_converter",
-                "--input_path", str(model_dir),
-                "--output_path", str(output_dir / "cameras.txt"),
-                "--output_type", "TXT",
-            ], check=True, capture_output=True)
+        if not model_dir:
+            # List what's in sparse_dir for debugging
+            if sparse_dir.exists():
+                contents = list(sparse_dir.iterdir())
+                print(f"[{production_id}] sparse_dir contents: {[str(c) for c in contents]}")
+            raise Exception("COLMAP reconstruction failed - no valid model produced. Try with different camera angles or more overlap between videos.")
 
-            # Create cameras.json from COLMAP output
-            cameras_json = {"frames": [], "camera_model": "PINHOLE"}
-            cameras_json_str = json.dumps(cameras_json, indent=2)
-            cameras_path.write_text(cameras_json_str)
+        # Export to PLY
+        subprocess.run([
+            "colmap", "model_converter",
+            "--input_path", str(model_dir),
+            "--output_path", str(ply_path),
+            "--output_type", "PLY",
+        ], check=True, capture_output=True)
+
+        # Export cameras
+        subprocess.run([
+            "colmap", "model_converter",
+            "--input_path", str(model_dir),
+            "--output_path", str(output_dir / "cameras.txt"),
+            "--output_type", "TXT",
+        ], check=True, capture_output=True)
+
+        # Create cameras.json from COLMAP output
+        cameras_json = {"frames": [], "camera_model": "PINHOLE"}
+        cameras_json_str = json.dumps(cameras_json, indent=2)
+        cameras_path.write_text(cameras_json_str)
 
         # Create thumbnail from first frame
         if all_frames:

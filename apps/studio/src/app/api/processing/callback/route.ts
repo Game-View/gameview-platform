@@ -54,8 +54,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (success && outputs) {
-      // Processing succeeded - update job and experience
+    // Check for valid outputs (must have at least plyUrl)
+    const hasValidOutputs = success && outputs && outputs.plyUrl;
+
+    if (hasValidOutputs) {
+      // Processing succeeded with valid outputs - update job and experience
       const processingTime = job.startedAt
         ? Math.floor((Date.now() - job.startedAt.getTime()) / 1000)
         : null;
@@ -94,12 +97,15 @@ export async function POST(req: NextRequest) {
       // TODO: Send notification to user (email, push, etc.)
 
     } else {
-      // Processing failed
+      // Processing failed or no valid outputs
+      const errorMessage = error ||
+        (success && !outputs?.plyUrl ? "Processing completed but no output was generated" : "Unknown processing error");
+
       await db.processingJob.update({
         where: { id: production_id },
         data: {
           status: "FAILED",
-          errorMessage: error || "Unknown processing error",
+          errorMessage,
           completedAt: new Date(),
           retryCount: {
             increment: 1,
