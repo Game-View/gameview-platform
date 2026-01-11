@@ -386,7 +386,7 @@ def process_production(
                     "--output_path", str(sparse_dir),
                     "--Mapper.ba_global_max_num_iterations", "30",  # Reduce iterations for speed
                     "--Mapper.ba_global_max_refinements", "2",
-                ], check=True, capture_output=True, text=True, timeout=3600)  # 1hr timeout
+                ], check=True, capture_output=True, text=True, timeout=5400)  # 90min timeout
                 print(f"[{production_id}] COLMAP mapper completed successfully")
             except subprocess.CalledProcessError as e:
                 print(f"[{production_id}] COLMAP mapper also failed:")
@@ -394,7 +394,7 @@ def process_production(
                 print(f"  stderr: {e.stderr}")
                 raise
             except subprocess.TimeoutExpired:
-                print(f"[{production_id}] COLMAP mapper timed out after 1 hour")
+                print(f"[{production_id}] COLMAP mapper timed out after 90 minutes")
                 raise Exception("Reconstruction timed out - try reducing video count or duration")
 
         # Stage 4: Train Gaussian Splats
