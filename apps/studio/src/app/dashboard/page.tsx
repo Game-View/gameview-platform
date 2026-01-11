@@ -473,10 +473,12 @@ export default function DashboardPage() {
   // Simulate production progress (placeholder for real backend integration)
   const simulateProductionProgress = (productionId: string) => {
     const stages: Array<Production["status"]> = [
+      "downloading",
       "frame_extraction",
       "colmap",
-      "brush_processing",
-      "metadata_generation",
+      "reconstruction",
+      "training",
+      "uploading",
       "completed",
     ];
     let stageIndex = 0;
