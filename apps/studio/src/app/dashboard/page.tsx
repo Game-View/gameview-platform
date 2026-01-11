@@ -86,11 +86,8 @@ export default function DashboardPage() {
         // Fetch briefs and productions in parallel
         const [briefsRes, productionsRes] = await Promise.all([
           fetch("/api/briefs"),
-          fetch("/api/trpc/production.list", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ json: { limit: 50 } }),
-          }),
+          // tRPC queries use GET with batch format in URL
+          fetch("/api/trpc/production.list?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: { limit: 50 } } }))),
         ]);
 
         if (briefsRes.ok) {
@@ -222,11 +219,8 @@ export default function DashboardPage() {
 
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch("/api/trpc/production.list", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ json: { limit: 50 } }),
-        });
+        // tRPC queries use GET with batch format in URL
+        const response = await fetch("/api/trpc/production.list?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: { limit: 50 } } })));
 
         if (response.ok) {
           const prodData = await response.json();
