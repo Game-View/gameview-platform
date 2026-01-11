@@ -249,12 +249,12 @@ def process_production(
 
         # Stage 2: Extract frames with smart capping
         # Quality insight: Reconstruction quality depends on frame DIVERSITY, not count
-        # 300-500 well-distributed frames produce results equal to 2000+ redundant frames
+        # 250-350 well-distributed frames produce good results while keeping COLMAP fast
         send_progress(callback_url, production_id, "frame_extraction", 15, "Extracting frames from videos")
         print(f"[{production_id}] Extracting frames...")
 
         fps = settings.get("fps", 3)  # Lower default: 3fps provides good coverage without redundancy
-        max_frames = settings.get("maxFrames", 500)  # Cap total frames to prevent GLOMAP OOM
+        max_frames = settings.get("maxFrames", 300)  # Cap at 300 for faster COLMAP completion
         all_frames = []
 
         for i, video_path in enumerate(video_paths):
