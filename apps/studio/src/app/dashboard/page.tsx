@@ -99,15 +99,18 @@ export default function DashboardPage() {
           const prodData = await productionsRes.json();
           console.log("[Dashboard] Productions API response:", prodData);
 
+          // tRPC batch format returns an array - get first result
+          const result = Array.isArray(prodData) ? prodData[0] : prodData;
+
           // Check for tRPC errors (returned with HTTP 200)
-          if (prodData.error) {
-            console.error("[Dashboard] Productions tRPC error:", prodData.error);
+          if (result.error) {
+            console.error("[Dashboard] Productions tRPC error:", result.error);
             // Don't show error toast for FORBIDDEN - user may just need to complete onboarding
-            if (prodData.error.data?.code !== "FORBIDDEN") {
-              toast.error("Failed to load productions", prodData.error.message || "Please try again.");
+            if (result.error.data?.code !== "FORBIDDEN") {
+              toast.error("Failed to load productions", result.error.message || "Please try again.");
             }
-          } else if (prodData.result?.data?.json?.items) {
-            const items = prodData.result.data.json.items;
+          } else if (result.result?.data?.json?.items) {
+            const items = result.result.data.json.items;
             // Map database items to Production type
             const mappedProductions: Production[] = items.map((item: {
               id: string;
@@ -224,8 +227,10 @@ export default function DashboardPage() {
 
         if (response.ok) {
           const prodData = await response.json();
-          if (prodData.result?.data?.json?.items) {
-            const items = prodData.result.data.json.items;
+          // tRPC batch format returns an array - get first result
+          const result = Array.isArray(prodData) ? prodData[0] : prodData;
+          if (result?.result?.data?.json?.items) {
+            const items = result.result.data.json.items;
             const mappedProductions: Production[] = items.map((item: {
               id: string;
               name: string;
