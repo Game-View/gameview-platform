@@ -42,7 +42,7 @@ export default function PlayExperiencePage() {
   const experienceId = params.id as string;
 
   // Fetch experience data
-  const { data: experience, isLoading, error } = trpc.experience.getById.useQuery(
+  const { data: experience, isLoading, error } = trpc.experience.get.useQuery(
     { id: experienceId },
     { enabled: !!experienceId }
   );

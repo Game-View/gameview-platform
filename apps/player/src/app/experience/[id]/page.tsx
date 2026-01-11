@@ -58,7 +58,7 @@ export default function ExperienceDetailPage() {
     data: experience,
     isLoading,
     error,
-  } = trpc.experience.getById.useQuery(
+  } = trpc.experience.get.useQuery(
     { id: experienceId },
     { enabled: !!experienceId }
   );
