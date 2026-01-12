@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth-server";
 import { db } from "@gameview/database";
 
@@ -9,7 +9,7 @@ import { db } from "@gameview/database";
  * This is an admin endpoint to fix productions that are stuck in
  * QUEUED or PROCESSING state but aren't actually running.
  */
-export async function POST(_request: NextRequest) {
+export async function POST() {
   try {
     const { userId } = await auth();
     if (!userId) {
@@ -89,7 +89,7 @@ export async function POST(_request: NextRequest) {
  *
  * Lists stuck productions without cleaning them up.
  */
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     const { userId } = await auth();
     if (!userId) {
