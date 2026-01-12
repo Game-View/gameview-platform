@@ -116,6 +116,7 @@ export default function DashboardPage() {
             // Map database items to Production type
             const mappedProductions: Production[] = items.map((item: {
               id: string;
+              experienceId: string;
               name: string;
               status: string;
               stage?: string;
@@ -128,6 +129,7 @@ export default function DashboardPage() {
               thumbnailUrl?: string;
             }) => ({
               id: item.id,
+              experienceId: item.experienceId,
               name: item.name,
               status: item.stage || item.status,
               progress: item.progress,
@@ -424,6 +426,7 @@ export default function DashboardPage() {
           const production = data.result.data.json;
           const newProduction: Production = {
             id: production.id,
+            experienceId: production.experienceId,
             name: production.name,
             status: "queued",
             progress: 0,
@@ -463,6 +466,7 @@ export default function DashboardPage() {
     console.log("[Production] Running in simulation mode (development only)");
     const newProduction: Production = {
       id: `prod_${Date.now()}`,
+      experienceId: `exp_sim_${Date.now()}`, // Simulated experienceId for dev
       name: settings.name,
       status: "queued",
       progress: 0,
@@ -536,8 +540,16 @@ export default function DashboardPage() {
 
   // Handle production actions
   const handleViewProduction = (id: string) => {
-    // Navigate to editor with this production
-    window.location.href = `/project/${id}`;
+    // Find the production to get its experienceId
+    const production = productions.find(p => p.id === id);
+    if (!production?.experienceId) {
+      toast.error("Error", "Could not find experience for this production");
+      return;
+    }
+    // Navigate to Player app's experience viewer
+    // In production, use NEXT_PUBLIC_APP_URL; in dev, use localhost:3001
+    const playerUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+    window.open(`${playerUrl}/experience/${production.experienceId}/play`, "_blank");
   };
 
   const handleRetryProduction = async (id: string) => {

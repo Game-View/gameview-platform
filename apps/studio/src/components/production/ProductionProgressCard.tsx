@@ -28,6 +28,7 @@ export type ProductionStage =
 
 export interface Production {
   id: string;
+  experienceId: string; // The experience this production creates
   name: string;
   status: ProductionStage;
   progress: number; // 0-100
