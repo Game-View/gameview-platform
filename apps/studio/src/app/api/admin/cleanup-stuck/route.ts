@@ -5,9 +5,8 @@ import { db } from "@gameview/database";
 /**
  * POST /api/admin/cleanup-stuck
  *
- * Cleans up stuck productions by marking them as cancelled.
- * This is an admin endpoint to fix productions that are stuck in
- * QUEUED or PROCESSING state but aren't actually running.
+ * Cleans up ALL stuck productions by marking them as cancelled.
+ * This is an admin endpoint for beta - finds any job in QUEUED or PROCESSING state.
  */
 export async function POST() {
   try {
@@ -16,14 +15,9 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Find all stuck productions for this user (via creator's userId)
+    // Find ALL stuck productions (admin cleanup - no user filter for beta)
     const stuckJobs = await db.processingJob.findMany({
       where: {
-        experience: {
-          creator: {
-            userId: userId,
-          },
-        },
         status: {
           in: ["QUEUED", "PROCESSING"],
         },
@@ -64,7 +58,7 @@ export async function POST() {
       cleaned: result.count,
       productions: stuckJobs.map((j) => ({
         id: j.id,
-        name: j.experience.title,
+        name: j.experience?.title || "Unknown",
         previousStatus: j.status,
       })),
     });
@@ -80,7 +74,7 @@ export async function POST() {
 /**
  * GET /api/admin/cleanup-stuck
  *
- * Lists stuck productions without cleaning them up.
+ * Lists ALL stuck productions.
  */
 export async function GET() {
   try {
@@ -91,11 +85,6 @@ export async function GET() {
 
     const stuckJobs = await db.processingJob.findMany({
       where: {
-        experience: {
-          creator: {
-            userId: userId,
-          },
-        },
         status: {
           in: ["QUEUED", "PROCESSING"],
         },
@@ -110,7 +99,7 @@ export async function GET() {
     return NextResponse.json({
       stuck: stuckJobs.map((j) => ({
         id: j.id,
-        name: j.experience.title,
+        name: j.experience?.title || "Unknown",
         status: j.status,
         stage: j.stage,
         createdAt: j.queuedAt,
