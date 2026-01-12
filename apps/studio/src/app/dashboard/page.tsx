@@ -97,17 +97,9 @@ export default function DashboardPage() {
 
         if (productionsRes.ok) {
           const prodData = await productionsRes.json();
-          console.log("[Dashboard] Productions API response:", prodData);
 
           // tRPC batch format returns an array - get first result
           const result = Array.isArray(prodData) ? prodData[0] : prodData;
-          console.log("[Dashboard] Parsed result:", result);
-          console.log("[Dashboard] Items:", result?.result?.data?.json?.items);
-          // Debug: Show first item's keys to see what fields API is returning
-          if (result?.result?.data?.json?.items?.[0]) {
-            console.log("[Dashboard] First item keys:", Object.keys(result.result.data.json.items[0]));
-            console.log("[Dashboard] First item experienceId:", result.result.data.json.items[0].experienceId);
-          }
 
           // Check for tRPC errors (returned with HTTP 200)
           if (result?.error) {
@@ -242,6 +234,7 @@ export default function DashboardPage() {
             const items = result.result.data.json.items;
             const mappedProductions: Production[] = items.map((item: {
               id: string;
+              experienceId: string;
               name: string;
               status: string;
               stage?: string;
@@ -254,6 +247,7 @@ export default function DashboardPage() {
               thumbnailUrl?: string;
             }) => ({
               id: item.id,
+              experienceId: item.experienceId,
               name: item.name,
               status: item.stage || item.status,
               progress: item.progress,
@@ -547,9 +541,6 @@ export default function DashboardPage() {
   const handleViewProduction = (id: string) => {
     // Find the production to get its experienceId
     const production = productions.find(p => p.id === id);
-    console.log("[Dashboard] handleViewProduction - id:", id);
-    console.log("[Dashboard] handleViewProduction - production:", production);
-    console.log("[Dashboard] handleViewProduction - experienceId:", production?.experienceId);
 
     if (!production?.experienceId) {
       toast.error("Error", "Could not find experience for this production");
@@ -557,7 +548,6 @@ export default function DashboardPage() {
     }
     // Navigate to Player app's experience viewer
     const playerUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-    console.log("[Dashboard] Opening Player at:", `${playerUrl}/experience/${production.experienceId}/play`);
     window.open(`${playerUrl}/experience/${production.experienceId}/play`, "_blank");
   };
 
