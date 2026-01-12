@@ -542,13 +542,17 @@ export default function DashboardPage() {
   const handleViewProduction = (id: string) => {
     // Find the production to get its experienceId
     const production = productions.find(p => p.id === id);
+    console.log("[Dashboard] handleViewProduction - id:", id);
+    console.log("[Dashboard] handleViewProduction - production:", production);
+    console.log("[Dashboard] handleViewProduction - experienceId:", production?.experienceId);
+
     if (!production?.experienceId) {
       toast.error("Error", "Could not find experience for this production");
       return;
     }
     // Navigate to Player app's experience viewer
-    // In production, use NEXT_PUBLIC_APP_URL; in dev, use localhost:3001
     const playerUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+    console.log("[Dashboard] Opening Player at:", `${playerUrl}/experience/${production.experienceId}/play`);
     window.open(`${playerUrl}/experience/${production.experienceId}/play`, "_blank");
   };
 
