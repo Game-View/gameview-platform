@@ -16,20 +16,13 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get the creator profile
-    const creator = await db.creator.findUnique({
-      where: { userId },
-    });
-
-    if (!creator) {
-      return NextResponse.json({ error: "Creator not found" }, { status: 404 });
-    }
-
-    // Find all stuck productions for this user
+    // Find all stuck productions for this user (via creator's userId)
     const stuckJobs = await db.processingJob.findMany({
       where: {
         experience: {
-          creatorId: creator.id,
+          creator: {
+            userId: userId,
+          },
         },
         status: {
           in: ["QUEUED", "PROCESSING"],
@@ -96,18 +89,12 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const creator = await db.creator.findUnique({
-      where: { userId },
-    });
-
-    if (!creator) {
-      return NextResponse.json({ error: "Creator not found" }, { status: 404 });
-    }
-
     const stuckJobs = await db.processingJob.findMany({
       where: {
         experience: {
-          creatorId: creator.id,
+          creator: {
+            userId: userId,
+          },
         },
         status: {
           in: ["QUEUED", "PROCESSING"],
