@@ -353,31 +353,23 @@ export const productionRouter = router({
         });
       }
 
-      if (job.status === "COMPLETED" || job.status === "CANCELLED") {
+      // Allow cancelling any job that's not COMPLETED
+      // (even if already CANCELLED, just update it again)
+      if (job.status === "COMPLETED") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Production cannot be cancelled",
+          message: "Completed productions cannot be cancelled",
         });
       }
 
-      // Cancel in queue
-      try {
-        await fetch(
-          `${getInternalApiUrl()}/api/productions/cancel`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ productionId: input.id }),
-          }
-        );
-      } catch {
-        // Continue even if queue cancel fails
-      }
-
-      // Update database
+      // Update database directly - no need to call internal API
       await ctx.db.processingJob.update({
         where: { id: input.id },
-        data: { status: "CANCELLED" },
+        data: {
+          status: "CANCELLED",
+          stage: null,
+          completedAt: new Date(),
+        },
       });
 
       return { success: true };
