@@ -103,6 +103,11 @@ export default function DashboardPage() {
           const result = Array.isArray(prodData) ? prodData[0] : prodData;
           console.log("[Dashboard] Parsed result:", result);
           console.log("[Dashboard] Items:", result?.result?.data?.json?.items);
+          // Debug: Show first item's keys to see what fields API is returning
+          if (result?.result?.data?.json?.items?.[0]) {
+            console.log("[Dashboard] First item keys:", Object.keys(result.result.data.json.items[0]));
+            console.log("[Dashboard] First item experienceId:", result.result.data.json.items[0].experienceId);
+          }
 
           // Check for tRPC errors (returned with HTTP 200)
           if (result?.error) {
