@@ -546,9 +546,8 @@ export default function DashboardPage() {
       toast.error("Error", "Could not find experience for this production");
       return;
     }
-    // Navigate to Player app's experience viewer
-    const playerUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-    window.open(`${playerUrl}/experience/${production.experienceId}/play`, "_blank");
+    // Navigate to the studio's experience viewer
+    window.location.href = `/viewer/${production.experienceId}`;
   };
 
   const handleRetryProduction = async (id: string) => {

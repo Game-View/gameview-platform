@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-server";
+import { db } from "@gameview/database";
 
 /**
  * POST /api/productions/cancel
  *
- * Cancels a production job in the BullMQ queue.
+ * Cancels a production job.
+ * Updates the database status to CANCELLED.
+ * Note: Modal jobs cannot be cancelled mid-execution, but we update the status.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -23,13 +26,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Dynamic import
-    const { cancelProductionJob } = await import("@gameview/queue");
+    // Update database status to CANCELLED
+    await db.processingJob.update({
+      where: { id: productionId },
+      data: {
+        status: "CANCELLED",
+        stage: null,
+        completedAt: new Date(),
+      },
+    });
 
-    const cancelled = await cancelProductionJob(productionId);
+    // Try to cancel in BullMQ if available (legacy support)
+    try {
+      const { cancelProductionJob } = await import("@gameview/queue");
+      await cancelProductionJob(productionId);
+    } catch {
+      // BullMQ not available, but we've already updated the database
+      console.log("[API] BullMQ cancel skipped (not available)");
+    }
 
     return NextResponse.json({
-      success: cancelled,
+      success: true,
       productionId,
     });
   } catch (error) {
