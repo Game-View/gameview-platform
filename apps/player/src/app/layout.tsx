@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { TRPCProvider } from "@/lib/trpc/provider";
 
 export const metadata: Metadata = {
   title: "Game View - Play Immersive Experiences",
@@ -15,7 +16,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
       <body className="font-sans bg-gv-neutral-900 text-white antialiased">
-        {children}
+        <TRPCProvider>{children}</TRPCProvider>
       </body>
     </html>
   );
