@@ -38,10 +38,11 @@ app = modal.App("gameview-processing")
 processing_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11")
     .apt_install([
-        # Cache buster v8: Force rebuild 2026-01-13 - Add OpenSplat
+        # Cache buster v9: Force rebuild with OpenSplat + 8hr timeout
         "tree",
         "file",
-        "htop",  # New package to invalidate Modal cache
+        "htop",
+        "iotop",  # v9: New package to force Modal image rebuild
         "ffmpeg",
         "libgl1-mesa-glx",
         "libglib2.0-0",
@@ -78,8 +79,8 @@ processing_image = (
         "libcgal-dev",
     ])
     .run_commands([
-        # Cache buster: v8 - Add OpenSplat for proper 3DGS training
-        "echo 'FORCE REBUILD v8: Add OpenSplat for Gaussian Splatting training'",
+        # Cache buster: v9 - Force rebuild with longer timeouts
+        "echo 'FORCE REBUILD v9: OpenSplat + 8hr timeout for complex reconstructions'",
         "date",
 
         # === Install CMake 3.28+ ===
@@ -208,7 +209,7 @@ def send_progress(callback_url: str, production_id: str, stage: str, progress: i
 @app.function(
     image=processing_image,
     gpu="A10G",  # 24GB VRAM - more memory for larger reconstructions
-    timeout=14400,  # 4 hours max for large video sets
+    timeout=36000,  # 10 hours max - reconstruction can take a long time
     secrets=[supabase_secret],
 )
 def process_production(
@@ -406,7 +407,7 @@ def process_production(
                     "--output_path", str(sparse_dir),
                     "--Mapper.ba_global_max_num_iterations", "30",  # Reduce iterations for speed
                     "--Mapper.ba_global_max_refinements", "2",
-                ], check=True, capture_output=True, text=True, timeout=10800)  # 3 hour timeout
+                ], check=True, capture_output=True, text=True, timeout=28800)  # 8 hour timeout
                 print(f"[{production_id}] COLMAP mapper completed successfully")
             except subprocess.CalledProcessError as e:
                 print(f"[{production_id}] COLMAP mapper also failed:")
@@ -414,8 +415,8 @@ def process_production(
                 print(f"  stderr: {e.stderr}")
                 raise
             except subprocess.TimeoutExpired:
-                print(f"[{production_id}] COLMAP mapper timed out after 3 hours")
-                raise Exception("Reconstruction timed out after 3 hours - try reducing video count or duration")
+                print(f"[{production_id}] COLMAP mapper timed out after 8 hours")
+                raise Exception("Reconstruction timed out after 8 hours - try reducing video count or duration")
 
         # Stage 4: Train Gaussian Splats using OpenSplat
         send_progress(callback_url, production_id, "training", 70, "Training 3D Gaussian Splats")
