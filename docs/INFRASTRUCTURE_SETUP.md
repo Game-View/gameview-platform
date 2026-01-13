@@ -25,10 +25,10 @@ Complete guide to setting up all production services for the Game View platform.
               │
               ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│  PROCESSING WORKER (GPU Server)                                   │
-│  - Node.js Worker connecting to Redis                             │
-│  - gvcore-cli for video-to-3D processing                         │
-│  - Uploads results to Supabase Storage                           │
+│  MODAL GPU PROCESSING (Serverless)                                │
+│  - COLMAP/GLOMAP for camera reconstruction                       │
+│  - OpenSplat for 3D Gaussian Splatting training                  │
+│  - Uploads PLY results to Supabase Storage                       │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -470,7 +470,7 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/onboarding
 REDIS_URL=
 
 # Modal GPU Processing (Recommended)
-MODAL_API_TOKEN=
+MODAL_ENDPOINT_URL=https://<username>--gameview-processing-trigger.modal.run
 
 # URLs
 NEXT_PUBLIC_APP_URL=
@@ -483,10 +483,4 @@ ANTHROPIC_API_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_PUBLISHABLE_KEY=
 STRIPE_WEBHOOK_SECRET=
-
-# Worker (for processing server only)
-GVCORE_CLI_PATH=/usr/local/bin/gvcore-cli
-BRUSH_PATH=/opt/brush
-WORK_DIR=/tmp/gv-processing
-WORKER_CONCURRENCY=1
 ```

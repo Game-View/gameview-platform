@@ -89,7 +89,7 @@ modal run modal_worker.py
 | **Feature Extraction** | COLMAP | CUDA SIFT (SiftGPU) |
 | **Feature Matching** | COLMAP | CUDA exhaustive matching |
 | **Sparse Reconstruction** | GLOMAP | cuDSS bundle adjustment |
-| **3DGS Training** | gsplat | Full CUDA training |
+| **3DGS Training** | OpenSplat | Full CUDA training |
 
 ### Pipeline Flow
 
@@ -115,7 +115,7 @@ All components use commercially-friendly open source licenses:
 | GLOMAP | Apache 2.0 | ✅ Yes |
 | Ceres Solver | Apache 2.0 | ✅ Yes |
 | cuDSS | NVIDIA EULA | ✅ Yes (with NVIDIA GPUs) |
-| gsplat | Apache 2.0 | ✅ Yes |
+| OpenSplat | MIT | ✅ Yes |
 
 ### Build Components
 
@@ -126,6 +126,8 @@ The Modal image includes:
 - **Ceres Solver 2.2**: Built from source with `-DUSE_CUDA=ON`
 - **COLMAP 3.9.1**: Built from source with `-DCUDA_ENABLED=ON`
 - **GLOMAP**: Latest, using CUDA-enabled Ceres
+- **LibTorch 2.5.1**: PyTorch C++ runtime for OpenSplat
+- **OpenSplat**: Production-grade 3D Gaussian Splatting training
 - **CMake 3.28+**: Required for modern CUDA builds
 - **CUDA Architectures**: 70 (Volta), 75 (Turing/T4), 80 (Ampere/A10G), 86 (RTX 30xx), 89 (Ada)
 
@@ -145,9 +147,9 @@ Modify `modal_worker.py` to change GPU type:
 
 ```python
 @app.function(
-    gpu="T4",      # Default: Good for most jobs
-    # gpu="A10G",  # Faster: 2x performance
-    # gpu="A100",  # Fastest: For large scenes
+    gpu="A10G",    # Default: 24GB VRAM, good balance of speed/cost
+    # gpu="T4",    # Budget: 16GB VRAM, slower but cheaper
+    # gpu="A100",  # Fastest: For large scenes, 40GB+ VRAM
 )
 ```
 
