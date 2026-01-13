@@ -214,7 +214,7 @@ export async function GET() {
   <script>
     const SUPABASE_URL = '${supabaseUrl}';
     const SUPABASE_ANON_KEY = '${supabaseAnonKey}';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // Show file size when selected
     document.getElementById('plyFile').addEventListener('change', (e) => {
@@ -248,7 +248,7 @@ export async function GET() {
         const bucket = 'production-outputs';
 
         // Upload PLY file directly to Supabase
-        const { error: plyError } = await supabase.storage
+        const { error: plyError } = await sbClient.storage
           .from(bucket)
           .upload(importId + '/scene.ply', plyFile, {
             contentType: 'application/octet-stream',
@@ -265,7 +265,7 @@ export async function GET() {
         // Upload config if provided
         let camerasJson = null;
         if (configFile) {
-          const { error: configError } = await supabase.storage
+          const { error: configError } = await sbClient.storage
             .from(bucket)
             .upload(importId + '/cameras.json', configFile, {
               contentType: 'application/json',
