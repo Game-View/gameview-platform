@@ -44,6 +44,22 @@ export async function POST(request: NextRequest) {
       console.log(`[Import] Created new user: ${user.id}`);
     }
 
+    // Get or create Creator for this user (Experience requires a Creator)
+    let creator = await db.creator.findUnique({
+      where: { userId: user.id },
+    });
+
+    if (!creator) {
+      creator = await db.creator.create({
+        data: {
+          userId: user.id,
+          username: `creator_${user.id.slice(-8)}`,
+          displayName: user.displayName,
+        },
+      });
+      console.log(`[Import] Created new creator: ${creator.id}`);
+    }
+
     // Parse form data
     const formData = await request.formData();
     const plyFile = formData.get("plyFile") as File | null;
@@ -105,7 +121,7 @@ export async function POST(request: NextRequest) {
         plyUrl,
         camerasJson,
         thumbnailUrl: null,
-        creatorId: user.id,
+        creatorId: creator.id,
         // Required fields with defaults
         category: "ENTERTAINMENT",
         subcategory: "General",
