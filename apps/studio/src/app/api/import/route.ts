@@ -152,8 +152,12 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/import - Returns a simple upload form for testing
+ * Uses direct Supabase upload to bypass Vercel's 4.5MB limit
  */
 export async function GET() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
   const html = `
 <!DOCTYPE html>
 <html>
@@ -168,18 +172,23 @@ export async function GET() {
     input[type="file"] { cursor: pointer; }
     button { background: #22d3ee; color: #000; font-weight: bold; cursor: pointer; }
     button:hover { background: #06b6d4; }
+    button:disabled { background: #666; cursor: not-allowed; }
     .note { color: #888; font-size: 14px; }
     #result { margin-top: 20px; padding: 15px; background: #2a2a2a; border-radius: 8px; display: none; }
     #result.success { border: 1px solid #22c55e; }
     #result.error { border: 1px solid #ef4444; }
+    #result.uploading { border: 1px solid #22d3ee; }
     a { color: #22d3ee; }
+    .progress { margin-top: 10px; }
+    .progress-bar { width: 100%; height: 20px; background: #333; border-radius: 10px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #22d3ee; transition: width 0.3s; }
   </style>
 </head>
 <body>
   <h1>Import Desktop Render</h1>
-  <p class="note">Upload your PLY file from GameViewer desktop to test in the web player.</p>
+  <p class="note">Upload your PLY file from GameViewer desktop to test in the web player. Supports files up to 500MB.</p>
 
-  <form id="importForm" enctype="multipart/form-data">
+  <form id="importForm">
     <div>
       <label for="title">Title</label>
       <input type="text" id="title" name="title" value="Desktop Import Test" required>
@@ -188,6 +197,7 @@ export async function GET() {
     <div>
       <label for="plyFile">PLY File (required)</label>
       <input type="file" id="plyFile" name="plyFile" accept=".ply" required>
+      <p class="note" id="fileSize"></p>
     </div>
 
     <div>
@@ -195,25 +205,90 @@ export async function GET() {
       <input type="file" id="configFile" name="configFile" accept=".json">
     </div>
 
-    <button type="submit">Upload & Import</button>
+    <button type="submit" id="submitBtn">Upload & Import</button>
   </form>
 
   <div id="result"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
+    const SUPABASE_URL = '${supabaseUrl}';
+    const SUPABASE_ANON_KEY = '${supabaseAnonKey}';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Show file size when selected
+    document.getElementById('plyFile').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        document.getElementById('fileSize').textContent = 'Size: ' + sizeMB + ' MB';
+      }
+    });
+
     document.getElementById('importForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const form = e.target;
-      const formData = new FormData(form);
+      const submitBtn = document.getElementById('submitBtn');
       const resultDiv = document.getElementById('result');
+      const title = document.getElementById('title').value;
+      const plyFile = document.getElementById('plyFile').files[0];
+      const configFile = document.getElementById('configFile').files[0];
 
+      if (!plyFile) {
+        alert('Please select a PLY file');
+        return;
+      }
+
+      submitBtn.disabled = true;
       resultDiv.style.display = 'block';
-      resultDiv.className = '';
-      resultDiv.innerHTML = 'Uploading...';
+      resultDiv.className = 'uploading';
+      resultDiv.innerHTML = '<p>Uploading PLY file directly to storage...</p><div class="progress"><div class="progress-bar"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div><p id="progressText">0%</p></div>';
 
       try {
-        const res = await fetch('/api/import', { method: 'POST', body: formData });
+        const importId = 'import-' + Date.now() + '-' + Math.random().toString(36).substring(7);
+        const bucket = 'production-outputs';
+
+        // Upload PLY file directly to Supabase
+        const { error: plyError } = await supabase.storage
+          .from(bucket)
+          .upload(importId + '/scene.ply', plyFile, {
+            contentType: 'application/octet-stream',
+            upsert: true
+          });
+
+        if (plyError) throw new Error('PLY upload failed: ' + plyError.message);
+
+        document.getElementById('progressFill').style.width = '70%';
+        document.getElementById('progressText').textContent = '70% - PLY uploaded, creating experience...';
+
+        const plyUrl = SUPABASE_URL + '/storage/v1/object/public/' + bucket + '/' + importId + '/scene.ply';
+
+        // Upload config if provided
+        let camerasJson = null;
+        if (configFile) {
+          const { error: configError } = await supabase.storage
+            .from(bucket)
+            .upload(importId + '/cameras.json', configFile, {
+              contentType: 'application/json',
+              upsert: true
+            });
+          if (!configError) {
+            camerasJson = SUPABASE_URL + '/storage/v1/object/public/' + bucket + '/' + importId + '/cameras.json';
+          }
+        }
+
+        document.getElementById('progressFill').style.width = '85%';
+        document.getElementById('progressText').textContent = '85% - Creating experience record...';
+
+        // Create experience via API (just metadata, no file upload)
+        const res = await fetch('/api/import/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, plyUrl, camerasJson })
+        });
         const data = await res.json();
+
+        document.getElementById('progressFill').style.width = '100%';
+        document.getElementById('progressText').textContent = '100%';
 
         if (data.success) {
           resultDiv.className = 'success';
@@ -224,12 +299,13 @@ export async function GET() {
             <p><a href="\${data.playerUrl}" target="_blank">Open in Player</a></p>
           \`;
         } else {
-          resultDiv.className = 'error';
-          resultDiv.innerHTML = '<h3>Error</h3><p>' + data.error + '</p>';
+          throw new Error(data.error || 'Failed to create experience');
         }
       } catch (err) {
         resultDiv.className = 'error';
         resultDiv.innerHTML = '<h3>Error</h3><p>' + err.message + '</p>';
+      } finally {
+        submitBtn.disabled = false;
       }
     });
   </script>
