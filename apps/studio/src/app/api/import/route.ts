@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     const plyUrl = supabase.storage.from(bucket).getPublicUrl(`${importId}/scene.ply`).data.publicUrl;
 
     // Upload config file if provided
-    let camerasUrl: string | null = null;
+    let camerasJson: string | null = null;
     if (configFile) {
       const configBuffer = await configFile.arrayBuffer();
       const { error: configError } = await supabase.storage
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
         });
 
       if (!configError) {
-        camerasUrl = supabase.storage.from(bucket).getPublicUrl(`${importId}/cameras.json`).data.publicUrl;
+        camerasJson = supabase.storage.from(bucket).getPublicUrl(`${importId}/cameras.json`).data.publicUrl;
       }
     }
 
@@ -90,12 +90,14 @@ export async function POST(request: NextRequest) {
         description,
         status: "PUBLISHED",
         plyUrl,
-        camerasUrl,
+        camerasJson,
         thumbnailUrl: null,
         creatorId: user.id,
-        // Default settings
-        isPublic: true,
-        featured: false,
+        // Required fields with defaults
+        category: "SPORTS",
+        subcategory: "General",
+        tags: ["imported", "desktop"],
+        duration: 0,
       },
     });
 
@@ -105,7 +107,7 @@ export async function POST(request: NextRequest) {
       success: true,
       experienceId: experience.id,
       plyUrl,
-      camerasUrl,
+      camerasJson,
       viewerUrl: `/viewer/${experience.id}`,
       playerUrl: `https://gvdw-player.vercel.app/experience/${experience.id}/play`,
     });
