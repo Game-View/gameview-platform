@@ -38,7 +38,6 @@ export async function POST(request: NextRequest) {
         data: {
           clerkId: userId,
           email: clerkUser.emailAddresses[0]?.emailAddress || `${userId}@temp.local`,
-          username: clerkUser.username || `user_${userId.slice(-8)}`,
           displayName: clerkUser.firstName || "User",
         },
       });
