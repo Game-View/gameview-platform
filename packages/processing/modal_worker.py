@@ -33,12 +33,12 @@ import urllib.parse
 # Modal app definition
 app = modal.App("gameview-processing")
 
-# GPU image with CUDA-accelerated COLMAP + GLOMAP
+# GPU image with CUDA-accelerated COLMAP + GLOMAP + OpenSplat
 # Built with cuDSS for GPU-accelerated bundle adjustment (2-5x faster)
 processing_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11")
     .apt_install([
-        # Cache buster v3: Force rebuild 2026-01-09
+        # Cache buster v8: Force rebuild 2026-01-13 - Add OpenSplat
         "tree",
         "file",
         "htop",  # New package to invalidate Modal cache
@@ -48,6 +48,7 @@ processing_image = (
         "wget",
         "git",
         "curl",
+        "unzip",
         # Build dependencies
         "ninja-build",
         "build-essential",
@@ -77,8 +78,8 @@ processing_image = (
         "libcgal-dev",
     ])
     .run_commands([
-        # Cache buster: v7 - Smart frame capping + COLMAP fallback
-        "echo 'FORCE REBUILD v7: Smart frame extraction with GLOMAP/COLMAP fallback'",
+        # Cache buster: v8 - Add OpenSplat for proper 3DGS training
+        "echo 'FORCE REBUILD v8: Add OpenSplat for Gaussian Splatting training'",
         "date",
 
         # === Install CMake 3.28+ ===
@@ -141,9 +142,28 @@ processing_image = (
         "cp /opt/glomap/build/glomap/glomap /usr/local/bin/glomap",
         "chmod 755 /usr/local/bin/glomap",
 
+        # === Download and install LibTorch for OpenSplat ===
+        "wget -q https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip -O /tmp/libtorch.zip",
+        "unzip -q /tmp/libtorch.zip -d /opt",
+        "rm /tmp/libtorch.zip",
+
+        # === Build OpenSplat with CUDA ===
+        "git clone --depth 1 https://github.com/pierotofy/OpenSplat.git /opt/opensplat",
+        "mkdir -p /opt/opensplat/build",
+        "cd /opt/opensplat/build && /usr/local/bin/cmake .. "
+        "-DCMAKE_BUILD_TYPE=Release "
+        "-DCMAKE_PREFIX_PATH=/opt/libtorch "
+        "-DGPU_RUNTIME=CUDA "
+        "-DCMAKE_CUDA_ARCHITECTURES='70;75;80;86;89' "
+        "-DOPENSPLAT_BUILD_SIMPLE_TRAINER=OFF "
+        "&& make -j$(nproc)",
+        "cp /opt/opensplat/build/opensplat /usr/local/bin/opensplat",
+        "chmod 755 /usr/local/bin/opensplat",
+
         # Verify installations
         "colmap -h || echo 'COLMAP verification failed'",
         "glomap --help || echo 'GLOMAP verification failed'",
+        "opensplat --help || echo 'OpenSplat verification failed'",
     ])
     .pip_install([
         "numpy",
@@ -397,20 +417,15 @@ def process_production(
                 print(f"[{production_id}] COLMAP mapper timed out after 3 hours")
                 raise Exception("Reconstruction timed out after 3 hours - try reducing video count or duration")
 
-        # Stage 4: Train Gaussian Splats
-        send_progress(callback_url, production_id, "training", 70, "Generating 3D Gaussian Splats")
-        print(f"[{production_id}] Training Gaussian Splats...")
+        # Stage 4: Train Gaussian Splats using OpenSplat
+        send_progress(callback_url, production_id, "training", 70, "Training 3D Gaussian Splats")
+        print(f"[{production_id}] Training Gaussian Splats with OpenSplat...")
         total_steps = settings.get("totalSteps", 15000)
-        max_splats = settings.get("maxSplats", 10000000)
 
-        # Use gsplat for training
-        # This is a simplified version - production would use full 3DGS training
         ply_path = output_dir / "scene.ply"
         cameras_path = output_dir / "cameras.json"
         thumbnail_path = output_dir / "thumbnail.jpg"
 
-        # For now, convert COLMAP output to PLY format
-        # In production, this would run full Gaussian Splatting training
         # COLMAP may create sparse/0/, sparse/1/, etc. - find any valid model
         model_dir = None
         for subdir in sorted(sparse_dir.iterdir()) if sparse_dir.exists() else []:
@@ -426,15 +441,84 @@ def process_production(
                 print(f"[{production_id}] sparse_dir contents: {[str(c) for c in contents]}")
             raise Exception("COLMAP reconstruction failed - no valid model produced. Try with different camera angles or more overlap between videos.")
 
-        # Export to PLY
-        subprocess.run([
-            "colmap", "model_converter",
-            "--input_path", str(model_dir),
-            "--output_path", str(ply_path),
-            "--output_type", "PLY",
-        ], check=True, capture_output=True)
+        # OpenSplat expects the COLMAP directory structure:
+        # project/
+        #   images/
+        #   sparse/0/  (or any model folder)
+        # We need to set up this structure
+        opensplat_dir = work_dir / "opensplat_input"
+        opensplat_dir.mkdir(exist_ok=True)
 
-        # Export cameras
+        # Symlink images
+        (opensplat_dir / "images").symlink_to(colmap_images)
+
+        # Copy sparse model to expected location
+        opensplat_sparse = opensplat_dir / "sparse" / "0"
+        opensplat_sparse.mkdir(parents=True, exist_ok=True)
+        for f in model_dir.iterdir():
+            shutil.copy(f, opensplat_sparse / f.name)
+
+        print(f"[{production_id}] OpenSplat input prepared at {opensplat_dir}")
+        print(f"[{production_id}] Training for {total_steps} iterations...")
+
+        # Run OpenSplat training
+        # Output file will be splat.ply in the output directory
+        try:
+            process = subprocess.Popen(
+                [
+                    "/usr/local/bin/opensplat",
+                    str(opensplat_dir),
+                    "-n", str(total_steps),
+                    "-o", str(output_dir / "splat.ply"),
+                    "--save-every", "-1",  # Only save final output
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env={**os.environ, "LD_LIBRARY_PATH": "/opt/libtorch/lib:" + os.environ.get("LD_LIBRARY_PATH", "")},
+            )
+
+            # Stream output and parse progress
+            for line in process.stdout:
+                line = line.strip()
+                if line:
+                    print(f"[OpenSplat] {line}")
+                    # Parse iteration progress
+                    if "Iteration" in line:
+                        try:
+                            # Format: "Iteration X/Y ..."
+                            parts = line.split()
+                            for i, p in enumerate(parts):
+                                if "/" in p:
+                                    current, total = p.split("/")
+                                    pct = int(current) / int(total) * 100
+                                    # Map 0-100% of training to 70-85% of overall progress
+                                    overall_pct = 70 + int(pct * 0.15)
+                                    send_progress(callback_url, production_id, "training", overall_pct, f"Training step {current}/{total}")
+                                    break
+                        except:
+                            pass
+
+            return_code = process.wait()
+            if return_code != 0:
+                raise subprocess.CalledProcessError(return_code, "opensplat")
+
+            print(f"[{production_id}] OpenSplat training completed!")
+
+        except subprocess.CalledProcessError as e:
+            print(f"[{production_id}] OpenSplat training failed with code {e.returncode}")
+            raise Exception(f"Gaussian Splatting training failed - error code {e.returncode}")
+
+        # Rename output file to scene.ply
+        splat_output = output_dir / "splat.ply"
+        if splat_output.exists():
+            shutil.move(splat_output, ply_path)
+            print(f"[{production_id}] PLY output: {ply_path} ({ply_path.stat().st_size / 1024 / 1024:.1f} MB)")
+        else:
+            raise Exception("OpenSplat did not produce output file")
+
+        # Export cameras.json from COLMAP for reference
         subprocess.run([
             "colmap", "model_converter",
             "--input_path", str(model_dir),
@@ -443,7 +527,7 @@ def process_production(
         ], check=True, capture_output=True)
 
         # Create cameras.json from COLMAP output
-        cameras_json = {"frames": [], "camera_model": "PINHOLE"}
+        cameras_json = {"frames": [], "camera_model": "PINHOLE", "source": "OpenSplat"}
         cameras_json_str = json.dumps(cameras_json, indent=2)
         cameras_path.write_text(cameras_json_str)
 
