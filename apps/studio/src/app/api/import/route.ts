@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
         thumbnailUrl: null,
         creatorId: user.id,
         // Required fields with defaults
-        category: "SPORTS",
+        category: "ENTERTAINMENT",
         subcategory: "General",
         tags: ["imported", "desktop"],
         duration: 0,
