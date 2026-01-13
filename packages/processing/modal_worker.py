@@ -187,8 +187,8 @@ def send_progress(callback_url: str, production_id: str, stage: str, progress: i
 
 @app.function(
     image=processing_image,
-    gpu="T4",  # Can upgrade to A10G or A100 for faster processing
-    timeout=7200,  # 2 hours max (GLOMAP is CPU-only and can take time)
+    gpu="A10G",  # 24GB VRAM - more memory for larger reconstructions
+    timeout=14400,  # 4 hours max for large video sets
     secrets=[supabase_secret],
 )
 def process_production(
@@ -386,7 +386,7 @@ def process_production(
                     "--output_path", str(sparse_dir),
                     "--Mapper.ba_global_max_num_iterations", "30",  # Reduce iterations for speed
                     "--Mapper.ba_global_max_refinements", "2",
-                ], check=True, capture_output=True, text=True, timeout=5400)  # 90min timeout
+                ], check=True, capture_output=True, text=True, timeout=10800)  # 3 hour timeout
                 print(f"[{production_id}] COLMAP mapper completed successfully")
             except subprocess.CalledProcessError as e:
                 print(f"[{production_id}] COLMAP mapper also failed:")
@@ -394,8 +394,8 @@ def process_production(
                 print(f"  stderr: {e.stderr}")
                 raise
             except subprocess.TimeoutExpired:
-                print(f"[{production_id}] COLMAP mapper timed out after 90 minutes")
-                raise Exception("Reconstruction timed out - try reducing video count or duration")
+                print(f"[{production_id}] COLMAP mapper timed out after 3 hours")
+                raise Exception("Reconstruction timed out after 3 hours - try reducing video count or duration")
 
         # Stage 4: Train Gaussian Splats
         send_progress(callback_url, production_id, "training", 70, "Generating 3D Gaussian Splats")
