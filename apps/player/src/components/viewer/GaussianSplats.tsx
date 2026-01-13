@@ -28,8 +28,21 @@ export function GaussianSplats({
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
   const groupRef = useRef<THREE.Group>(null);
 
+  // Store callbacks in refs to avoid re-running useEffect when they change
+  const onLoadRef = useRef(onLoad);
+  const onErrorRef = useRef(onError);
+  const onProgressRef = useRef(onProgress);
+
+  // Keep refs updated
+  onLoadRef.current = onLoad;
+  onErrorRef.current = onError;
+  onProgressRef.current = onProgress;
+
   useEffect(() => {
-    if (!gl || !camera) return;
+    if (!gl || !camera || !url) return;
+
+    // Prevent double-initialization
+    if (viewerRef.current) return;
 
     // Create viewer that integrates with existing Three.js scene
     const viewer = new GaussianSplats3D.Viewer({
@@ -48,13 +61,14 @@ export function GaussianSplats({
       sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual,
       antialiased: true,
       focalAdjustment: 1.0,
-      logLevel: GaussianSplats3D.LogLevel.None,
+      logLevel: GaussianSplats3D.LogLevel.Debug, // Enable debug logging
       sphericalHarmonicsDegree: 0,
     });
 
     viewerRef.current = viewer;
 
     // Load the splat scene
+    console.log("Loading Gaussian splats from:", url);
     viewer
       .addSplatScene(url, {
         showLoadingUI: false,
@@ -63,16 +77,17 @@ export function GaussianSplats({
         rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
         scale: [scale, scale, scale],
         onProgress: (percent: number) => {
-          onProgress?.(percent);
+          onProgressRef.current?.(percent);
         },
       })
       .then(() => {
-        onLoad?.();
+        console.log("Gaussian splats loaded successfully");
+        onLoadRef.current?.();
         viewer.start();
       })
       .catch((err: Error) => {
         console.error("Failed to load Gaussian splats:", err);
-        onError?.(err);
+        onErrorRef.current?.(err);
       });
 
     return () => {
@@ -81,7 +96,7 @@ export function GaussianSplats({
         viewerRef.current = null;
       }
     };
-  }, [url, gl, camera, position, rotation, scale, onLoad, onError, onProgress]);
+  }, [url, gl, camera, position, rotation, scale]);
 
   return <group ref={groupRef} />;
 }
