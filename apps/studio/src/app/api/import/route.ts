@@ -152,12 +152,9 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/import - Returns a simple upload form for testing
- * Uses direct Supabase upload to bypass Vercel's 4.5MB limit
+ * Uses signed URLs for direct browser upload (bypasses Vercel's 4.5MB limit)
  */
 export async function GET() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
   const html = `
 <!DOCTYPE html>
 <html>
@@ -210,12 +207,7 @@ export async function GET() {
 
   <div id="result"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    const SUPABASE_URL = '${supabaseUrl}';
-    const SUPABASE_ANON_KEY = '${supabaseAnonKey}';
-    const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
     // Show file size when selected
     document.getElementById('plyFile').addEventListener('change', (e) => {
       const file = e.target.files[0];
@@ -224,6 +216,28 @@ export async function GET() {
         document.getElementById('fileSize').textContent = 'Size: ' + sizeMB + ' MB';
       }
     });
+
+    // Upload file using signed URL
+    async function uploadWithSignedUrl(file, filename) {
+      // Get signed URL from server
+      const urlRes = await fetch('/api/import/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename })
+      });
+      const urlData = await urlRes.json();
+      if (!urlRes.ok) throw new Error(urlData.error || 'Failed to get upload URL');
+
+      // Upload directly to signed URL
+      const uploadRes = await fetch(urlData.signedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: file
+      });
+      if (!uploadRes.ok) throw new Error('Upload failed: ' + uploadRes.statusText);
+
+      return urlData.publicUrl;
+    }
 
     document.getElementById('importForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -241,45 +255,28 @@ export async function GET() {
       submitBtn.disabled = true;
       resultDiv.style.display = 'block';
       resultDiv.className = 'uploading';
-      resultDiv.innerHTML = '<p>Uploading PLY file directly to storage...</p><div class="progress"><div class="progress-bar"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div><p id="progressText">0%</p></div>';
+      resultDiv.innerHTML = '<p>Getting upload URL...</p><div class="progress"><div class="progress-bar"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div><p id="progressText">0%</p></div>';
 
       try {
-        const importId = 'import-' + Date.now() + '-' + Math.random().toString(36).substring(7);
-        const bucket = 'production-outputs';
+        document.getElementById('progressText').textContent = '10% - Uploading PLY file...';
+        document.getElementById('progressFill').style.width = '10%';
 
-        // Upload PLY file directly to Supabase
-        const { error: plyError } = await sbClient.storage
-          .from(bucket)
-          .upload(importId + '/scene.ply', plyFile, {
-            contentType: 'application/octet-stream',
-            upsert: true
-          });
+        const plyUrl = await uploadWithSignedUrl(plyFile, 'scene.ply');
 
-        if (plyError) throw new Error('PLY upload failed: ' + plyError.message);
-
-        document.getElementById('progressFill').style.width = '70%';
-        document.getElementById('progressText').textContent = '70% - PLY uploaded, creating experience...';
-
-        const plyUrl = SUPABASE_URL + '/storage/v1/object/public/' + bucket + '/' + importId + '/scene.ply';
+        document.getElementById('progressFill').style.width = '60%';
+        document.getElementById('progressText').textContent = '60% - PLY uploaded!';
 
         // Upload config if provided
         let camerasJson = null;
         if (configFile) {
-          const { error: configError } = await sbClient.storage
-            .from(bucket)
-            .upload(importId + '/cameras.json', configFile, {
-              contentType: 'application/json',
-              upsert: true
-            });
-          if (!configError) {
-            camerasJson = SUPABASE_URL + '/storage/v1/object/public/' + bucket + '/' + importId + '/cameras.json';
-          }
+          document.getElementById('progressText').textContent = '70% - Uploading config...';
+          camerasJson = await uploadWithSignedUrl(configFile, 'cameras.json');
         }
 
-        document.getElementById('progressFill').style.width = '85%';
-        document.getElementById('progressText').textContent = '85% - Creating experience record...';
+        document.getElementById('progressFill').style.width = '80%';
+        document.getElementById('progressText').textContent = '80% - Creating experience...';
 
-        // Create experience via API (just metadata, no file upload)
+        // Create experience via API
         const res = await fetch('/api/import/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
