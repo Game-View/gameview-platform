@@ -38,11 +38,12 @@ app = modal.App("gameview-processing")
 processing_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11")
     .apt_install([
-        # Cache buster v9: Force rebuild with OpenSplat + 8hr timeout
+        # Cache buster v10: Force image rebuild - OpenSplat must be installed!
         "tree",
         "file",
         "htop",
-        "iotop",  # v9: New package to force Modal image rebuild
+        "iotop",
+        "jq",  # v10: JSON processor + force cache rebuild
         "ffmpeg",
         "libgl1-mesa-glx",
         "libglib2.0-0",
@@ -79,8 +80,8 @@ processing_image = (
         "libcgal-dev",
     ])
     .run_commands([
-        # Cache buster: v9 - Force rebuild with longer timeouts
-        "echo 'FORCE REBUILD v9: OpenSplat + 8hr timeout for complex reconstructions'",
+        # Cache buster: v10 - MUST rebuild with OpenSplat
+        "echo 'FORCE REBUILD v10: OpenSplat REQUIRED - 8hr timeout'",
         "date",
 
         # === Install CMake 3.28+ ===
@@ -464,10 +465,16 @@ def process_production(
 
         # Run OpenSplat training
         # Output file will be splat.ply in the output directory
+        opensplat_bin = "/usr/local/bin/opensplat"
+        if not os.path.exists(opensplat_bin):
+            print(f"[{production_id}] ERROR: OpenSplat not found at {opensplat_bin}")
+            print(f"[{production_id}] The Modal image needs to be rebuilt. Try: modal app stop gameview-processing")
+            raise Exception("OpenSplat not installed - Modal image needs rebuild")
+
         try:
             process = subprocess.Popen(
                 [
-                    "/usr/local/bin/opensplat",
+                    opensplat_bin,
                     str(opensplat_dir),
                     "-n", str(total_steps),
                     "-o", str(output_dir / "splat.ply"),
@@ -519,13 +526,16 @@ def process_production(
         else:
             raise Exception("OpenSplat did not produce output file")
 
-        # Export cameras.json from COLMAP for reference
-        subprocess.run([
-            "colmap", "model_converter",
-            "--input_path", str(model_dir),
-            "--output_path", str(output_dir / "cameras.txt"),
-            "--output_type", "TXT",
-        ], check=True, capture_output=True)
+        # Export cameras.json from COLMAP for reference (optional, don't fail if it crashes)
+        try:
+            subprocess.run([
+                "colmap", "model_converter",
+                "--input_path", str(model_dir),
+                "--output_path", str(output_dir / "cameras.txt"),
+                "--output_type", "TXT",
+            ], check=True, capture_output=True)
+        except Exception as e:
+            print(f"[{production_id}] Warning: cameras.txt export failed (non-critical): {e}")
 
         # Create cameras.json from COLMAP output
         cameras_json = {"frames": [], "camera_model": "PINHOLE", "source": "OpenSplat"}
