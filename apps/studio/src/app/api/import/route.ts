@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "@gameview/database";
 import { createClient } from "@supabase/supabase-js";
 
@@ -22,13 +22,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get the user
-    const user = await db.user.findUnique({
+    // Get or create the user
+    let user = await db.user.findUnique({
       where: { clerkId: userId },
     });
 
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      // User doesn't exist in DB, create them
+      const clerkUser = await currentUser();
+      if (!clerkUser) {
+        return NextResponse.json({ error: "Could not get user info" }, { status: 401 });
+      }
+
+      user = await db.user.create({
+        data: {
+          clerkId: userId,
+          email: clerkUser.emailAddresses[0]?.emailAddress || `${userId}@temp.local`,
+          username: clerkUser.username || `user_${userId.slice(-8)}`,
+          displayName: clerkUser.firstName || "User",
+        },
+      });
+      console.log(`[Import] Created new user: ${user.id}`);
     }
 
     // Parse form data
