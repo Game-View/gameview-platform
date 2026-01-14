@@ -78,6 +78,8 @@ processing_image = (
         "libqt5opengl5-dev",
         # CGAL for geometry algorithms
         "libcgal-dev",
+        # OpenCV for OpenSplat
+        "libopencv-dev",
     ])
     .run_commands([
         # Cache buster: v10 - MUST rebuild with OpenSplat
