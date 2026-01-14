@@ -37,6 +37,7 @@ app = modal.App("gameview-processing")
 # Built with cuDSS for GPU-accelerated bundle adjustment (2-5x faster)
 processing_image = (
     modal.Image.from_registry("nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11")
+    .env({"DEBIAN_FRONTEND": "noninteractive", "TZ": "UTC"})
     .apt_install([
         # Cache buster v10: Force image rebuild - OpenSplat must be installed!
         "tree",
