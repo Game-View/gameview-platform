@@ -152,6 +152,11 @@ model Experience {
   updatedAt    DateTime         @updatedAt
   publishedAt  DateTime?
 
+  // Game data for interactive playback (Sprint 18 - Phase 3)
+  scenesData   Json? // Array of scene data: [{id, splatUrl, placedObjects, interactions, portals, spawnPoints}]
+  gameConfig   Json? // Game configuration: {inventory, scoring, winConditions, objectives, etc.}
+  briefId      String? // Reference to original brief in Supabase
+
   // Relations
   creator       Creator            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   series        Series?            @relation(fields: [seriesId], references: [id], onDelete: SetNull)
@@ -165,6 +170,7 @@ model Experience {
   @@index([category])
   @@index([status])
   @@index([publishedAt])
+  @@index([briefId])
 }
 
 model Series {
@@ -226,6 +232,11 @@ model PlayHistory {
   playTimeSeconds Int       @default(0)
   lastPosition    Json? // { x, y, z, rotation } for resume
   updatedAt       DateTime  @updatedAt
+
+  // Play session results (Sprint 18.3 - Phase 3)
+  score           Int       @default(0)
+  collectibles    Int       @default(0)
+  hasWon          Boolean   @default(false)
 
   // Relations
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -87,7 +87,9 @@ export type RuntimeEvent =
   | { type: "fail_condition_met"; conditionId: string }
   | { type: "game_won" }
   | { type: "game_failed" }
-  | { type: "interaction_triggered"; interactionId: string; objectId: string };
+  | { type: "interaction_triggered"; interactionId: string; objectId: string }
+  | { type: "show_object"; objectId: string }
+  | { type: "hide_object"; objectId: string };
 
 export type RuntimeEventHandler = (event: RuntimeEvent) => void;
 

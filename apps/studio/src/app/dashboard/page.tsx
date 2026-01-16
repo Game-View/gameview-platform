@@ -17,6 +17,7 @@ import {
   X,
   Wrench,
   Video,
+  BarChart3,
 } from "lucide-react";
 import type { StoredBrief } from "@/lib/briefs";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -653,6 +654,20 @@ export default function DashboardPage() {
               <span>Quick actions</span>
               <kbd className="ml-1 px-1.5 py-0.5 bg-gv-neutral-700 rounded text-xs">⌘K</kbd>
             </button>
+            <Link
+              href="/experiences"
+              className="p-2 text-gv-neutral-400 hover:text-white transition-colors"
+              title="My Experiences"
+            >
+              <FolderOpen className="h-5 w-5" />
+            </Link>
+            <Link
+              href="/analytics"
+              className="p-2 text-gv-neutral-400 hover:text-white transition-colors"
+              title="Analytics"
+            >
+              <BarChart3 className="h-5 w-5" />
+            </Link>
             <Link
               href="/settings"
               className="p-2 text-gv-neutral-400 hover:text-white transition-colors"

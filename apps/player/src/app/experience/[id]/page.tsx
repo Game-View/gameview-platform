@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Play,
@@ -19,6 +19,8 @@ import {
   Shield,
   Calendar,
   Loader2,
+  ShoppingCart,
+  Lock,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 
@@ -51,7 +53,11 @@ function formatDuration(seconds: number): string {
 
 export default function ExperienceDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const experienceId = params.id as string;
+
+  // Check for purchase success/cancel from URL params
+  const purchaseStatus = searchParams.get("purchase");
 
   // Fetch experience from tRPC
   const {
@@ -62,6 +68,43 @@ export default function ExperienceDetailPage() {
     { id: experienceId },
     { enabled: !!experienceId }
   );
+
+  // Check purchase status (only for paid experiences)
+  const {
+    data: purchaseCheck,
+    isLoading: purchaseLoading,
+    refetch: refetchPurchase,
+  } = trpc.stripe.checkPurchase.useQuery(
+    { experienceId },
+    { enabled: !!experienceId }
+  );
+
+  // Create checkout session mutation
+  const createCheckout = trpc.stripe.createCheckoutSession.useMutation({
+    onSuccess: (data) => {
+      if (data.free) {
+        // Free experience, just refetch purchase status
+        refetchPurchase();
+      } else if (data.url) {
+        // Redirect to Stripe checkout
+        window.location.href = data.url;
+      }
+    },
+    onError: (error) => {
+      alert(error.message);
+    },
+  });
+
+  // Show success message on purchase completion
+  useEffect(() => {
+    if (purchaseStatus === "success") {
+      refetchPurchase();
+    }
+  }, [purchaseStatus, refetchPurchase]);
+
+  // Determine if user can play
+  const isPaid = experience && Number(experience.price) > 0;
+  const hasAccess = purchaseCheck?.hasAccess ?? !isPaid;
 
   if (isLoading) {
     return (
@@ -283,6 +326,19 @@ export default function ExperienceDetailPage() {
             <div className="sticky top-20 space-y-4">
               {/* Price & Play Card */}
               <div className="bg-gv-neutral-800 rounded-gv-lg border border-gv-neutral-700 p-6">
+                {/* Purchase Success Banner */}
+                {purchaseStatus === "success" && (
+                  <div className="mb-4 p-3 bg-green-500/20 border border-green-500/30 rounded-lg">
+                    <div className="flex items-center gap-2 text-green-400">
+                      <CheckCircle className="h-5 w-5" />
+                      <span className="font-medium">Purchase successful!</span>
+                    </div>
+                    <p className="text-sm text-green-400/80 mt-1">
+                      You now have access to this experience.
+                    </p>
+                  </div>
+                )}
+
                 <div className="text-center mb-6">
                   {Number(experience.price) === 0 ? (
                     <div>
@@ -291,6 +347,15 @@ export default function ExperienceDetailPage() {
                       </span>
                       <p className="text-sm text-gv-neutral-400 mt-1">
                         No payment required
+                      </p>
+                    </div>
+                  ) : hasAccess ? (
+                    <div>
+                      <span className="text-3xl font-bold text-green-400">
+                        Owned
+                      </span>
+                      <p className="text-sm text-gv-neutral-400 mt-1">
+                        You have access to this experience
                       </p>
                     </div>
                   ) : (
@@ -305,15 +370,34 @@ export default function ExperienceDetailPage() {
                   )}
                 </div>
 
-                <Link
-                  href={`/experience/${experienceId}/play`}
-                  className="w-full py-3 bg-gv-primary-500 hover:bg-gv-primary-600 text-white font-semibold rounded-gv-lg flex items-center justify-center gap-2 transition-colors shadow-gv-glow"
-                >
-                  <Play className="h-5 w-5" fill="white" />
-                  {Number(experience.price) === 0
-                    ? "Play Now"
-                    : "Purchase & Play"}
-                </Link>
+                {/* Play or Purchase Button */}
+                {hasAccess ? (
+                  <Link
+                    href={`/experience/${experienceId}/play`}
+                    className="w-full py-3 bg-gv-primary-500 hover:bg-gv-primary-600 text-white font-semibold rounded-gv-lg flex items-center justify-center gap-2 transition-colors shadow-gv-glow"
+                  >
+                    <Play className="h-5 w-5" fill="white" />
+                    Play Now
+                  </Link>
+                ) : (
+                  <button
+                    onClick={() => createCheckout.mutate({ experienceId })}
+                    disabled={createCheckout.isPending || purchaseLoading}
+                    className="w-full py-3 bg-gv-primary-500 hover:bg-gv-primary-600 disabled:bg-gv-neutral-600 text-white font-semibold rounded-gv-lg flex items-center justify-center gap-2 transition-colors shadow-gv-glow"
+                  >
+                    {createCheckout.isPending ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="h-5 w-5" />
+                        Purchase for ${Number(experience.price).toFixed(2)}
+                      </>
+                    )}
+                  </button>
+                )}
 
                 <div className="flex gap-2 mt-3">
                   <button className="flex-1 py-2 bg-gv-neutral-700 hover:bg-gv-neutral-600 text-white text-sm rounded-gv flex items-center justify-center gap-2 transition-colors">

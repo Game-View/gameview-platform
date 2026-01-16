@@ -144,17 +144,20 @@ export const playHistoryRouter = router({
     }),
 
   /**
-   * Mark play session as complete
+   * Mark play session as complete with results
    */
   complete: protectedProcedure
     .input(
       z.object({
         experienceId: z.string(),
         playTimeSeconds: z.number().min(0),
+        score: z.number().min(0).default(0),
+        collectibles: z.number().min(0).default(0),
+        hasWon: z.boolean().default(false),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { experienceId, playTimeSeconds } = input;
+      const { experienceId, playTimeSeconds, score, collectibles, hasWon } = input;
 
       const existing = await ctx.db.playHistory.findFirst({
         where: {
@@ -170,15 +173,22 @@ export const playHistoryRouter = router({
             experienceId,
             playTimeSeconds,
             completedAt: new Date(),
+            score,
+            collectibles,
+            hasWon,
           },
         });
       }
 
+      // Update with best score and latest completion
       return ctx.db.playHistory.update({
         where: { id: existing.id },
         data: {
           playTimeSeconds: Math.max(existing.playTimeSeconds, playTimeSeconds),
           completedAt: new Date(),
+          score: Math.max(existing.score, score), // Keep best score
+          collectibles: Math.max(existing.collectibles, collectibles),
+          hasWon: existing.hasWon || hasWon, // Once won, always won
         },
       });
     }),
