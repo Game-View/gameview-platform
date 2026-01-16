@@ -8,6 +8,7 @@ import { playHistoryRouter } from "./playHistory";
 import { promoRouter } from "./promo";
 import { productionRouter } from "./production";
 import { analyticsRouter } from "./analytics";
+import { stripeRouter } from "./stripe";
 
 /**
  * Main application router
@@ -23,6 +24,7 @@ export const appRouter = router({
   promo: promoRouter,
   production: productionRouter,
   analytics: analyticsRouter,
+  stripe: stripeRouter,
 });
 
 // Export type definition of API

@@ -3,7 +3,7 @@
 import { useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Lock, ShoppingCart } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { PlaybackMode, type PlayStats } from "@/components/playback";
 import { type SceneData, type GameConfig, defaultGameConfig } from "@/lib/player-runtime";
@@ -16,6 +16,12 @@ export default function PlayExperiencePage() {
   // Fetch experience data with game data
   const { data: experience, isLoading, error } = trpc.experience.get.useQuery(
     { id: experienceId },
+    { enabled: !!experienceId }
+  );
+
+  // Check purchase status for paid experiences
+  const { data: purchaseCheck, isLoading: purchaseLoading } = trpc.stripe.checkPurchase.useQuery(
+    { experienceId },
     { enabled: !!experienceId }
   );
 
@@ -73,7 +79,7 @@ export default function PlayExperiencePage() {
   }, [router, experienceId]);
 
   // Loading state
-  if (isLoading) {
+  if (isLoading || purchaseLoading) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
         <div className="text-center">
@@ -100,6 +106,42 @@ export default function PlayExperiencePage() {
             <ArrowLeft className="h-5 w-5" />
             Back to Home
           </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Purchase verification for paid experiences
+  const isPaid = Number(experience.price) > 0;
+  const hasAccess = purchaseCheck?.hasAccess ?? !isPaid;
+
+  if (isPaid && !hasAccess) {
+    return (
+      <div className="fixed inset-0 bg-black flex items-center justify-center">
+        <div className="text-center max-w-md px-4">
+          <div className="w-16 h-16 rounded-full bg-gv-neutral-800 flex items-center justify-center mx-auto mb-4">
+            <Lock className="h-8 w-8 text-gv-neutral-400" />
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-2">Purchase Required</h1>
+          <p className="text-gv-neutral-400 mb-6">
+            This experience costs ${Number(experience.price).toFixed(2)}. Purchase it to start playing.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link
+              href={`/experience/${experienceId}`}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gv-primary-500 hover:bg-gv-primary-600 text-white rounded-lg transition-colors"
+            >
+              <ShoppingCart className="h-5 w-5" />
+              Purchase Now
+            </Link>
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gv-neutral-800 hover:bg-gv-neutral-700 text-white rounded-lg transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+              Browse Experiences
+            </Link>
+          </div>
         </div>
       </div>
     );
