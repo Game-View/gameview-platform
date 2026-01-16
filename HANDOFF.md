@@ -68,7 +68,7 @@ https://github.com/Game-View
 | Auth (Clerk) | Complete | User authentication |
 | Database | Complete | Supabase + Prisma |
 
-### Phase 2: BUILD (Sprints 11-18) - IN PROGRESS (~40%)
+### Phase 2: BUILD (Sprints 11-18) - IN PROGRESS (~78%)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -76,11 +76,13 @@ https://github.com/Game-View
 | 3D Processing | Complete | OpenSplat via Modal (8hr timeout, A10G GPU) |
 | Scene Viewer | Complete | Three.js Gaussian Splat viewer |
 | Import API | Complete | Desktop-rendered PLY import |
-| Object Library | Not Started | Pre-loaded + user uploads |
-| Object Placement | Not Started | Drag-drop into 3D scene |
-| Interaction Setup | Not Started | Triggers, collisions, behaviors |
-| Game Logic | Not Started | Win conditions, scoring, progression |
-| Testing Mode | Not Started | Play-through before publish |
+| Object Library | Implemented | UI, API, categories, search - needs drag-drop integration |
+| Object Placement | Implemented | Placement works, transforms work - renders as boxes in playtest |
+| Interaction Setup | Implemented | 9 trigger types, 11 actions - needs click/look runtime |
+| Game Logic | Implemented | Win conditions, scoring, inventory, objectives, rewards |
+| Testing Mode | Implemented | First-person controls, debug tools - **CRITICAL: objects render as boxes** |
+
+**Critical Gap:** PlacedObjectsRenderer renders blue boxes instead of GLTF models during playtest. See `docs/SPRINT_PLAN_PHASE2.md` for fix plan.
 
 ### Phase 3: PLATFORM (Sprints 19-22) - NOT STARTED
 
