@@ -95,8 +95,8 @@ https://github.com/Game-View
 | Interactive Playback | Complete ✅ | Sprint 18: Full playtest ported to player app |
 | Discovery/Browse | Existing | Player app has browse/discover infrastructure |
 | Play Session Tracking | Complete ✅ | Score, collectibles, completion recorded |
-| Analytics | Not Started | Creator analytics dashboard (Sprint 19) |
-| Player Payments | Not Started | Stripe integration (Sprint 20) |
+| Analytics | Complete ✅ | Sprint 19: Creator analytics dashboard, experience stats |
+| Player Payments | Complete ✅ | Sprint 20: Stripe Connect, checkout, purchase verification |
 | Social & Engagement | Not Started | Share, ratings, leaderboards (Sprint 21) |
 
 **Sprint 18 Completed:** Players can now play published experiences with:
@@ -106,14 +106,28 @@ https://github.com/Game-View
 - Victory/completion screens
 - Play history tracking in database
 
+**Sprint 19 Completed:** Creators can view analytics with:
+- Overview stats: plays, completions, unique players, play time
+- Plays over time chart (30-day trend)
+- Experience rankings sorted by performance
+- Per-experience detailed stats and leaderboards
+- My Experiences page with stats for all creator content
+
+**Sprint 20 Completed:** Full payment integration:
+- Stripe Connect onboarding for creators
+- Checkout sessions for paid experiences
+- Purchase verification before play access
+- Webhook handler for payment events
+- Creator earnings dashboard with payouts info
+- 20% platform fee structure
+
 ---
 
 ## 5. IMMEDIATE PRIORITIES
 
-1. Run database migrations for new Experience and PlayHistory fields
-2. Test end-to-end: Studio publish → Player playback → Completion tracking
-3. Begin Sprint 19: Creator Analytics Dashboard
-4. Begin Sprint 20: Stripe Payment Integration
+1. Configure Stripe environment variables for production
+2. Test end-to-end payment flow: Purchase → Webhook → Access
+3. Begin Sprint 21: Social & Engagement (sharing, ratings, leaderboards)
 
 ---
 
@@ -130,6 +144,12 @@ MODAL_TOKEN_ID=
 MODAL_TOKEN_SECRET=
 MODAL_ENDPOINT_URL=
 
+# Stripe (Sprint 20)
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+NEXT_PUBLIC_STUDIO_URL=
+NEXT_PUBLIC_PLAYER_URL=
+
 ---
 
 ## 7. STARTING A NEW CLAUDE CODE SESSION
@@ -141,6 +161,6 @@ MODAL_ENDPOINT_URL=
 
 ---
 
-Document Version: 1.1
+Document Version: 1.2
 Last Updated: January 16, 2026
-Sprint 18 Complete: Interactive Playback
+Sprints 18-20 Complete: Interactive Playback, Analytics, Payments
