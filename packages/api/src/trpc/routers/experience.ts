@@ -120,6 +120,9 @@ export const experienceRouter = router({
               isVerified: true,
             },
           },
+          _count: {
+            select: { playHistory: true },
+          },
         },
       });
 
@@ -129,11 +132,17 @@ export const experienceRouter = router({
         nextCursor = nextItem?.id;
       }
 
-      return { experiences, nextCursor };
+      // Transform to include playCount
+      const experiencesWithPlays = experiences.map((exp) => ({
+        ...exp,
+        playCount: exp._count.playHistory,
+      }));
+
+      return { experiences: experiencesWithPlays, nextCursor };
     }),
 
   /**
-   * Get trending experiences
+   * Get trending experiences (sorted by recent play activity)
    */
   trending: publicProcedure
     .input(
@@ -142,12 +151,31 @@ export const experienceRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      // For now, just get recent published experiences
-      // TODO: Implement actual trending algorithm based on play counts
+      // Get recent play activity (last 7 days) to determine trending
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      // Get experiences with recent play counts
+      const recentPlays = await ctx.db.playHistory.groupBy({
+        by: ["experienceId"],
+        where: {
+          startedAt: { gte: sevenDaysAgo },
+        },
+        _count: { id: true },
+        orderBy: {
+          _count: { id: "desc" },
+        },
+        take: input.limit * 2, // Get more to filter published
+      });
+
+      const trendingIds = recentPlays.map((p) => p.experienceId);
+
+      // Fetch those experiences
       const experiences = await ctx.db.experience.findMany({
-        where: { status: "PUBLISHED" },
-        orderBy: { publishedAt: "desc" },
-        take: input.limit,
+        where: {
+          status: "PUBLISHED",
+          id: { in: trendingIds },
+        },
         include: {
           creator: {
             select: {
@@ -157,10 +185,58 @@ export const experienceRouter = router({
               isVerified: true,
             },
           },
+          _count: {
+            select: { playHistory: true },
+          },
         },
       });
 
-      return experiences;
+      // Sort by trending order and add playCount
+      const trendingMap = new Map(recentPlays.map((p) => [p.experienceId, p._count.id]));
+      const sorted = experiences
+        .map((exp) => ({
+          ...exp,
+          playCount: exp._count.playHistory,
+          recentPlays: trendingMap.get(exp.id) ?? 0,
+        }))
+        .sort((a, b) => b.recentPlays - a.recentPlays)
+        .slice(0, input.limit);
+
+      // If not enough trending, fill with recent published
+      if (sorted.length < input.limit) {
+        const existingIds = sorted.map((e) => e.id);
+        const fillExperiences = await ctx.db.experience.findMany({
+          where: {
+            status: "PUBLISHED",
+            id: { notIn: existingIds },
+          },
+          orderBy: { publishedAt: "desc" },
+          take: input.limit - sorted.length,
+          include: {
+            creator: {
+              select: {
+                username: true,
+                displayName: true,
+                avatarUrl: true,
+                isVerified: true,
+              },
+            },
+            _count: {
+              select: { playHistory: true },
+            },
+          },
+        });
+
+        const fillWithPlays = fillExperiences.map((exp) => ({
+          ...exp,
+          playCount: exp._count.playHistory,
+          recentPlays: 0,
+        }));
+
+        sorted.push(...fillWithPlays);
+      }
+
+      return sorted;
     }),
 
   /**
@@ -275,10 +351,19 @@ export const experienceRouter = router({
               isVerified: true,
             },
           },
+          _count: {
+            select: { playHistory: true },
+          },
         },
       });
 
-      return experiences;
+      // Add playCount to each experience
+      const experiencesWithPlays = experiences.map((exp) => ({
+        ...exp,
+        playCount: exp._count.playHistory,
+      }));
+
+      return experiencesWithPlays;
     }),
 
   /**
@@ -314,6 +399,9 @@ export const experienceRouter = router({
               isVerified: true,
             },
           },
+          _count: {
+            select: { playHistory: true },
+          },
         },
       });
 
@@ -323,7 +411,93 @@ export const experienceRouter = router({
         nextCursor = nextItem?.id;
       }
 
-      return { experiences, nextCursor };
+      // Transform to include playCount
+      const experiencesWithPlays = experiences.map((exp) => ({
+        ...exp,
+        playCount: exp._count.playHistory,
+      }));
+
+      return { experiences: experiencesWithPlays, nextCursor };
+    }),
+
+  /**
+   * Creator: List own experiences with stats (Sprint 19.3)
+   */
+  myExperiences: creatorProcedure
+    .input(
+      z.object({
+        status: statusEnum.optional(),
+        limit: z.number().min(1).max(50).default(20),
+        cursor: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { status, limit, cursor } = input;
+
+      const experiences = await ctx.db.experience.findMany({
+        where: {
+          creatorId: ctx.creatorId,
+          ...(status && { status }),
+        },
+        orderBy: { updatedAt: "desc" },
+        take: limit + 1,
+        cursor: cursor ? { id: cursor } : undefined,
+        include: {
+          _count: {
+            select: { playHistory: true },
+          },
+        },
+      });
+
+      // Get play stats for each experience
+      const experienceIds = experiences.map((e) => e.id);
+
+      // Get completion counts in one query
+      const completionCounts = await ctx.db.playHistory.groupBy({
+        by: ["experienceId"],
+        where: {
+          experienceId: { in: experienceIds },
+          completedAt: { not: null },
+        },
+        _count: { id: true },
+      });
+      const completionMap = new Map(completionCounts.map((c) => [c.experienceId, c._count.id]));
+
+      // Get win counts in one query
+      const winCounts = await ctx.db.playHistory.groupBy({
+        by: ["experienceId"],
+        where: {
+          experienceId: { in: experienceIds },
+          hasWon: true,
+        },
+        _count: { id: true },
+      });
+      const winMap = new Map(winCounts.map((w) => [w.experienceId, w._count.id]));
+
+      let nextCursor: string | undefined;
+      if (experiences.length > limit) {
+        const nextItem = experiences.pop();
+        nextCursor = nextItem?.id;
+      }
+
+      const experiencesWithStats = experiences.map((exp) => {
+        const totalPlays = exp._count.playHistory;
+        const completions = completionMap.get(exp.id) ?? 0;
+        const wins = winMap.get(exp.id) ?? 0;
+
+        return {
+          ...exp,
+          stats: {
+            totalPlays,
+            completions,
+            wins,
+            completionRate: totalPlays > 0 ? Math.round((completions / totalPlays) * 100) : 0,
+            winRate: completions > 0 ? Math.round((wins / completions) * 100) : 0,
+          },
+        };
+      });
+
+      return { experiences: experiencesWithStats, nextCursor };
     }),
 
   /**

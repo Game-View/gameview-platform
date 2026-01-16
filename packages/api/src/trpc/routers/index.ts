@@ -7,6 +7,7 @@ import { wishlistRouter } from "./wishlist";
 import { playHistoryRouter } from "./playHistory";
 import { promoRouter } from "./promo";
 import { productionRouter } from "./production";
+import { analyticsRouter } from "./analytics";
 
 /**
  * Main application router
@@ -21,6 +22,7 @@ export const appRouter = router({
   playHistory: playHistoryRouter,
   promo: promoRouter,
   production: productionRouter,
+  analytics: analyticsRouter,
 });
 
 // Export type definition of API
