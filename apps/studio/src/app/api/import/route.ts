@@ -3,6 +3,9 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "@gameview/database";
 import { createClient } from "@supabase/supabase-js";
 
+// Route segment config for longer timeout
+export const maxDuration = 60;
+
 /**
  * Import pre-rendered 3D content (PLY files from desktop app)
  *
