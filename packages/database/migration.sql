@@ -85,6 +85,10 @@ CREATE TABLE "Experience" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "publishedAt" TIMESTAMP(3),
+    -- Game data for interactive playback (Phase 3 - Sprint 18)
+    "scenesData" JSONB,
+    "gameConfig" JSONB,
+    "briefId" TEXT,
     CONSTRAINT "Experience_pkey" PRIMARY KEY ("id")
 );
 
@@ -92,6 +96,7 @@ CREATE INDEX "Experience_creatorId_idx" ON "Experience"("creatorId");
 CREATE INDEX "Experience_category_idx" ON "Experience"("category");
 CREATE INDEX "Experience_status_idx" ON "Experience"("status");
 CREATE INDEX "Experience_publishedAt_idx" ON "Experience"("publishedAt");
+CREATE INDEX "Experience_briefId_idx" ON "Experience"("briefId");
 
 CREATE TABLE "Series" (
     "id" TEXT NOT NULL,

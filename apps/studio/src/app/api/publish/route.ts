@@ -4,11 +4,13 @@ import { db } from "@gameview/database";
 import { getBriefById } from "@/lib/briefs";
 import { getScenesByBrief } from "@/lib/scenes";
 import { getProfileByClerkId } from "@/lib/profile";
+import { defaultGameConfig, type GameConfig } from "@/lib/game-logic";
 
 /**
  * POST /api/publish - Publish a brief as a playable experience
  *
  * Creates or updates an Experience in the Prisma database from the Brief + completed Scenes
+ * Includes full scene data (placedObjects, interactions) and game config for interactive playback
  * Returns the experience ID and shareable URL
  */
 export async function POST(request: Request) {
@@ -110,11 +112,26 @@ export async function POST(request: Request) {
       }
     }
 
+    // Build scenes data for interactive playback (Sprint 18)
+    const scenesData = completedScenes.map(scene => ({
+      id: scene.id,
+      name: scene.name,
+      splatUrl: scene.splatUrl,
+      thumbnailUrl: scene.thumbnailUrl,
+      placedObjects: scene.placedObjects || [],
+      interactions: scene.interactions || [],
+      cameraPosition: scene.cameraPosition,
+      cameraTarget: scene.cameraTarget,
+      audioConfig: scene.audioConfig,
+    }));
+
+    // Get game config from brief or use defaults
+    const gameConfig: GameConfig = brief.gameConfig || defaultGameConfig;
+
     // Check if experience already exists for this brief
     const existingExperience = await db.experience.findFirst({
       where: {
-        creatorId: creator.id,
-        title: brief.name || "Untitled Experience",
+        briefId: briefId,
       }
     });
 
@@ -134,6 +151,9 @@ export async function POST(request: Request) {
           duration,
           status: "PUBLISHED",
           publishedAt: new Date(),
+          // Include game data for interactive playback
+          scenesData: scenesData,
+          gameConfig: gameConfig,
         }
       });
     } else {
@@ -152,6 +172,10 @@ export async function POST(request: Request) {
           price: 0, // Free for beta
           status: "PUBLISHED",
           publishedAt: new Date(),
+          briefId: briefId,
+          // Include game data for interactive playback
+          scenesData: scenesData,
+          gameConfig: gameConfig,
         }
       });
     }
@@ -161,6 +185,7 @@ export async function POST(request: Request) {
     const shareUrl = `${baseUrl}/experience/${experience.id}`;
 
     console.log(`[Publish] Experience ${experience.id} published for brief ${briefId}`);
+    console.log(`[Publish] Included ${scenesData.length} scene(s) with ${scenesData.reduce((sum, s) => sum + s.placedObjects.length, 0)} total placed objects`);
 
     return NextResponse.json({
       success: true,

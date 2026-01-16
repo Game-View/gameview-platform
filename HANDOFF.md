@@ -87,25 +87,33 @@ https://github.com/Game-View
 
 **Phase 2 Exit Criteria Met:** Creator can upload video, process to 3D, place objects, configure interactions, define win conditions, and test the complete experience — without writing code.
 
-### Phase 3: PLATFORM (Sprints 19-22) - READY TO START
+### Phase 3: PLATFORM (Sprints 18-22) - IN PROGRESS
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Publishing Flow | Partially Done | API exists, modal created, needs player app integration |
-| Discovery/Browse | Not Started | Player app needs experience browser |
-| Player Experience | Not Started | Player app needs playable experience viewer |
-| Analytics | Not Started | Creator analytics dashboard |
-| Player Payments | Not Started | Stripe integration for paid experiences |
-| Prize Pools | Not Started | Competitive experience rewards |
+| Publishing Flow | Complete ✅ | API includes scene data, game config bundled |
+| Interactive Playback | Complete ✅ | Sprint 18: Full playtest ported to player app |
+| Discovery/Browse | Existing | Player app has browse/discover infrastructure |
+| Play Session Tracking | Complete ✅ | Score, collectibles, completion recorded |
+| Analytics | Not Started | Creator analytics dashboard (Sprint 19) |
+| Player Payments | Not Started | Stripe integration (Sprint 20) |
+| Social & Engagement | Not Started | Share, ratings, leaderboards (Sprint 21) |
+
+**Sprint 18 Completed:** Players can now play published experiences with:
+- First-person controls and interactions
+- Click and proximity triggers
+- Score tracking and win conditions
+- Victory/completion screens
+- Play history tracking in database
 
 ---
 
 ## 5. IMMEDIATE PRIORITIES
 
-1. Test Phase 2 end-to-end (video → 3D → objects → interactions → playtest)
-2. Begin Phase 3: PLATFORM development
-3. Integrate publish flow with player app
-4. Build discovery/browse for player app
+1. Run database migrations for new Experience and PlayHistory fields
+2. Test end-to-end: Studio publish → Player playback → Completion tracking
+3. Begin Sprint 19: Creator Analytics Dashboard
+4. Begin Sprint 20: Stripe Payment Integration
 
 ---
 
@@ -133,5 +141,6 @@ MODAL_ENDPOINT_URL=
 
 ---
 
-Document Version: 1.0
+Document Version: 1.1
 Last Updated: January 16, 2026
+Sprint 18 Complete: Interactive Playback
