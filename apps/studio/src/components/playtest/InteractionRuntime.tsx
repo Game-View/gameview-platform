@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
+import * as THREE from "three";
 import { usePlaytestStore } from "@/stores/playtest-store";
 import type { PlacedObject } from "@/lib/objects";
-import type { ProximityTrigger, ZoneTrigger } from "@/lib/interactions";
+import type { ProximityTrigger, ZoneTrigger, LookTrigger } from "@/lib/interactions";
 import { checkProximityTrigger, checkZoneTrigger, type PlayerPosition } from "@/lib/player-runtime";
 
 interface InteractionRuntimeProps {
@@ -12,6 +13,7 @@ interface InteractionRuntimeProps {
 }
 
 export function InteractionRuntime({ enabled = true }: InteractionRuntimeProps) {
+  const { camera } = useThree();
   const {
     isPlaytestMode,
     isPaused,
@@ -23,6 +25,28 @@ export function InteractionRuntime({ enabled = true }: InteractionRuntimeProps) 
 
   // Track which objects were in range last frame (for enter/exit detection)
   const previousInRangeRef = useRef<Map<string, Set<string>>>(new Map());
+
+  // Track look duration for look triggers (key: objectId:interactionId)
+  const lookDurationRef = useRef<Map<string, number>>(new Map());
+
+  // Helper to check if player is looking at an object
+  const isLookingAt = (objectPos: PlayerPosition, angleThreshold: number): boolean => {
+    // Get camera direction
+    const cameraDirection = new THREE.Vector3();
+    camera.getWorldDirection(cameraDirection);
+
+    // Get direction from camera to object
+    const toObject = new THREE.Vector3(
+      objectPos.x - camera.position.x,
+      objectPos.y - camera.position.y,
+      objectPos.z - camera.position.z
+    ).normalize();
+
+    // Calculate angle between camera direction and object direction
+    const angle = cameraDirection.angleTo(toObject) * (180 / Math.PI);
+
+    return angle <= angleThreshold;
+  };
 
   // Frame update for proximity-based triggers
   useFrame(() => {
@@ -101,8 +125,32 @@ export function InteractionRuntime({ enabled = true }: InteractionRuntimeProps) 
             break;
           }
 
+          case "look": {
+            const trigger = interaction.trigger as LookTrigger;
+            const lookKey = `${object.instanceId}:${interaction.id}`;
+            const looking = isLookingAt(objectPos, trigger.angle);
+
+            if (looking) {
+              inRange = true;
+              // Track look duration
+              const currentDuration = lookDurationRef.current.get(lookKey) || 0;
+              const newDuration = currentDuration + 16.67; // Approximate ms per frame at 60fps
+
+              if (newDuration >= trigger.duration && currentDuration < trigger.duration) {
+                // Just crossed the threshold - trigger!
+                shouldTrigger = true;
+              }
+
+              lookDurationRef.current.set(lookKey, newDuration);
+            } else {
+              // Reset look duration when not looking
+              lookDurationRef.current.set(lookKey, 0);
+            }
+            break;
+          }
+
           // Timer triggers are handled separately
-          // Click/look triggers are handled by event system
+          // Click triggers are handled by ClickInteractionHandler
         }
 
         // Update in-range tracking
@@ -261,6 +309,28 @@ export function TriggerZoneVisuals({ objects, visible = false }: TriggerZoneVisu
                     color="#ff8800"
                     transparent
                     opacity={0.2}
+                    wireframe
+                  />
+                </mesh>
+              );
+            }
+
+            case "look": {
+              // Show a cone pointing from the object to indicate look detection area
+              const trigger = interaction.trigger as LookTrigger;
+              const coneHeight = 2;
+              const coneRadius = Math.tan((trigger.angle * Math.PI) / 180) * coneHeight;
+              return (
+                <mesh
+                  key={`${object.instanceId}-${interaction.id}`}
+                  position={[pos.x, pos.y + coneHeight / 2, pos.z]}
+                  rotation={[Math.PI, 0, 0]}
+                >
+                  <coneGeometry args={[coneRadius, coneHeight, 16]} />
+                  <meshBasicMaterial
+                    color="#ff00ff"
+                    transparent
+                    opacity={0.15}
                     wireframe
                   />
                 </mesh>

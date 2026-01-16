@@ -56,6 +56,7 @@ export default function SceneEditorPage() {
   const [audioConfig, setAudioConfig] = useState<SceneAudioConfig>(defaultSceneAudioConfig);
   const [isPlaytestMode, setIsPlaytestMode] = useState(false);
   const [gameConfig, setGameConfig] = useState<GameConfig>(defaultGameConfig);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   // Editor store
   const {
@@ -198,14 +199,14 @@ export default function SceneEditorPage() {
 
   // Handle placing object from library
   const handlePlaceObject = useCallback(
-    (object: StoredObject) => {
+    (object: StoredObject, position?: { x: number; y: number; z: number }) => {
       const placedObject: PlacedObject = {
         instanceId: crypto.randomUUID(),
         objectId: object.id,
         name: object.name,
         modelUrl: object.modelUrl,
         transform: {
-          position: { x: 0, y: 0, z: 0 },
+          position: position || { x: 0, y: 0, z: 0 },
           rotation: { x: 0, y: 0, z: 0 },
           scale: { x: 1, y: 1, z: 1 },
         },
@@ -225,6 +226,55 @@ export default function SceneEditorPage() {
       toast.success("Object placed", `${object.name} added to scene`);
     },
     [addObject]
+  );
+
+  // Handle drag over the editor area
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setIsDraggingOver(true);
+  }, []);
+
+  // Handle drag leave
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Only set to false if leaving the main element (not entering a child)
+    if (e.currentTarget === e.target) {
+      setIsDraggingOver(false);
+    }
+  }, []);
+
+  // Handle drop on the editor area
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDraggingOver(false);
+
+      try {
+        const data = e.dataTransfer.getData("application/json");
+        if (!data) return;
+
+        const object: StoredObject = JSON.parse(data);
+
+        // Calculate approximate drop position based on where user dropped
+        // For now, offset from center based on mouse position relative to viewport center
+        const rect = e.currentTarget.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const offsetX = (e.clientX - rect.left - centerX) / 100; // Scale down for reasonable 3D position
+        const offsetZ = (e.clientY - rect.top - centerY) / 100;
+
+        const position = {
+          x: offsetX,
+          y: 0, // Place on ground level
+          z: offsetZ,
+        };
+
+        handlePlaceObject(object, position);
+      } catch (err) {
+        console.error("Failed to parse dropped object:", err);
+      }
+    },
+    [handlePlaceObject]
   );
 
   // Keyboard shortcuts
@@ -316,7 +366,12 @@ export default function SceneEditorPage() {
       </aside>
 
       {/* Main Editor Area */}
-      <main className="flex-1 relative">
+      <main
+        className={`flex-1 relative transition-all ${isDraggingOver ? "ring-4 ring-gv-primary-500 ring-inset" : ""}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {/* Toggle Buttons */}
         <div className="absolute top-4 left-4 z-30 flex items-center gap-2">
           <button
