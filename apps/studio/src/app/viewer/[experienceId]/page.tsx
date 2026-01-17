@@ -47,24 +47,31 @@ export default function ExperienceViewerPage() {
           )}`
         );
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch experience");
-        }
-
         const data = await response.json();
         const result = Array.isArray(data) ? data[0] : data;
 
+        // Check for tRPC error in the response body (can happen even with 200 status)
         if (result?.error) {
-          throw new Error(result.error.message || "Experience not found");
+          const errorCode = result.error.data?.code || "UNKNOWN";
+          const errorMessage = result.error.message || "Experience not found";
+          console.error(`[Viewer] tRPC error (${errorCode}):`, errorMessage);
+          throw new Error(errorMessage);
+        }
+
+        // Check for HTTP error status
+        if (!response.ok) {
+          console.error(`[Viewer] HTTP error: ${response.status} ${response.statusText}`);
+          throw new Error(`Server error (${response.status}). Please try again.`);
         }
 
         if (result?.result?.data?.json) {
           setExperience(result.result.data.json);
         } else {
+          console.error("[Viewer] Invalid response format:", result);
           throw new Error("Experience not found");
         }
       } catch (err) {
-        console.error("Failed to fetch experience:", err);
+        console.error("[Viewer] Failed to fetch experience:", err);
         setError(err instanceof Error ? err.message : "Failed to load experience");
       } finally {
         setIsLoading(false);
