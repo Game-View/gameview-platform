@@ -28,7 +28,7 @@ export default function AnalyticsPage() {
   const { data: rankings, isLoading: rankingsLoading } = trpc.analytics.rankings.useQuery();
 
   // Fetch selected experience details
-  const { data: experienceStats, isLoading: _experienceLoading } = trpc.analytics.experience.useQuery(
+  const { data: experienceStats } = trpc.analytics.experience.useQuery(
     { experienceId: selectedExperience! },
     { enabled: !!selectedExperience }
   );
