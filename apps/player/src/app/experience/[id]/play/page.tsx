@@ -50,7 +50,7 @@ export default function PlayExperiencePage() {
   // Parse game config from experience
   const gameConfig: GameConfig | null = useMemo(() => {
     if (!experience?.gameConfig) return defaultGameConfig;
-    return experience.gameConfig as GameConfig;
+    return experience.gameConfig as unknown as GameConfig;
   }, [experience]);
 
   // Track play completion via API
