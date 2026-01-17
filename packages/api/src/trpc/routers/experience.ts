@@ -609,6 +609,43 @@ export const experienceRouter = router({
     }),
 
   /**
+   * Creator: Update scene data (placed objects and game config)
+   */
+  updateSceneData: creatorProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        scenesData: z.any().optional(), // Array of placed objects
+        gameConfig: z.any().optional(), // Game configuration
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, scenesData, gameConfig } = input;
+
+      // Verify ownership
+      const existing = await ctx.db.experience.findUnique({
+        where: { id },
+      });
+
+      if (!existing || existing.creatorId !== ctx.creatorId) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Experience not found",
+        });
+      }
+
+      const experience = await ctx.db.experience.update({
+        where: { id },
+        data: {
+          ...(scenesData !== undefined && { scenesData }),
+          ...(gameConfig !== undefined && { gameConfig }),
+        },
+      });
+
+      return experience;
+    }),
+
+  /**
    * Creator: Publish an experience
    */
   publish: creatorProcedure

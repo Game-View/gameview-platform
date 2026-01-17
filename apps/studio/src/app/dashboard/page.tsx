@@ -547,8 +547,8 @@ export default function DashboardPage() {
       toast.error("Error", "Could not find experience for this production");
       return;
     }
-    // Navigate to the studio's experience viewer
-    window.location.href = `/viewer/${production.experienceId}`;
+    // Navigate to the studio's experience editor
+    window.location.href = `/editor/${production.experienceId}`;
   };
 
   const handleRetryProduction = async (id: string) => {
