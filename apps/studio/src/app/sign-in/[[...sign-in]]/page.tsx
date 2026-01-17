@@ -6,7 +6,7 @@ export default function SignInPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <span className="text-3xl">🐰</span>
+            <img src="/images/brand/logo.png" alt="Game View" className="h-10 w-auto" />
             <span className="font-bold text-white text-2xl tracking-wide">GAME VIEW</span>
             <span className="text-gv-primary-500 font-semibold text-xl">Studio</span>
           </div>

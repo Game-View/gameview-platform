@@ -8,7 +8,7 @@ export default function Home() {
       {/* Header */}
       <header className="flex items-center justify-between p-6 max-w-7xl mx-auto">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">🐰</span>
+          <img src="/images/brand/logo.png" alt="Game View" className="h-8 w-auto" />
           <span className="font-bold text-white text-xl tracking-wide">GAME VIEW</span>
           <span className="text-gv-primary-500 font-semibold">Studio</span>
         </div>
@@ -126,7 +126,7 @@ export default function Home() {
       <footer className="border-t border-gv-neutral-800 py-8">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🐰</span>
+            <img src="/images/brand/logo.png" alt="Game View" className="h-6 w-auto" />
             <span className="font-bold text-gv-neutral-400">GAME VIEW</span>
           </div>
           <p className="text-gv-neutral-500 text-sm">
