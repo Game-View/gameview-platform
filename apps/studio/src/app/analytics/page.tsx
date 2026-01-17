@@ -18,6 +18,38 @@ import {
   Medal,
 } from "lucide-react";
 
+// Type for experience detail data
+interface ExperienceDetailData {
+  experience: {
+    id: string;
+    title: string;
+    status: string;
+    publishedAt: Date | null;
+    thumbnailUrl: string | null;
+  };
+  stats: {
+    totalPlays: number;
+    totalPlayTime: number;
+    avgPlayTime: number;
+    avgScore: number;
+    highScore: number;
+    completions: number;
+    wins: number;
+    uniquePlayers: number;
+    completionRate: number;
+    winRate: number;
+  };
+  playsOverTime: { date: string; plays: number }[];
+  topScores: {
+    userId: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    score: number;
+    playTime: number;
+    completedAt: Date | null;
+  }[];
+}
+
 export default function AnalyticsPage() {
   const [selectedExperience, setSelectedExperience] = useState<string | null>(null);
 
@@ -50,7 +82,7 @@ export default function AnalyticsPage() {
   if (selectedExperience && experienceStats) {
     return (
       <ExperienceDetailView
-        data={experienceStats}
+        data={experienceStats as ExperienceDetailData}
         onBack={() => setSelectedExperience(null)}
       />
     );
@@ -366,7 +398,7 @@ function ExperienceDetailView({
   data,
   onBack,
 }: {
-  data: NonNullable<ReturnType<typeof trpc.analytics.experience.useQuery>["data"]>;
+  data: ExperienceDetailData;
   onBack: () => void;
 }) {
   return (
