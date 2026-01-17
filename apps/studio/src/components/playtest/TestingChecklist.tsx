@@ -169,10 +169,10 @@ export function TestingChecklist({
             conditionDesc = "Collect all required items";
             break;
           case "collect_count":
-            conditionDesc = `Collect ${condition.targetCount} items`;
+            conditionDesc = `Collect ${(condition.config as { count: number }).count} items`;
             break;
           case "reach_score":
-            conditionDesc = `Reach score of ${condition.targetScore}`;
+            conditionDesc = `Reach score of ${(condition.config as { targetScore: number }).targetScore}`;
             break;
           case "complete_objectives":
             conditionDesc = "Complete all required objectives";
