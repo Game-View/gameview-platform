@@ -380,7 +380,7 @@ export default function SparkPage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div className="flex items-center gap-2">
-              <span className="text-2xl">🐰</span>
+              <img src="/images/brand/logo.png" alt="Game View" className="h-8 w-auto" />
               <span className="font-bold text-white text-xl tracking-wide">GAME VIEW</span>
               <span className="text-gv-primary-500 font-semibold">Spark</span>
             </div>

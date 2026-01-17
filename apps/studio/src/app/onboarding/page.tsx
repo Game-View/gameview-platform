@@ -210,7 +210,7 @@ export default function OnboardingPage() {
       {/* Header */}
       <header className="p-6">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">🐰</span>
+          <img src="/images/brand/logo.png" alt="Game View" className="h-8 w-auto" />
           <span className="font-bold text-white text-xl tracking-wide">GAME VIEW</span>
           <span className="text-gv-primary-500 font-semibold">Studio</span>
         </div>
