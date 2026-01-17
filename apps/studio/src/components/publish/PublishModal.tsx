@@ -10,11 +10,6 @@ import {
   Copy,
   Check,
   Rocket,
-  Eye,
-  Box,
-  Target,
-  Trophy,
-  Image,
 } from "lucide-react";
 import { toast } from "@/stores/toast-store";
 import type { GameConfig } from "@/lib/game-logic";

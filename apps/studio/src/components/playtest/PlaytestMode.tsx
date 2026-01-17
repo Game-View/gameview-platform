@@ -270,7 +270,7 @@ function PlacedObjectsRenderer({
   objects: PlacedObject[];
   showLabels: boolean;
 }) {
-  const { playerState, interactionStates } = usePlaytestStore();
+  const { playerState } = usePlaytestStore();
   const [hiddenObjects, setHiddenObjects] = useState<Set<string>>(new Set());
 
   // Listen for show/hide events
