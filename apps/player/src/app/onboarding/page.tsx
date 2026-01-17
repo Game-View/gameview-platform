@@ -101,7 +101,7 @@ export default function OnboardingPage() {
       {/* Header */}
       <header className="p-6 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
-          <span className="text-2xl">🐰</span>
+          <img src="/images/brand/logo.png" alt="Game View" className="h-8 w-auto" />
           <span className="font-bold text-white text-xl tracking-wide">GAME VIEW</span>
         </Link>
         {step !== "complete" && (

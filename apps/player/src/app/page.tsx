@@ -62,7 +62,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
-            <span className="text-2xl">🐰</span>
+            <img src="/images/brand/logo.png" alt="Game View" className="h-8 w-auto" />
             <span className="font-bold text-white text-xl tracking-wide hidden sm:inline">GAME VIEW</span>
           </Link>
 
@@ -271,7 +271,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-xl">🐰</span>
+              <img src="/images/brand/logo.png" alt="Game View" className="h-6 w-auto" />
               <span className="font-bold text-white">GAME VIEW</span>
             </div>
             <div className="flex items-center gap-6 text-sm text-gv-neutral-400">
