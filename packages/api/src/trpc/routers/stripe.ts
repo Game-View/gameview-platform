@@ -22,7 +22,7 @@ const getStripe = () => {
       message: "Stripe is not configured",
     });
   }
-  return new Stripe(secretKey, { apiVersion: "2024-06-20" });
+  return new Stripe(secretKey, { apiVersion: "2023-10-16" });
 };
 
 export const stripeRouter = router({

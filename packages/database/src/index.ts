@@ -31,7 +31,7 @@ export const db = prismaClient;
 // Type helper for transactions
 export type TransactionClient = InstanceType<typeof GeneratedPrismaClient>;
 
-// Re-export enums from generated client
+// Re-export enums and Prisma namespace from generated client
 export {
   UserRole,
   Category,
@@ -47,4 +47,5 @@ export {
   PromoCodeType,
   AppType,
   UpdateType,
+  Prisma,
 } from "../generated/client";

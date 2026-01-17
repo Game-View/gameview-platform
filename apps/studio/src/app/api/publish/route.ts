@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth-server";
 import { NextResponse } from "next/server";
-import { db } from "@gameview/database";
+import { db, Prisma } from "@gameview/database";
 import { getBriefById } from "@/lib/briefs";
 import { getScenesByBrief } from "@/lib/scenes";
 import { getProfileByClerkId } from "@/lib/profile";
@@ -152,8 +152,8 @@ export async function POST(request: Request) {
           status: "PUBLISHED",
           publishedAt: new Date(),
           // Include game data for interactive playback
-          scenesData: scenesData,
-          gameConfig: gameConfig,
+          scenesData: scenesData as unknown as Prisma.InputJsonValue,
+          gameConfig: gameConfig as unknown as Prisma.InputJsonValue,
         }
       });
     } else {
@@ -174,8 +174,8 @@ export async function POST(request: Request) {
           publishedAt: new Date(),
           briefId: briefId,
           // Include game data for interactive playback
-          scenesData: scenesData,
-          gameConfig: gameConfig,
+          scenesData: scenesData as unknown as Prisma.InputJsonValue,
+          gameConfig: gameConfig as unknown as Prisma.InputJsonValue,
         }
       });
     }
