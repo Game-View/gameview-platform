@@ -44,7 +44,7 @@ export default function PlayExperiencePage() {
       }
       return [];
     }
-    return experience.scenesData as SceneData[];
+    return experience.scenesData as unknown as SceneData[];
   }, [experience]);
 
   // Parse game config from experience
