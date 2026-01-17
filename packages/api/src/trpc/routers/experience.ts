@@ -13,59 +13,92 @@ export const experienceRouter = router({
   get: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const experience = await ctx.db.experience.findUnique({
-        where: { id: input.id },
-        include: {
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatarUrl: true,
-              isVerified: true,
+      try {
+        const experience = await ctx.db.experience.findUnique({
+          where: { id: input.id },
+          include: {
+            creator: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatarUrl: true,
+                isVerified: true,
+              },
+            },
+            series: true,
+            _count: {
+              select: {
+                playHistory: true,
+                wishlist: true,
+              },
             },
           },
-          series: true,
-          _count: {
-            select: {
-              playHistory: true,
-              wishlist: true,
-            },
-          },
-        },
-      });
-
-      if (!experience) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Experience not found",
         });
-      }
 
-      // Only return published experiences to non-creators
-      if (experience.status !== "PUBLISHED") {
-        // Check if the user is the creator
-        if (ctx.userId) {
-          const user = await ctx.db.user.findUnique({
-            where: { id: ctx.userId },
-            include: { creator: true },
-          });
-
-          if (user?.creator?.id !== experience.creatorId) {
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "Experience not found",
-            });
-          }
-        } else {
+        if (!experience) {
+          console.log(`[experience.get] Experience not found: ${input.id}`);
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Experience not found",
           });
         }
-      }
 
-      return experience;
+        // Only return published experiences to non-creators
+        if (experience.status !== "PUBLISHED") {
+          // Check if the user is the creator
+          if (ctx.userId) {
+            const user = await ctx.db.user.findUnique({
+              where: { id: ctx.userId },
+              include: { creator: true },
+            });
+
+            if (!user) {
+              console.log(`[experience.get] User not found for id: ${ctx.userId}`);
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "Experience not found",
+              });
+            }
+
+            if (!user.creator) {
+              console.log(`[experience.get] User has no creator profile: ${ctx.userId}`);
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "Experience not found",
+              });
+            }
+
+            if (user.creator.id !== experience.creatorId) {
+              console.log(`[experience.get] Creator mismatch: user.creator.id=${user.creator.id}, experience.creatorId=${experience.creatorId}`);
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "Experience not found",
+              });
+            }
+          } else {
+            console.log(`[experience.get] Not authenticated, experience status: ${experience.status}`);
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Experience not found",
+            });
+          }
+        }
+
+        return experience;
+      } catch (error) {
+        // Re-throw TRPCErrors as-is
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        // Log and wrap unexpected errors
+        console.error(`[experience.get] Unexpected error for id ${input.id}:`, error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to load experience",
+          cause: error,
+        });
+      }
     }),
 
   /**
