@@ -4,81 +4,65 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Play,
   Pause,
+  Square,
   SkipBack,
   SkipForward,
   ChevronLeft,
   ChevronRight,
-  ZoomIn,
-  ZoomOut,
-  Video,
-  Music,
-  Box,
-  Sparkles,
+  RotateCcw,
+  Sliders,
+  Scissors,
+  MousePointer2,
+  Magnet,
+  Flag,
 } from "lucide-react";
 
-export interface TimelineTrack {
-  id: string;
-  name: string;
-  type: "video" | "audio" | "objects" | "effects";
-  color: string;
-  items?: TimelineItem[];
-}
-
-export interface TimelineItem {
-  id: string;
-  startTime: number;
-  duration: number;
-  name: string;
+export interface TimelineThumbnail {
+  time: number;
+  imageUrl?: string;
+  label?: string;
 }
 
 interface TimelineProps {
   duration?: number; // Total duration in seconds
   currentTime?: number;
   isPlaying?: boolean;
-  tracks?: TimelineTrack[];
+  thumbnails?: TimelineThumbnail[];
   onTimeChange?: (time: number) => void;
   onPlayPause?: () => void;
-  onSkipForward?: () => void;
-  onSkipBack?: () => void;
+  onStop?: () => void;
   className?: string;
 }
-
-const defaultTracks: TimelineTrack[] = [
-  { id: "video", name: "Video", type: "video", color: "#3B82F6", items: [] },
-  { id: "audio", name: "Audio", type: "audio", color: "#8B5CF6", items: [] },
-  { id: "objects", name: "Objects", type: "objects", color: "#10B981", items: [] },
-  { id: "effects", name: "Effects", type: "effects", color: "#F59E0B", items: [] },
-];
 
 export function Timeline({
   duration = 60,
   currentTime: externalTime,
   isPlaying: externalIsPlaying,
-  tracks = defaultTracks,
+  thumbnails = [],
   onTimeChange,
   onPlayPause,
-  onSkipForward,
-  onSkipBack,
+  onStop,
   className = "",
 }: TimelineProps) {
   const [internalTime, setInternalTime] = useState(0);
   const [internalIsPlaying, setInternalIsPlaying] = useState(false);
-  const [zoom, setZoom] = useState(1); // 1 = 100%, 2 = 200%, etc.
   const [isDragging, setIsDragging] = useState(false);
-  const [scrollPosition, setScrollPosition] = useState(0);
+  const [isDraggingOverview, setIsDraggingOverview] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const scrubberRef = useRef<HTMLDivElement>(null);
+  const overviewRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
 
   // Use external or internal state
   const currentTime = externalTime ?? internalTime;
   const isPlaying = externalIsPlaying ?? internalIsPlaying;
 
-  // Format time as MM:SS:FF (frames)
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
+  // Format time as HH:MM:SS:FF (timecode format like DaVinci)
+  const formatTimecode = (seconds: number): string => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
     const frames = Math.floor((seconds % 1) * 30); // Assuming 30fps
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}:${frames.toString().padStart(2, "0")}`;
+    return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}:${frames.toString().padStart(2, "0")}`;
   };
 
   // Handle play/pause
@@ -90,29 +74,30 @@ export function Timeline({
     }
   }, [onPlayPause]);
 
-  // Handle skip forward (5 seconds)
-  const handleSkipForward = useCallback(() => {
-    if (onSkipForward) {
-      onSkipForward();
+  // Handle stop
+  const handleStop = useCallback(() => {
+    if (onStop) {
+      onStop();
     } else {
-      const newTime = Math.min(currentTime + 5, duration);
-      setInternalTime(newTime);
-      onTimeChange?.(newTime);
+      setInternalIsPlaying(false);
+      setInternalTime(0);
+      onTimeChange?.(0);
     }
-  }, [currentTime, duration, onSkipForward, onTimeChange]);
+  }, [onStop, onTimeChange]);
 
-  // Handle skip back (5 seconds)
-  const handleSkipBack = useCallback(() => {
-    if (onSkipBack) {
-      onSkipBack();
-    } else {
-      const newTime = Math.max(currentTime - 5, 0);
-      setInternalTime(newTime);
-      onTimeChange?.(newTime);
-    }
-  }, [currentTime, onSkipBack, onTimeChange]);
+  // Handle skip to start
+  const handleSkipToStart = useCallback(() => {
+    setInternalTime(0);
+    onTimeChange?.(0);
+  }, [onTimeChange]);
 
-  // Handle step forward (1 frame)
+  // Handle skip to end
+  const handleSkipToEnd = useCallback(() => {
+    setInternalTime(duration);
+    onTimeChange?.(duration);
+  }, [duration, onTimeChange]);
+
+  // Handle step forward (1 frame = 1/30 second)
   const handleStepForward = useCallback(() => {
     const newTime = Math.min(currentTime + 1 / 30, duration);
     setInternalTime(newTime);
@@ -126,50 +111,70 @@ export function Timeline({
     onTimeChange?.(newTime);
   }, [currentTime, onTimeChange]);
 
-  // Handle zoom
-  const handleZoomIn = useCallback(() => {
-    setZoom((prev) => Math.min(prev * 1.5, 4));
-  }, []);
+  // Handle play reverse
+  const handlePlayReverse = useCallback(() => {
+    // For now, just step back - could implement continuous reverse
+    const newTime = Math.max(currentTime - 1, 0);
+    setInternalTime(newTime);
+    onTimeChange?.(newTime);
+  }, [currentTime, onTimeChange]);
 
-  const handleZoomOut = useCallback(() => {
-    setZoom((prev) => Math.max(prev / 1.5, 0.5));
-  }, []);
+  // Calculate playhead position as percentage
+  const playheadPosition = duration > 0 ? (currentTime / duration) * 100 : 0;
 
-  // Calculate timeline width based on zoom
-  const timelineWidth = duration * 20 * zoom; // 20px per second at zoom 1
-  const playheadPosition = (currentTime / duration) * 100;
-
-  // Handle scrubber drag
-  const handleScrubberMouseDown = useCallback(
+  // Handle overview bar click/drag
+  const handleOverviewMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (!scrubberRef.current) return;
+      if (!overviewRef.current) return;
       e.preventDefault();
-      setIsDragging(true);
+      setIsDraggingOverview(true);
 
-      const rect = scrubberRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left + scrollPosition;
-      const newTime = Math.max(0, Math.min(duration, (x / timelineWidth) * duration));
+      const rect = overviewRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percentage = x / rect.width;
+      const newTime = Math.max(0, Math.min(duration, percentage * duration));
       setInternalTime(newTime);
       onTimeChange?.(newTime);
     },
-    [duration, timelineWidth, scrollPosition, onTimeChange]
+    [duration, onTimeChange]
+  );
+
+  // Handle detail timeline click/drag
+  const handleDetailMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (!detailRef.current) return;
+      e.preventDefault();
+      setIsDragging(true);
+
+      const rect = detailRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percentage = x / rect.width;
+      const newTime = Math.max(0, Math.min(duration, percentage * duration));
+      setInternalTime(newTime);
+      onTimeChange?.(newTime);
+    },
+    [duration, onTimeChange]
   );
 
   // Handle mouse move while dragging
   useEffect(() => {
-    if (!isDragging) return;
+    if (!isDragging && !isDraggingOverview) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!scrubberRef.current) return;
-      const rect = scrubberRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left + scrollPosition;
-      const newTime = Math.max(0, Math.min(duration, (x / timelineWidth) * duration));
+      const ref = isDraggingOverview ? overviewRef.current : detailRef.current;
+      if (!ref) return;
+
+      const rect = ref.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, x / rect.width));
+      const newTime = percentage * duration;
       setInternalTime(newTime);
       onTimeChange?.(newTime);
     };
 
     const handleMouseUp = () => {
       setIsDragging(false);
+      setIsDraggingOverview(false);
     };
 
     document.addEventListener("mousemove", handleMouseMove);
@@ -179,7 +184,7 @@ export function Timeline({
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isDragging, duration, timelineWidth, scrollPosition, onTimeChange]);
+  }, [isDragging, isDraggingOverview, duration, onTimeChange]);
 
   // Auto-play timer
   useEffect(() => {
@@ -190,7 +195,7 @@ export function Timeline({
         const newTime = prev + 1 / 30;
         if (newTime >= duration) {
           setInternalIsPlaying(false);
-          return 0;
+          return duration;
         }
         onTimeChange?.(newTime);
         return newTime;
@@ -200,199 +205,295 @@ export function Timeline({
     return () => clearInterval(interval);
   }, [isPlaying, duration, onTimeChange]);
 
-  // Get icon for track type
-  const getTrackIcon = (type: TimelineTrack["type"]) => {
-    switch (type) {
-      case "video":
-        return <Video className="h-3.5 w-3.5" />;
-      case "audio":
-        return <Music className="h-3.5 w-3.5" />;
-      case "objects":
-        return <Box className="h-3.5 w-3.5" />;
-      case "effects":
-        return <Sparkles className="h-3.5 w-3.5" />;
-    }
-  };
+  // Generate time markers for detail view (every 2 seconds visible)
+  const detailMarkers: { time: number; label: string }[] = [];
+  const visibleDuration = 10; // Show ~10 seconds of detail
+  const startTime = Math.max(0, currentTime - visibleDuration / 2);
+  const endTime = Math.min(duration, startTime + visibleDuration);
 
-  // Generate time markers
-  const markers: { time: number; label: string }[] = [];
-  const markerInterval = zoom >= 2 ? 5 : zoom >= 1 ? 10 : 30; // seconds
-  for (let t = 0; t <= duration; t += markerInterval) {
-    markers.push({
-      time: t,
-      label: `${Math.floor(t / 60)}:${(t % 60).toString().padStart(2, "0")}`,
-    });
+  for (let t = Math.floor(startTime); t <= Math.ceil(endTime); t += 2) {
+    if (t >= 0 && t <= duration) {
+      const hrs = Math.floor(t / 3600);
+      const mins = Math.floor((t % 3600) / 60);
+      const secs = t % 60;
+      detailMarkers.push({
+        time: t,
+        label: `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}:00`,
+      });
+    }
   }
 
   return (
-    <div className={`bg-gv-neutral-900 border-t border-gv-neutral-700 ${className}`}>
-      {/* Timeline Controls Bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gv-neutral-800">
-        {/* Left: Playback Controls */}
-        <div className="flex items-center gap-1">
-          <button
-            onClick={handleSkipBack}
-            className="p-1.5 hover:bg-gv-neutral-700 rounded transition-colors text-gv-neutral-400 hover:text-white"
-            title="Skip back 5s"
-          >
-            <SkipBack className="h-4 w-4" />
-          </button>
-          <button
+    <div className={`bg-[#1a1a1a] border-t border-[#333] ${className}`} ref={timelineRef}>
+      {/* Transport Controls Bar - DaVinci style */}
+      <div className="flex items-center justify-between px-2 py-1.5 bg-[#232323] border-b border-[#333]">
+        {/* Left: Tool Icons */}
+        <div className="flex items-center gap-0.5">
+          <ToolButton icon={<Sliders className="h-4 w-4" />} title="Inspector" />
+          <ToolButton icon={<MousePointer2 className="h-4 w-4" />} title="Selection" />
+          <div className="w-px h-5 bg-[#444] mx-1" />
+          <ToolButton icon={<Scissors className="h-4 w-4" />} title="Cut" />
+          <ToolButton icon={<Magnet className="h-4 w-4" />} title="Snap" />
+          <div className="w-px h-5 bg-[#444] mx-1" />
+          <ToolButton icon={<Flag className="h-4 w-4" />} title="Marker" />
+        </div>
+
+        {/* Center: Playback Controls */}
+        <div className="flex items-center gap-0.5">
+          <TransportButton
+            icon={<SkipBack className="h-4 w-4" />}
+            title="Go to start"
+            onClick={handleSkipToStart}
+          />
+          <TransportButton
+            icon={<ChevronLeft className="h-4 w-4" />}
+            title="Step back"
             onClick={handleStepBack}
-            className="p-1.5 hover:bg-gv-neutral-700 rounded transition-colors text-gv-neutral-400 hover:text-white"
-            title="Step back 1 frame"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            onClick={handlePlayPause}
-            className={`p-2 rounded-full transition-colors ${
+          />
+          <TransportButton
+            icon={
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 12L8 5v14l11-7z" transform="scale(-1,1) translate(-24,0)" />
+              </svg>
+            }
+            title="Play reverse"
+            onClick={handlePlayReverse}
+          />
+          <TransportButton
+            icon={<Square className="h-3.5 w-3.5" fill="currentColor" />}
+            title="Stop"
+            onClick={handleStop}
+          />
+          <TransportButton
+            icon={
               isPlaying
-                ? "bg-gv-primary-500 text-white hover:bg-gv-primary-600"
-                : "bg-gv-neutral-700 text-white hover:bg-gv-neutral-600"
-            }`}
+                ? <Pause className="h-4 w-4" fill="currentColor" />
+                : <Play className="h-4 w-4" fill="currentColor" />
+            }
             title={isPlaying ? "Pause" : "Play"}
-          >
-            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
-          </button>
-          <button
+            onClick={handlePlayPause}
+            active={isPlaying}
+          />
+          <TransportButton
+            icon={<ChevronRight className="h-4 w-4" />}
+            title="Step forward"
             onClick={handleStepForward}
-            className="p-1.5 hover:bg-gv-neutral-700 rounded transition-colors text-gv-neutral-400 hover:text-white"
-            title="Step forward 1 frame"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-          <button
-            onClick={handleSkipForward}
-            className="p-1.5 hover:bg-gv-neutral-700 rounded transition-colors text-gv-neutral-400 hover:text-white"
-            title="Skip forward 5s"
-          >
-            <SkipForward className="h-4 w-4" />
-          </button>
+          />
+          <TransportButton
+            icon={<SkipForward className="h-4 w-4" />}
+            title="Go to end"
+            onClick={handleSkipToEnd}
+          />
+          <TransportButton
+            icon={<RotateCcw className="h-4 w-4" />}
+            title="Loop"
+          />
         </div>
 
-        {/* Center: Time Display */}
-        <div className="flex items-center gap-3">
-          <div className="font-mono text-sm text-white bg-gv-neutral-800 px-3 py-1 rounded">
-            {formatTime(currentTime)}
-          </div>
-          <span className="text-gv-neutral-500">/</span>
-          <div className="font-mono text-sm text-gv-neutral-400">
-            {formatTime(duration)}
-          </div>
-        </div>
-
-        {/* Right: Zoom Controls */}
-        <div className="flex items-center gap-1">
-          <button
-            onClick={handleZoomOut}
-            className="p-1.5 hover:bg-gv-neutral-700 rounded transition-colors text-gv-neutral-400 hover:text-white"
-            title="Zoom out"
-          >
-            <ZoomOut className="h-4 w-4" />
-          </button>
-          <span className="text-xs text-gv-neutral-400 w-12 text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            onClick={handleZoomIn}
-            className="p-1.5 hover:bg-gv-neutral-700 rounded transition-colors text-gv-neutral-400 hover:text-white"
-            title="Zoom in"
-          >
-            <ZoomIn className="h-4 w-4" />
-          </button>
+        {/* Right: Large Timecode Display */}
+        <div className="font-mono text-lg text-[#e0e0e0] tracking-wider min-w-[140px] text-right">
+          {formatTimecode(currentTime)}
         </div>
       </div>
 
-      {/* Timeline Tracks Area */}
-      <div className="flex" ref={timelineRef}>
-        {/* Track Labels */}
-        <div className="flex-shrink-0 w-32 border-r border-gv-neutral-800">
-          {/* Time ruler header */}
-          <div className="h-6 border-b border-gv-neutral-800" />
-
-          {/* Track labels */}
-          {tracks.map((track) => (
-            <div
-              key={track.id}
-              className="h-10 flex items-center gap-2 px-3 border-b border-gv-neutral-800 text-sm"
-              style={{ color: track.color }}
-            >
-              {getTrackIcon(track.type)}
-              <span className="text-gv-neutral-300 truncate">{track.name}</span>
-            </div>
-          ))}
+      {/* Overview Timeline Bar - Compact view of entire timeline */}
+      <div
+        ref={overviewRef}
+        className="h-8 bg-[#2a2a2a] border-b border-[#333] relative cursor-pointer"
+        onMouseDown={handleOverviewMouseDown}
+      >
+        {/* Time markers on overview */}
+        <div className="absolute inset-x-0 top-0 h-3 flex items-end">
+          {[0, 0.25, 0.5, 0.75, 1].map((pct) => {
+            const time = pct * duration;
+            const hrs = Math.floor(time / 3600);
+            const mins = Math.floor((time % 3600) / 60);
+            const secs = Math.floor(time % 60);
+            return (
+              <div
+                key={pct}
+                className="absolute text-[9px] text-[#888] transform -translate-x-1/2"
+                style={{ left: `${pct * 100}%` }}
+              >
+                {`${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}:00`}
+              </div>
+            );
+          })}
         </div>
 
-        {/* Timeline Scrubber Area */}
-        <div
-          className="flex-1 overflow-x-auto"
-          ref={scrubberRef}
-          onScroll={(e) => setScrollPosition(e.currentTarget.scrollLeft)}
-        >
-          <div style={{ width: timelineWidth, minWidth: "100%" }}>
-            {/* Time Ruler */}
-            <div
-              className="h-6 border-b border-gv-neutral-800 relative cursor-pointer"
-              onMouseDown={handleScrubberMouseDown}
-            >
-              {/* Time markers */}
-              {markers.map((marker) => (
-                <div
-                  key={marker.time}
-                  className="absolute top-0 h-full flex flex-col items-center"
-                  style={{ left: `${(marker.time / duration) * 100}%` }}
-                >
-                  <div className="h-2 w-px bg-gv-neutral-600" />
-                  <span className="text-[10px] text-gv-neutral-500 mt-0.5">
-                    {marker.label}
-                  </span>
-                </div>
-              ))}
-
-              {/* Playhead */}
+        {/* Overview clip/region visualization */}
+        <div className="absolute left-0 right-0 bottom-0 h-4 mx-1">
+          <div className="h-full bg-[#4a6fa5] rounded-sm opacity-80 flex items-center">
+            {/* Segment markers - representing content/scenes */}
+            {[0.1, 0.2, 0.35, 0.4, 0.55, 0.6, 0.65, 0.75, 0.8, 0.85, 0.9].map((pct, i) => (
               <div
-                className="absolute top-0 h-full flex flex-col items-center pointer-events-none"
-                style={{ left: `${playheadPosition}%` }}
-              >
-                <div className="w-2.5 h-2.5 bg-red-500 transform -translate-x-1/2 rotate-45" />
-              </div>
-            </div>
-
-            {/* Track Lanes */}
-            {tracks.map((track) => (
-              <div
-                key={track.id}
-                className="h-10 border-b border-gv-neutral-800 relative"
-                onMouseDown={handleScrubberMouseDown}
-              >
-                {/* Track items */}
-                {track.items?.map((item) => (
-                  <div
-                    key={item.id}
-                    className="absolute top-1 h-8 rounded px-2 flex items-center text-xs text-white truncate cursor-move"
-                    style={{
-                      left: `${(item.startTime / duration) * 100}%`,
-                      width: `${(item.duration / duration) * 100}%`,
-                      backgroundColor: track.color,
-                      opacity: 0.8,
-                    }}
-                  >
-                    {item.name}
-                  </div>
-                ))}
-
-                {/* Playhead line */}
-                <div
-                  className="absolute top-0 w-0.5 h-full bg-red-500 pointer-events-none"
-                  style={{ left: `${playheadPosition}%` }}
-                />
-              </div>
+                key={i}
+                className="absolute top-0 bottom-0 w-px bg-[#2a2a2a]"
+                style={{ left: `${pct * 100}%` }}
+              />
             ))}
           </div>
         </div>
+
+        {/* Overview playhead */}
+        <div
+          className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10"
+          style={{ left: `${playheadPosition}%` }}
+        />
+      </div>
+
+      {/* Detail Timeline - Frame-accurate view */}
+      <div
+        ref={detailRef}
+        className="relative cursor-pointer select-none"
+        onMouseDown={handleDetailMouseDown}
+      >
+        {/* Time ruler with frame markers */}
+        <div className="h-5 bg-[#232323] border-b border-[#333] relative">
+          {detailMarkers.map((marker) => {
+            const position = ((marker.time - startTime) / (endTime - startTime)) * 100;
+            if (position < 0 || position > 100) return null;
+            return (
+              <div
+                key={marker.time}
+                className="absolute top-0 flex flex-col items-center"
+                style={{ left: `${position}%` }}
+              >
+                <div className="h-2 w-px bg-[#555]" />
+                <span className="text-[9px] text-[#888] whitespace-nowrap">
+                  {marker.label}
+                </span>
+              </div>
+            );
+          })}
+
+          {/* Playhead triangle */}
+          <div
+            className="absolute -bottom-1 z-20 pointer-events-none"
+            style={{ left: `${playheadPosition}%` }}
+          >
+            <div
+              className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-red-500 transform -translate-x-1/2"
+            />
+          </div>
+        </div>
+
+        {/* Video track with thumbnails */}
+        <div className="h-24 bg-[#1e1e1e] relative overflow-hidden">
+          {/* Thumbnail strip */}
+          <div className="absolute inset-0 flex">
+            {thumbnails.length > 0 ? (
+              thumbnails.map((thumb, i) => (
+                <div
+                  key={i}
+                  className="flex-shrink-0 h-full border-r border-[#333] relative"
+                  style={{ width: `${100 / Math.max(thumbnails.length, 8)}%` }}
+                >
+                  {thumb.imageUrl ? (
+                    <img
+                      src={thumb.imageUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-[#2a3a4a] to-[#1a2a3a]" />
+                  )}
+                  {thumb.label && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[8px] text-[#aaa] px-1 truncate">
+                      {thumb.label}
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              // Default placeholder thumbnails
+              Array.from({ length: 12 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex-shrink-0 h-full border-r border-[#333] bg-gradient-to-br from-[#2a3a4a] to-[#1a2a3a]"
+                  style={{ width: `${100 / 12}%` }}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Playhead line */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10 pointer-events-none"
+            style={{ left: `${playheadPosition}%` }}
+          />
+        </div>
+
+        {/* Text/Graphics track indicator */}
+        <div className="h-6 bg-[#252525] border-t border-[#333] relative flex items-center">
+          <div className="absolute inset-0 flex items-center px-2">
+            <span className="text-[10px] text-red-400 uppercase tracking-wider truncate">
+              3D Scene • Objects • Interactions
+            </span>
+          </div>
+
+          {/* Playhead line continues */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10 pointer-events-none"
+            style={{ left: `${playheadPosition}%` }}
+          />
+        </div>
       </div>
     </div>
+  );
+}
+
+// Tool button for left toolbar
+function ToolButton({
+  icon,
+  title,
+  active = false,
+  onClick
+}: {
+  icon: React.ReactNode;
+  title: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`p-1.5 rounded transition-colors ${
+        active
+          ? "bg-[#4a4a4a] text-white"
+          : "text-[#888] hover:text-white hover:bg-[#333]"
+      }`}
+      title={title}
+    >
+      {icon}
+    </button>
+  );
+}
+
+// Transport button for playback controls
+function TransportButton({
+  icon,
+  title,
+  active = false,
+  onClick
+}: {
+  icon: React.ReactNode;
+  title: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`p-2 rounded transition-colors ${
+        active
+          ? "bg-[#555] text-white"
+          : "text-[#aaa] hover:text-white hover:bg-[#3a3a3a]"
+      }`}
+      title={title}
+    >
+      {icon}
+    </button>
   );
 }
 
