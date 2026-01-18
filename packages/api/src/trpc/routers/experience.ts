@@ -91,11 +91,13 @@ export const experienceRouter = router({
         if (error instanceof TRPCError) {
           throw error;
         }
-        // Log and wrap unexpected errors
+        // Log and wrap unexpected errors with more detail
+        const errorMessage = error instanceof Error ? error.message : String(error);
         console.error(`[experience.get] Unexpected error for id ${input.id}:`, error);
+        console.error(`[experience.get] Error message: ${errorMessage}`);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to load experience",
+          message: `Failed to load experience: ${errorMessage}`,
           cause: error,
         });
       }
