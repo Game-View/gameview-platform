@@ -37,10 +37,10 @@ export const experienceRouter = router({
         });
 
         if (!experience) {
-          console.log(`[experience.get] Experience not found: ${input.id}`);
+          console.log(`[experience.get] Experience not found in database: ${input.id}`);
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "Experience not found",
+            message: "Experience not found. It may have been deleted or the ID is invalid.",
           });
         }
 
@@ -56,31 +56,31 @@ export const experienceRouter = router({
             if (!user) {
               console.log(`[experience.get] User not found for id: ${ctx.userId}`);
               throw new TRPCError({
-                code: "NOT_FOUND",
-                message: "Experience not found",
+                code: "UNAUTHORIZED",
+                message: "Your account was not found. Please try signing out and back in.",
               });
             }
 
             if (!user.creator) {
               console.log(`[experience.get] User has no creator profile: ${ctx.userId}`);
               throw new TRPCError({
-                code: "NOT_FOUND",
-                message: "Experience not found",
+                code: "FORBIDDEN",
+                message: "You need a creator profile to access unpublished experiences. Please complete onboarding.",
               });
             }
 
             if (user.creator.id !== experience.creatorId) {
               console.log(`[experience.get] Creator mismatch: user.creator.id=${user.creator.id}, experience.creatorId=${experience.creatorId}`);
               throw new TRPCError({
-                code: "NOT_FOUND",
-                message: "Experience not found",
+                code: "FORBIDDEN",
+                message: "You don't have permission to access this experience. Only the creator can edit unpublished experiences.",
               });
             }
           } else {
-            console.log(`[experience.get] Not authenticated, experience status: ${experience.status}`);
+            console.log(`[experience.get] Not authenticated, experience status: ${experience.status}, userId: ${ctx.userId}`);
             throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "Experience not found",
+              code: "UNAUTHORIZED",
+              message: "Please sign in to access this unpublished experience.",
             });
           }
         }
