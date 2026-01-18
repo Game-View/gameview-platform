@@ -224,17 +224,17 @@ export function Timeline({
   }
 
   return (
-    <div className={`bg-[#1a1a1a] border-t border-[#333] ${className}`} ref={timelineRef}>
+    <div className={`bg-gv-neutral-900 border-t border-gv-neutral-700 ${className}`} ref={timelineRef}>
       {/* Transport Controls Bar - DaVinci style */}
-      <div className="flex items-center justify-between px-2 py-1.5 bg-[#232323] border-b border-[#333]">
+      <div className="flex items-center justify-between px-2 py-1.5 bg-gv-neutral-800 border-b border-gv-neutral-700">
         {/* Left: Tool Icons */}
         <div className="flex items-center gap-0.5">
           <ToolButton icon={<Sliders className="h-4 w-4" />} title="Inspector" />
           <ToolButton icon={<MousePointer2 className="h-4 w-4" />} title="Selection" />
-          <div className="w-px h-5 bg-[#444] mx-1" />
+          <div className="w-px h-5 bg-gv-neutral-600 mx-1" />
           <ToolButton icon={<Scissors className="h-4 w-4" />} title="Cut" />
           <ToolButton icon={<Magnet className="h-4 w-4" />} title="Snap" />
-          <div className="w-px h-5 bg-[#444] mx-1" />
+          <div className="w-px h-5 bg-gv-neutral-600 mx-1" />
           <ToolButton icon={<Flag className="h-4 w-4" />} title="Marker" />
         </div>
 
@@ -291,7 +291,7 @@ export function Timeline({
         </div>
 
         {/* Right: Large Timecode Display */}
-        <div className="font-mono text-lg text-[#e0e0e0] tracking-wider min-w-[140px] text-right">
+        <div className="font-mono text-lg text-gv-neutral-200 tracking-wider min-w-[140px] text-right">
           {formatTimecode(currentTime)}
         </div>
       </div>
@@ -299,7 +299,7 @@ export function Timeline({
       {/* Overview Timeline Bar - Compact view of entire timeline */}
       <div
         ref={overviewRef}
-        className="h-8 bg-[#2a2a2a] border-b border-[#333] relative cursor-pointer"
+        className="h-8 bg-gv-neutral-800 border-b border-gv-neutral-700 relative cursor-pointer"
         onMouseDown={handleOverviewMouseDown}
       >
         {/* Time markers on overview */}
@@ -312,7 +312,7 @@ export function Timeline({
             return (
               <div
                 key={pct}
-                className="absolute text-[9px] text-[#888] transform -translate-x-1/2"
+                className="absolute text-[9px] text-gv-neutral-500 transform -translate-x-1/2"
                 style={{ left: `${pct * 100}%` }}
               >
                 {`${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}:00`}
@@ -323,12 +323,12 @@ export function Timeline({
 
         {/* Overview clip/region visualization */}
         <div className="absolute left-0 right-0 bottom-0 h-4 mx-1">
-          <div className="h-full bg-[#4a6fa5] rounded-sm opacity-80 flex items-center">
+          <div className="h-full bg-gv-primary-600 rounded-sm opacity-80 flex items-center">
             {/* Segment markers - representing content/scenes */}
             {[0.1, 0.2, 0.35, 0.4, 0.55, 0.6, 0.65, 0.75, 0.8, 0.85, 0.9].map((pct, i) => (
               <div
                 key={i}
-                className="absolute top-0 bottom-0 w-px bg-[#2a2a2a]"
+                className="absolute top-0 bottom-0 w-px bg-gv-neutral-800"
                 style={{ left: `${pct * 100}%` }}
               />
             ))}
@@ -349,7 +349,7 @@ export function Timeline({
         onMouseDown={handleDetailMouseDown}
       >
         {/* Time ruler with frame markers */}
-        <div className="h-5 bg-[#232323] border-b border-[#333] relative">
+        <div className="h-5 bg-gv-neutral-800 border-b border-gv-neutral-700 relative">
           {detailMarkers.map((marker) => {
             const position = ((marker.time - startTime) / (endTime - startTime)) * 100;
             if (position < 0 || position > 100) return null;
@@ -359,8 +359,8 @@ export function Timeline({
                 className="absolute top-0 flex flex-col items-center"
                 style={{ left: `${position}%` }}
               >
-                <div className="h-2 w-px bg-[#555]" />
-                <span className="text-[9px] text-[#888] whitespace-nowrap">
+                <div className="h-2 w-px bg-gv-neutral-600" />
+                <span className="text-[9px] text-gv-neutral-500 whitespace-nowrap">
                   {marker.label}
                 </span>
               </div>
@@ -379,14 +379,14 @@ export function Timeline({
         </div>
 
         {/* Video track with thumbnails */}
-        <div className="h-24 bg-[#1e1e1e] relative overflow-hidden">
+        <div className="h-24 bg-gv-neutral-900 relative overflow-hidden">
           {/* Thumbnail strip */}
           <div className="absolute inset-0 flex">
             {thumbnails.length > 0 ? (
               thumbnails.map((thumb, i) => (
                 <div
                   key={i}
-                  className="flex-shrink-0 h-full border-r border-[#333] relative"
+                  className="flex-shrink-0 h-full border-r border-gv-neutral-700 relative"
                   style={{ width: `${100 / Math.max(thumbnails.length, 8)}%` }}
                 >
                   {thumb.imageUrl ? (
@@ -396,10 +396,10 @@ export function Timeline({
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-[#2a3a4a] to-[#1a2a3a]" />
+                    <div className="w-full h-full bg-gradient-to-br from-gv-primary-900/30 to-gv-neutral-900" />
                   )}
                   {thumb.label && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[8px] text-[#aaa] px-1 truncate">
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[8px] text-gv-neutral-400 px-1 truncate">
                       {thumb.label}
                     </div>
                   )}
@@ -410,7 +410,7 @@ export function Timeline({
               Array.from({ length: 12 }).map((_, i) => (
                 <div
                   key={i}
-                  className="flex-shrink-0 h-full border-r border-[#333] bg-gradient-to-br from-[#2a3a4a] to-[#1a2a3a]"
+                  className="flex-shrink-0 h-full border-r border-gv-neutral-700 bg-gradient-to-br from-gv-primary-900/30 to-gv-neutral-900"
                   style={{ width: `${100 / 12}%` }}
                 />
               ))
@@ -425,9 +425,9 @@ export function Timeline({
         </div>
 
         {/* Text/Graphics track indicator */}
-        <div className="h-6 bg-[#252525] border-t border-[#333] relative flex items-center">
+        <div className="h-6 bg-gv-neutral-800 border-t border-gv-neutral-700 relative flex items-center">
           <div className="absolute inset-0 flex items-center px-2">
-            <span className="text-[10px] text-red-400 uppercase tracking-wider truncate">
+            <span className="text-[10px] text-gv-primary-400 uppercase tracking-wider truncate">
               3D Scene • Objects • Interactions
             </span>
           </div>
@@ -460,8 +460,8 @@ function ToolButton({
       onClick={onClick}
       className={`p-1.5 rounded transition-colors ${
         active
-          ? "bg-[#4a4a4a] text-white"
-          : "text-[#888] hover:text-white hover:bg-[#333]"
+          ? "bg-gv-neutral-600 text-white"
+          : "text-gv-neutral-500 hover:text-white hover:bg-gv-neutral-700"
       }`}
       title={title}
     >
@@ -487,8 +487,8 @@ function TransportButton({
       onClick={onClick}
       className={`p-2 rounded transition-colors ${
         active
-          ? "bg-[#555] text-white"
-          : "text-[#aaa] hover:text-white hover:bg-[#3a3a3a]"
+          ? "bg-gv-neutral-600 text-white"
+          : "text-gv-neutral-400 hover:text-white hover:bg-gv-neutral-700"
       }`}
       title={title}
     >
