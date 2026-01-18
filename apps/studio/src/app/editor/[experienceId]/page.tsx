@@ -19,6 +19,9 @@ import { toast } from "@/stores/toast-store";
 import type { StoredObject, PlacedObject } from "@/lib/objects";
 import { PlaytestMode } from "@/components/playtest";
 import { defaultGameConfig, type GameConfig } from "@/lib/game-logic";
+import { Timeline } from "@/components/editor/Timeline";
+import { SceneTabs, type Scene } from "@/components/editor/SceneTabs";
+import { CameraPreview } from "@/components/editor/CameraPreview";
 
 // Dynamic import for SceneEditor (uses Three.js)
 const SceneEditor = dynamic(
@@ -70,6 +73,16 @@ export default function ExperienceEditorPage() {
   const [gameConfig, setGameConfig] = useState<GameConfig>(defaultGameConfig);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+
+  // New component states
+  const [showTimeline, setShowTimeline] = useState(true);
+  const [showCameraPreview, setShowCameraPreview] = useState(true);
+  const [timelineTime, setTimelineTime] = useState(0);
+  const [isTimelinePlaying, setIsTimelinePlaying] = useState(false);
+  const [scenes, setScenes] = useState<Scene[]>([
+    { id: "scene-1", name: "Main Scene", order: 0 },
+  ]);
+  const [activeSceneId, setActiveSceneId] = useState("scene-1");
 
   // Editor store
   const {
@@ -322,6 +335,59 @@ export default function ExperienceEditorPage() {
     [handlePlaceObject]
   );
 
+  // Scene management handlers
+  const handleAddScene = useCallback(() => {
+    const newScene: Scene = {
+      id: `scene-${Date.now()}`,
+      name: `Scene ${scenes.length + 1}`,
+      order: scenes.length,
+    };
+    setScenes((prev) => [...prev, newScene]);
+    setActiveSceneId(newScene.id);
+    toast.success("Scene added", `${newScene.name} created`);
+  }, [scenes.length]);
+
+  const handleDeleteScene = useCallback((sceneId: string) => {
+    if (scenes.length <= 1) {
+      toast.error("Cannot delete", "You must have at least one scene");
+      return;
+    }
+    setScenes((prev) => prev.filter((s) => s.id !== sceneId));
+    if (activeSceneId === sceneId) {
+      setActiveSceneId(scenes[0]?.id || "");
+    }
+    toast.success("Scene deleted", "Scene removed successfully");
+  }, [scenes, activeSceneId]);
+
+  const handleRenameScene = useCallback((sceneId: string, newName: string) => {
+    setScenes((prev) =>
+      prev.map((s) => (s.id === sceneId ? { ...s, name: newName } : s))
+    );
+  }, []);
+
+  const handleDuplicateScene = useCallback((sceneId: string) => {
+    const sourceScene = scenes.find((s) => s.id === sceneId);
+    if (!sourceScene) return;
+
+    const newScene: Scene = {
+      id: `scene-${Date.now()}`,
+      name: `${sourceScene.name} (Copy)`,
+      order: scenes.length,
+    };
+    setScenes((prev) => [...prev, newScene]);
+    toast.success("Scene duplicated", `${newScene.name} created`);
+  }, [scenes]);
+
+  // Timeline handlers
+  const handleTimelinePlayPause = useCallback(() => {
+    setIsTimelinePlaying((prev) => !prev);
+  }, []);
+
+  const handleTimelineStop = useCallback(() => {
+    setIsTimelinePlaying(false);
+    setTimelineTime(0);
+  }, []);
+
   // Keyboard shortcuts
   useKeyboardShortcut({
     key: "o",
@@ -339,6 +405,16 @@ export default function ExperienceEditorPage() {
     callback: () => {
       saveObjects();
     },
+  });
+
+  useKeyboardShortcut({
+    key: "t",
+    callback: () => setShowTimeline((prev) => !prev),
+  });
+
+  useKeyboardShortcut({
+    key: " ",
+    callback: handleTimelinePlayPause,
   });
 
   // Loading state
@@ -411,92 +487,128 @@ export default function ExperienceEditorPage() {
       </aside>
 
       {/* Main Editor Area */}
-      <main
-        className={`flex-1 relative transition-all ${isDraggingOver ? "ring-4 ring-gv-primary-500 ring-inset" : ""}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        {/* Toggle Buttons */}
-        <div className="absolute top-4 left-4 z-30 flex items-center gap-2">
-          <button
-            onClick={() => setShowLibrary((prev) => !prev)}
-            className="p-2 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-gv text-white transition-colors"
-            title={showLibrary ? "Hide library (O)" : "Show library (O)"}
-          >
-            {showLibrary ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeft className="h-5 w-5" />}
-          </button>
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Scene Tabs */}
+        <SceneTabs
+          scenes={scenes}
+          activeSceneId={activeSceneId}
+          onSceneChange={setActiveSceneId}
+          onAddScene={handleAddScene}
+          onDeleteScene={handleDeleteScene}
+          onRenameScene={handleRenameScene}
+          onDuplicateScene={handleDuplicateScene}
+        />
 
-          {/* Object count */}
-          {placedObjects.length > 0 && (
-            <div className="px-3 py-1.5 bg-black/50 backdrop-blur-sm rounded-gv flex items-center gap-2">
-              <Box className="h-4 w-4 text-gv-primary-400" />
-              <span className="text-white text-sm">
-                {placedObjects.length} object{placedObjects.length !== 1 ? "s" : ""}
-              </span>
+        {/* Editor Content Area */}
+        <div
+          className={`flex-1 relative transition-all ${isDraggingOver ? "ring-4 ring-gv-primary-500 ring-inset" : ""}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {/* Toggle Buttons */}
+          <div className="absolute top-4 left-4 z-30 flex items-center gap-2">
+            <button
+              onClick={() => setShowLibrary((prev) => !prev)}
+              className="p-2 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-gv text-white transition-colors"
+              title={showLibrary ? "Hide library (O)" : "Show library (O)"}
+            >
+              {showLibrary ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeft className="h-5 w-5" />}
+            </button>
+
+            {/* Object count */}
+            {placedObjects.length > 0 && (
+              <div className="px-3 py-1.5 bg-black/50 backdrop-blur-sm rounded-gv flex items-center gap-2">
+                <Box className="h-4 w-4 text-gv-primary-400" />
+                <span className="text-white text-sm">
+                  {placedObjects.length} object{placedObjects.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Right panel toggles */}
+          <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
+            {/* Playtest Button */}
+            <button
+              onClick={() => setIsPlaytestMode(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 backdrop-blur-sm rounded-gv text-white font-medium transition-colors"
+              title="Test your experience"
+            >
+              <Play className="h-4 w-4" />
+              Test
+            </button>
+
+            {/* Publish Button */}
+            <button
+              onClick={handlePublish}
+              disabled={isPublishing || experience?.status === "PUBLISHED"}
+              className={`flex items-center gap-2 px-4 py-2 backdrop-blur-sm rounded-gv text-white font-medium transition-colors ${
+                experience?.status === "PUBLISHED"
+                  ? "bg-green-500 cursor-default"
+                  : isPublishing
+                  ? "bg-gv-primary-500/50 cursor-wait"
+                  : "bg-gv-primary-500 hover:bg-gv-primary-600"
+              }`}
+              title={experience?.status === "PUBLISHED" ? "Already published" : "Publish your experience"}
+            >
+              {isPublishing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              {experience?.status === "PUBLISHED" ? "Published" : isPublishing ? "Publishing..." : "Publish"}
+            </button>
+
+            <button
+              onClick={() => setShowAudioPanel((prev) => !prev)}
+              className={`p-2 backdrop-blur-sm rounded-gv text-white transition-colors ${
+                showAudioPanel ? "bg-gv-primary-500 hover:bg-gv-primary-600" : "bg-black/50 hover:bg-black/70"
+              }`}
+              title={showAudioPanel ? "Hide audio settings" : "Show audio settings"}
+            >
+              <Volume2 className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setShowProperties((prev) => !prev)}
+              className="p-2 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-gv text-white transition-colors"
+              title={showProperties ? "Hide properties (P)" : "Show properties (P)"}
+            >
+              {showProperties ? <PanelRightClose className="h-5 w-5" /> : <PanelRight className="h-5 w-5" />}
+            </button>
+          </div>
+
+          {/* Editor Toolbar */}
+          <EditorToolbar isSaving={isSaving} lastSaved={lastSavedAt} onSave={saveObjects} />
+
+          {/* Viewer Controls (experience name, back button) */}
+          <ViewerControls sceneName={experience.title} onBack={handleBack} isLoading={false} />
+
+          {/* 3D Scene Editor */}
+          <SceneEditor splatUrl={experience.plyUrl || undefined} onSave={saveObjects} />
+
+          {/* Camera Preview - Floating Panel */}
+          {showCameraPreview && (
+            <div className="absolute bottom-4 right-4 z-20 w-72">
+              <CameraPreview
+                isLive={true}
+                onToggleFullscreen={() => setShowCameraPreview(false)}
+              />
             </div>
           )}
         </div>
 
-        {/* Right panel toggles */}
-        <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
-          {/* Playtest Button */}
-          <button
-            onClick={() => setIsPlaytestMode(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 backdrop-blur-sm rounded-gv text-white font-medium transition-colors"
-            title="Test your experience"
-          >
-            <Play className="h-4 w-4" />
-            Test
-          </button>
-
-          {/* Publish Button */}
-          <button
-            onClick={handlePublish}
-            disabled={isPublishing || experience?.status === "PUBLISHED"}
-            className={`flex items-center gap-2 px-4 py-2 backdrop-blur-sm rounded-gv text-white font-medium transition-colors ${
-              experience?.status === "PUBLISHED"
-                ? "bg-green-500 cursor-default"
-                : isPublishing
-                ? "bg-gv-primary-500/50 cursor-wait"
-                : "bg-gv-primary-500 hover:bg-gv-primary-600"
-            }`}
-            title={experience?.status === "PUBLISHED" ? "Already published" : "Publish your experience"}
-          >
-            {isPublishing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Upload className="h-4 w-4" />
-            )}
-            {experience?.status === "PUBLISHED" ? "Published" : isPublishing ? "Publishing..." : "Publish"}
-          </button>
-
-          <button
-            onClick={() => setShowAudioPanel((prev) => !prev)}
-            className={`p-2 backdrop-blur-sm rounded-gv text-white transition-colors ${
-              showAudioPanel ? "bg-gv-primary-500 hover:bg-gv-primary-600" : "bg-black/50 hover:bg-black/70"
-            }`}
-            title={showAudioPanel ? "Hide audio settings" : "Show audio settings"}
-          >
-            <Volume2 className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => setShowProperties((prev) => !prev)}
-            className="p-2 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-gv text-white transition-colors"
-            title={showProperties ? "Hide properties (P)" : "Show properties (P)"}
-          >
-            {showProperties ? <PanelRightClose className="h-5 w-5" /> : <PanelRight className="h-5 w-5" />}
-          </button>
-        </div>
-
-        {/* Editor Toolbar */}
-        <EditorToolbar isSaving={isSaving} lastSaved={lastSavedAt} onSave={saveObjects} />
-
-        {/* Viewer Controls (experience name, back button) */}
-        <ViewerControls sceneName={experience.title} onBack={handleBack} isLoading={false} />
-
-        {/* 3D Scene Editor */}
-        <SceneEditor splatUrl={experience.plyUrl || undefined} onSave={saveObjects} />
+        {/* Timeline */}
+        {showTimeline && (
+          <Timeline
+            duration={60}
+            currentTime={timelineTime}
+            isPlaying={isTimelinePlaying}
+            onTimeChange={setTimelineTime}
+            onPlayPause={handleTimelinePlayPause}
+            onStop={handleTimelineStop}
+          />
+        )}
       </main>
 
       {/* Properties Panel */}
