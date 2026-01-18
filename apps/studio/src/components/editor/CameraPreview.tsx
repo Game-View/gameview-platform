@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   Maximize2,
   Minimize2,
@@ -8,7 +8,6 @@ import {
   Eye,
   EyeOff,
   Settings,
-  Grid3X3,
   Crosshair,
   RotateCcw,
   ChevronDown,

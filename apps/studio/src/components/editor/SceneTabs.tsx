@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react";
 import {
   Plus,
-  X,
   MoreHorizontal,
   Copy,
   Trash2,
