@@ -62,7 +62,7 @@ export function GaussianSplats({
     const viewer = new GaussianSplats3D.Viewer({
       renderer: gl,
       camera: camera as THREE.PerspectiveCamera,
-      useBuiltInControls: false, // We're using our own controls
+      useBuiltInControls: true, // Enable temporarily to find the splats
       ignoreDevicePixelRatio: false,
       gpuAcceleratedSort: true,
       enableSIMDInSort: true,
@@ -99,6 +99,11 @@ export function GaussianSplats({
       .then(() => {
         if (!isDisposedRef.current) {
           console.log("[GaussianSplats] Load complete, starting viewer");
+          // Log scene bounds to understand splat positions
+          const sceneCenter = viewer.getSceneCenter();
+          const sceneRadius = viewer.getSplatMesh()?.getSplatSceneRadius();
+          console.log("[GaussianSplats] Scene center:", sceneCenter);
+          console.log("[GaussianSplats] Scene radius:", sceneRadius);
           onLoadRef.current?.();
           viewer.start();
         }
