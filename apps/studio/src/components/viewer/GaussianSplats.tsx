@@ -2,7 +2,15 @@
 
 import { useEffect, useRef } from "react";
 import { useThree } from "@react-three/fiber";
+import * as THREE from "three";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
+
+// DropInViewer exists at runtime but isn't in the TypeScript types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const DropInViewer = (GaussianSplats3D as any).DropInViewer as new (options: Record<string, unknown>) => THREE.Group & {
+  addSplatScene: (url: string, options: Record<string, unknown>) => Promise<void>;
+  dispose: () => Promise<void>;
+};
 
 export interface GaussianSplatsProps {
   url: string;
@@ -31,7 +39,8 @@ export function GaussianSplats({
   onProgress,
 }: GaussianSplatsProps) {
   const { scene } = useThree();
-  const viewerRef = useRef<GaussianSplats3D.DropInViewer | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const viewerRef = useRef<any>(null);
 
   useEffect(() => {
     console.log("[GaussianSplats] Initializing DropInViewer...");
@@ -40,7 +49,7 @@ export function GaussianSplats({
     // DropInViewer is designed for integration with existing Three.js scenes
     // It extends THREE.Group and handles all the rendering integration internally
     // via onBeforeRender callbacks - no need for useFrame or manual render calls
-    const viewer = new GaussianSplats3D.DropInViewer({
+    const viewer = new DropInViewer({
       gpuAcceleratedSort: true,
       enableSIMDInSort: true,
       sharedMemoryForWorkers: false,
@@ -67,12 +76,7 @@ export function GaussianSplats({
         showLoadingUI: false,
         progressiveLoad: true,
         position: position,
-        rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [
-          number,
-          number,
-          number,
-          string,
-        ],
+        rotation: [rotation[0], rotation[1], rotation[2], "XYZ"],
         scale: [scale, scale, scale],
         onProgress: (percent: number) => {
           console.log(`[GaussianSplats] Loading progress: ${percent.toFixed(1)}%`);
