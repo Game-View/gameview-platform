@@ -16,7 +16,7 @@ import { Loader2 } from "lucide-react";
 import { useEditorStore } from "@/stores/editor-store";
 import type { PlacedObject, ObjectTransform } from "@/lib/objects";
 import { TriggerZoneVisualization } from "./TriggerZoneVisualization";
-import { SplatBackground, SplatBackgroundRef } from "@/components/viewer/SplatBackground";
+import { SceneViewer } from "@/components/viewer/SceneViewer";
 
 interface SceneEditorProps {
   splatUrl?: string;
@@ -25,7 +25,6 @@ interface SceneEditorProps {
 
 export function SceneEditor({ splatUrl, onSave }: SceneEditorProps) {
   const { placedObjects, isDirty } = useEditorStore();
-  const splatRef = useRef<SplatBackgroundRef>(null);
   const [splatLoaded, setSplatLoaded] = useState(false);
   const [splatError, setSplatError] = useState<string | null>(null);
   const [splatProgress, setSplatProgress] = useState(0);
@@ -43,21 +42,22 @@ export function SceneEditor({ splatUrl, onSave }: SceneEditorProps) {
 
   return (
     <div className="relative w-full h-full">
-      {/* Bottom layer: Splat background with its own renderer */}
+      {/* Bottom layer: SceneViewer (known to work) */}
       {splatUrl && (
-        <SplatBackground
-          ref={splatRef}
-          url={splatUrl}
-          onLoad={() => {
-            console.log("[SceneEditor] Splat background loaded");
-            setSplatLoaded(true);
-          }}
-          onError={(err) => {
-            console.error("[SceneEditor] Splat background error:", err);
-            setSplatError(err.message);
-          }}
-          onProgress={(progress) => setSplatProgress(progress)}
-        />
+        <div className="absolute inset-0" style={{ zIndex: 0 }}>
+          <SceneViewer
+            splatUrl={splatUrl}
+            onLoad={() => {
+              console.log("[SceneEditor] SceneViewer loaded");
+              setSplatLoaded(true);
+            }}
+            onError={(err) => {
+              console.error("[SceneEditor] SceneViewer error:", err);
+              setSplatError(err.message);
+            }}
+            onProgress={(progress) => setSplatProgress(progress)}
+          />
+        </div>
       )}
 
       {/* Top layer: R3F Canvas for editor elements (transparent background) */}
@@ -77,8 +77,8 @@ export function SceneEditor({ splatUrl, onSave }: SceneEditorProps) {
             useEditorStore.getState().selectObject(null);
           }}
         >
-          {/* Camera sync component */}
-          <CameraSync splatRef={splatRef} />
+          {/* Camera sync component - temporarily disabled */}
+          {/* <CameraSync /> */}
 
           <Suspense fallback={<LoadingIndicator />}>
             <EditorScene />
