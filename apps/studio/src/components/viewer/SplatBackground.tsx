@@ -67,16 +67,33 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
         }
 
         console.log(`[SplatBackground:${instanceId}] Initializing...`);
-
-        // DEBUG: Log container dimensions
         console.log(`[SplatBackground:${instanceId}] Container dimensions: ${container.clientWidth}x${container.clientHeight}`);
 
-        // Let the viewer create its own renderer (like SceneViewer does successfully)
-        // Then move its canvas to our container
+        // Create Three.js renderer - EXACTLY like SceneViewer
+        const renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: true,
+        });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+        rendererRef.current = renderer;
+
+        // Create camera - EXACTLY like SceneViewer
+        const camera = new THREE.PerspectiveCamera(
+          75,
+          container.clientWidth / container.clientHeight,
+          0.1,
+          1000
+        );
+        camera.position.set(0, 2, 5);
+        camera.lookAt(0, 0, 0);
+        cameraRef.current = camera;
+
+        // Create viewer with orbit controls - EXACTLY like SceneViewer
         const viewer = new GaussianSplats3D.Viewer({
-          cameraUp: [0, 1, 0],
-          initialCameraPosition: [0, 2, 5],
-          initialCameraLookAt: [0, 0, 0],
+          renderer,
+          camera,
           useBuiltInControls: true,
           ignoreDevicePixelRatio: false,
           gpuAcceleratedSort: true,
@@ -86,43 +103,19 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
           halfPrecisionCovariancesOnGPU: true,
           dynamicScene: false,
           webXRMode: GaussianSplats3D.WebXRMode.None,
-          renderMode: GaussianSplats3D.RenderMode.Always,
+          renderMode: GaussianSplats3D.RenderMode.OnChange,
           sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual,
           antialiased: true,
           focalAdjustment: 1.0,
-          logLevel: GaussianSplats3D.LogLevel.Debug,
+          logLevel: GaussianSplats3D.LogLevel.None,
           sphericalHarmonicsDegree: 0,
         });
 
         viewerRef.current = viewer;
 
-        // Get viewer's canvas and move it to our container
-        const canvas = viewer.renderer.domElement;
-        console.log(`[SplatBackground:${instanceId}] Viewer created, moving canvas...`);
-
-        // Remove from wherever the viewer put it (usually body)
-        if (canvas.parentElement) {
-          canvas.parentElement.removeChild(canvas);
-        }
-
-        // Add to our container and style it to fill
-        canvas.style.position = "absolute";
-        canvas.style.top = "0";
-        canvas.style.left = "0";
-        canvas.style.width = "100%";
-        canvas.style.height = "100%";
-        container.appendChild(canvas);
-
-        // Resize to match container
-        viewer.renderer.setSize(container.clientWidth, container.clientHeight);
-
-        // Store refs
-        cameraRef.current = viewer.camera;
-        rendererRef.current = viewer.renderer;
-
-        console.log(`[SplatBackground:${instanceId}] Canvas moved, size: ${canvas.width}x${canvas.height}`);
         console.log(`[SplatBackground:${instanceId}] Loading splats from:`, url);
 
+        // Load the splat file
         viewer
           .addSplatScene(url, {
             showLoadingUI: false,
@@ -150,12 +143,12 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
 
         // Handle resize
         const handleResize = () => {
-          if (!container || !isMounted || !viewer) return;
+          if (!container || !isMounted) return;
           const width = container.clientWidth;
           const height = container.clientHeight;
-          viewer.camera.aspect = width / height;
-          viewer.camera.updateProjectionMatrix();
-          viewer.renderer.setSize(width, height);
+          camera.aspect = width / height;
+          camera.updateProjectionMatrix();
+          renderer.setSize(width, height);
         };
 
         window.addEventListener("resize", handleResize);
@@ -200,7 +193,7 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
       <div
         ref={containerRef}
         className="absolute inset-0"
-        style={{ zIndex: 0, background: "#ff00ff" }} // DEBUG: Magenta to verify div positioning
+        style={{ zIndex: 0 }}
       />
     );
   }
