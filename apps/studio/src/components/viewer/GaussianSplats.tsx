@@ -220,11 +220,10 @@ export function GaussianSplats({
   const frameCountRef = useRef(0);
   const lastLoggedStateRef = useRef<string>("");
 
-  // Manual rendering AFTER R3F completes
-  // The DropInViewer's onBeforeRender calls update() but doesn't render
-  // We need to explicitly render the splatMesh using the internal viewer's render method
-  // Priority -1 means this runs AFTER R3F's render (which is at priority 0)
-  useFrame(({ gl: renderer }) => {
+  // Update splats BEFORE R3F renders (high priority = runs first)
+  // DropInViewer normally uses onBeforeRender to call update(), but we call it explicitly
+  // to ensure proper sorting/preparation happens before rendering
+  useFrame(({ gl: renderer, camera: frameCamera }) => {
     frameCountRef.current++;
     const dropInViewer = viewerRef.current;
 
@@ -247,40 +246,21 @@ export function GaussianSplats({
     if (dropInViewer && isReadyRef.current && !isDisposedRef.current) {
       const internalViewer = dropInViewer.viewer;
 
-      // Ensure the internal viewer has the renderer and camera
+      // Call update() to sort splats and prepare for rendering
+      // This is normally called by onBeforeRender, but we call it explicitly
+      // to ensure it runs with the correct renderer and camera
       if (internalViewer && internalViewer.splatRenderReady) {
-        // Make sure the internal viewer has the correct renderer and camera
-        // This is normally done by onBeforeRender, but we ensure it here
-        if (internalViewer.renderer !== renderer) {
-          internalViewer.renderer = renderer;
-          if (internalViewer.splatMesh) {
-            internalViewer.splatMesh.setRenderer(renderer);
+        try {
+          // update() sets up the renderer/camera and runs splat sorting
+          internalViewer.update(renderer, frameCamera);
+        } catch (e) {
+          if (frameCountRef.current % 300 === 0) {
+            console.warn('[GaussianSplats] Update error:', e);
           }
         }
-        if (internalViewer.camera !== camera) {
-          internalViewer.camera = camera;
-        }
-
-        // Set autoClear to false to preserve R3F's render
-        const savedAutoClear = renderer.autoClear;
-        renderer.autoClear = false;
-
-        // Manually render the splatMesh if the internal render method exists
-        if (typeof internalViewer.render === 'function') {
-          try {
-            internalViewer.render();
-          } catch (e) {
-            // Log only once per state change
-            if (frameCountRef.current % 300 === 0) {
-              console.warn('[GaussianSplats] Render error:', e);
-            }
-          }
-        }
-
-        renderer.autoClear = savedAutoClear;
       }
     }
-  }, -1); // Priority -1 runs AFTER R3F's render pass
+  }, 1); // Priority 1 = runs BEFORE R3F's default render pass (priority 0)
 
   return <group ref={groupRef} />;
 }
