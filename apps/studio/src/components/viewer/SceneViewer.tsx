@@ -227,13 +227,19 @@ export function SceneViewer({
         cameraUp: [0, 1, 0], // Standard Y-up
         initialCameraPosition: [initPos.x, initPos.y, initPos.z],
         initialCameraLookAt: [initTarget.x, initTarget.y, initTarget.z],
-        sharedMemoryForWorkers: false,
+        // Quality settings
+        sphericalHarmonicsDegree: 2, // Highest quality (0, 1, or 2) - uses SH data if available
+        antialiased: true,
+        focalAdjustment: 1.0, // Increase for scenes with small details
+        ignoreDevicePixelRatio: false, // Use full device resolution
+        // Performance settings
+        sharedMemoryForWorkers: false, // Disabled for broader compatibility
+        gpuAcceleratedSort: true, // Faster sorting
+        // Rendering settings
         renderMode: GaussianSplats3D.RenderMode.Always,
         sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
         logLevel: GaussianSplats3D.LogLevel.None,
-        sphericalHarmonicsDegree: 0,
-        // Keep built-in controls - they work for orbit mode
-        // FPS controls layer on top when pointer is locked
+        // Controls
         useBuiltInControls: true,
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -251,34 +257,24 @@ export function SceneViewer({
       initializedUrlRef.current = splatUrl;
       initializingRef.current = false;
 
-      console.log('[SceneViewer] Viewer created, checking renderer...');
-      console.log('[SceneViewer] Renderer:', viewerInternal.renderer);
-      console.log('[SceneViewer] Camera:', viewerInternal.camera);
-
       // Move the viewer's canvas into our container
       // The viewer creates and appends its canvas to document.body by default
       setTimeout(() => {
-        // Find the canvas created by the viewer (should be in body)
         const viewerCanvas = viewerInternal.renderer?.domElement;
-        console.log('[SceneViewer] Canvas element:', viewerCanvas);
-        console.log('[SceneViewer] Canvas parent:', viewerCanvas?.parentElement);
-        console.log('[SceneViewer] Container:', container);
-        console.log('[SceneViewer] Container dimensions:', container.clientWidth, 'x', container.clientHeight);
-
         if (viewerCanvas && viewerCanvas.parentElement !== container) {
-          // Style the canvas to fill our container
           viewerCanvas.style.width = '100%';
           viewerCanvas.style.height = '100%';
           viewerCanvas.style.position = 'absolute';
           viewerCanvas.style.top = '0';
           viewerCanvas.style.left = '0';
           container.appendChild(viewerCanvas);
-          console.log('[SceneViewer] Canvas moved to container');
 
-          // Resize to match container
+          // Resize to match container with device pixel ratio for sharpness
           const width = container.clientWidth;
           const height = container.clientHeight;
+          const pixelRatio = window.devicePixelRatio || 1;
           viewerInternal.renderer?.setSize(width, height);
+          viewerInternal.renderer?.setPixelRatio(pixelRatio);
           if (viewerInternal.camera) {
             const cam = viewerInternal.camera;
             if (cam.aspect !== undefined) {
@@ -286,20 +282,14 @@ export function SceneViewer({
               cam.updateProjectionMatrix();
             }
           }
-          console.log('[SceneViewer] Renderer resized to:', width, 'x', height);
-        } else if (!viewerCanvas) {
-          console.error('[SceneViewer] No canvas found on renderer!');
-        } else {
-          console.log('[SceneViewer] Canvas already in container');
         }
       }, 50);
 
-      // Load the splat file
-      console.log('[SceneViewer] Starting to load splat from:', splatUrl);
+      // Load the splat file with quality settings
       viewer
         .addSplatScene(splatUrl, {
           showLoadingUI: false,
-          progressiveLoad: true,
+          progressiveLoad: false, // Load full quality immediately
           onProgress: (percent: number) => {
             if (!isMounted) return;
             setLoadProgress(Math.round(percent));
@@ -310,13 +300,9 @@ export function SceneViewer({
           if (!isMounted) {
             return;
           }
-          console.log('[SceneViewer] Splat loaded successfully');
-          console.log('[SceneViewer] Splat count:', viewerInternal.splatMesh?.getSplatCount?.() || 'unknown');
-          console.log('[SceneViewer] Camera position:', viewerInternal.camera?.position);
           setIsLoading(false);
           onLoadRef.current?.();
           viewer.start();
-          console.log('[SceneViewer] Viewer started');
         })
         .catch((err: Error) => {
           if (!isMounted) return;
