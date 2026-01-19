@@ -76,6 +76,11 @@ function EditorScene({ splatUrl }: EditorSceneProps) {
   const [splatError, setSplatError] = useState<string | null>(null);
   const [splatProgress, setSplatProgress] = useState(0);
 
+  // Debug logging
+  useEffect(() => {
+    console.log("[EditorScene] splatUrl:", splatUrl);
+  }, [splatUrl]);
+
   const {
     placedObjects,
     selectedObjectId,

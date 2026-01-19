@@ -125,6 +125,7 @@ export default function ExperienceEditorPage() {
 
         if (result?.result?.data?.json) {
           const exp = result.result.data.json;
+          console.log("[Editor] Experience loaded:", { id: exp.id, title: exp.title, plyUrl: exp.plyUrl });
           setExperience(exp);
 
           // Load placed objects from scenesData
@@ -139,6 +140,7 @@ export default function ExperienceEditorPage() {
 
           // Check if experience is ready for editing
           if (!exp.plyUrl) {
+            console.warn("[Editor] No plyUrl - experience still processing");
             setError("This experience is still processing. Please wait for the 3D scene to be ready.");
           }
         } else {
