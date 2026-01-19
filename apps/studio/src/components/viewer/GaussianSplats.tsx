@@ -165,7 +165,7 @@ export function GaussianSplats({
 
   // Render splats after R3F renders (priority > 0 runs after default)
   // Using renderPriority 1 to run after R3F's default render
-  useFrame(({ gl, scene, camera: frameCamera }) => {
+  useFrame(({ gl }) => {
     if (viewerRef.current && isReadyRef.current && !isDisposedRef.current) {
       // Save autoClear state
       const wasAutoClear = gl.autoClear;
