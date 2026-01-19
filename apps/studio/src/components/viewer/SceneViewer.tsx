@@ -58,6 +58,8 @@ export function SceneViewer({
   const groundLevelRef = useRef(initialPosition.y);
   const animationFrameRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
+  const initializingRef = useRef(false);
+  const initializedUrlRef = useRef<string | null>(null);
 
   // Use refs for callbacks to avoid re-triggering effect
   const onLoadRef = useRef(onLoad);
@@ -194,33 +196,45 @@ export function SceneViewer({
   useEffect(() => {
     if (!containerRef.current || !splatUrl) return;
 
+    // Skip if already initialized for this URL or currently initializing
+    if (viewerRef.current || initializingRef.current || initializedUrlRef.current === splatUrl) {
+      return;
+    }
+
+    // Mark as initializing
+    initializingRef.current = true;
+
     const container = containerRef.current;
     let isMounted = true;
     const instanceId = Math.random().toString(36).substr(2, 9);
 
-    // Debug logging disabled for production
-    // console.log(`[SceneViewer:${instanceId}] Effect started, waiting for stability...`);
-
     // Delay to handle React Strict Mode's double-mount cycle
     const initTimeout = setTimeout(() => {
-      if (!isMounted) {
+      // Double-check all conditions after delay
+      if (!isMounted || viewerRef.current || !initializingRef.current) {
+        initializingRef.current = false;
         return;
       }
+
+      // Use current prop values at initialization time
+      const initPos = initialPosition;
+      const initTarget = initialTarget;
+      const useFpsControls = enableFirstPersonControls;
 
       // Let the viewer create its own renderer, camera, and controls
       // This is the simplest initialization pattern from the library docs
       // Note: TypeScript types are incomplete, so we use type assertion
       const viewerOptions = {
         cameraUp: [0, 1, 0], // Standard Y-up
-        initialCameraPosition: [initialPosition.x, initialPosition.y, initialPosition.z],
-        initialCameraLookAt: [initialTarget.x, initialTarget.y, initialTarget.z],
+        initialCameraPosition: [initPos.x, initPos.y, initPos.z],
+        initialCameraLookAt: [initTarget.x, initTarget.y, initTarget.z],
         sharedMemoryForWorkers: false,
         renderMode: GaussianSplats3D.RenderMode.Always,
         sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
         logLevel: GaussianSplats3D.LogLevel.None,
         sphericalHarmonicsDegree: 0,
         // Disable built-in orbit controls when using first-person controls
-        useBuiltInControls: !enableFirstPersonControls,
+        useBuiltInControls: !useFpsControls,
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewer = new GaussianSplats3D.Viewer(viewerOptions as any);
@@ -229,11 +243,13 @@ export function SceneViewer({
       const viewerInternal = viewer as any;
 
       // Calculate initial yaw from lookAt target
-      const dx = initialTarget.x - initialPosition.x;
-      const dz = initialTarget.z - initialPosition.z;
+      const dx = initTarget.x - initPos.x;
+      const dz = initTarget.z - initPos.z;
       rotationRef.current.yaw = Math.atan2(dx, dz) * (180 / Math.PI);
 
       viewerRef.current = viewer;
+      initializedUrlRef.current = splatUrl;
+      initializingRef.current = false;
 
       // Move the viewer's canvas into our container
       // The viewer creates and appends its canvas to document.body by default
@@ -315,6 +331,7 @@ export function SceneViewer({
     return () => {
       isMounted = false;
       clearTimeout(initTimeout);
+      initializingRef.current = false;
 
       // Remove resize listener if it was set
       const cleanupResize = (window as unknown as Record<string, () => void>)[`sceneViewerResize_${instanceId}`];
@@ -324,18 +341,38 @@ export function SceneViewer({
       }
 
       if (viewerRef.current) {
-        // Remove canvas from container if present
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const canvas = (viewerRef.current as any).renderer?.domElement;
-        if (canvas && container.contains(canvas)) {
-          container.removeChild(canvas);
+        const viewerInternal = viewerRef.current as any;
+
+        // Stop and dispose first
+        try {
+          viewerRef.current.stop();
+        } catch {
+          // Ignore stop errors
         }
-        viewerRef.current.stop();
-        viewerRef.current.dispose();
+
+        // Safely remove canvas - check parent before removing
+        try {
+          const canvas = viewerInternal.renderer?.domElement;
+          if (canvas && canvas.parentElement) {
+            canvas.parentElement.removeChild(canvas);
+          }
+        } catch {
+          // Ignore canvas removal errors
+        }
+
+        // Dispose the viewer to release WebGL context
+        try {
+          viewerRef.current.dispose();
+        } catch {
+          // Ignore dispose errors
+        }
+
         viewerRef.current = null;
+        initializedUrlRef.current = null;
       }
     };
-  }, [splatUrl, initialPosition, initialTarget, enableFirstPersonControls]);
+  }, [splatUrl]); // Only re-run when URL changes - other props read at init time
 
   // First-person controls animation loop
   useEffect(() => {
