@@ -219,7 +219,6 @@ export function SceneViewer({
       // Use current prop values at initialization time
       const initPos = initialPosition;
       const initTarget = initialTarget;
-      const useFpsControls = enableFirstPersonControls;
 
       // Let the viewer create its own renderer, camera, and controls
       // This is the simplest initialization pattern from the library docs
@@ -406,6 +405,7 @@ export function SceneViewer({
     const gravity = 20;
 
     // Sync rotation from current camera when entering FPS mode
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const viewerInternal = viewerRef.current as any;
     if (viewerInternal?.camera) {
       const euler = new THREE.Euler().setFromQuaternion(viewerInternal.camera.quaternion, 'YXZ');
