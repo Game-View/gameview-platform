@@ -116,9 +116,25 @@ export function GaussianSplats({
             console.log("[GaussianSplats] SplatMesh found, visible:", splatMesh.visible);
             console.log("[GaussianSplats] SplatMesh in scene:", splatMesh.parent?.type);
 
-            // Ensure mesh is visible
+            // Debug material info
+            const material = splatMesh.material;
+            console.log("[GaussianSplats] Material type:", material?.type);
+            console.log("[GaussianSplats] Material visible:", material?.visible);
+            console.log("[GaussianSplats] Material transparent:", material?.transparent);
+
+            // Ensure mesh is visible and renderable
             splatMesh.visible = true;
             splatMesh.frustumCulled = false;
+            splatMesh.renderOrder = 999; // Render last
+
+            // Fix material settings if needed
+            if (material) {
+              material.visible = true;
+              material.transparent = true;
+              material.depthTest = true;
+              material.depthWrite = false; // Splats are transparent
+              material.needsUpdate = true;
+            }
 
             // CRITICAL: Manually add splatMesh to R3F scene if not already added
             if (!splatMesh.parent) {
@@ -129,6 +145,17 @@ export function GaussianSplats({
 
             const splatCount = splatMesh.getSplatCount?.() || 0;
             console.log("[GaussianSplats] Total splats:", splatCount);
+
+            // Debug geometry
+            const geometry = splatMesh.geometry;
+            if (geometry) {
+              console.log("[GaussianSplats] Geometry type:", geometry.type);
+              console.log("[GaussianSplats] Geometry attributes:", Object.keys(geometry.attributes || {}));
+              const posAttr = geometry.attributes?.position;
+              if (posAttr) {
+                console.log("[GaussianSplats] Position attribute count:", posAttr.count);
+              }
+            }
 
             // Focus camera on the middle splat
             if (splatCount > 0) {
