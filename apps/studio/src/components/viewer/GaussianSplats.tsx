@@ -24,7 +24,7 @@ export function GaussianSplats({
   onError,
   onProgress,
 }: GaussianSplatsProps) {
-  const { gl, camera } = useThree();
+  const { gl, camera, scene } = useThree();
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
   const groupRef = useRef<THREE.Group>(null);
   const isLoadingRef = useRef(false);
@@ -44,8 +44,8 @@ export function GaussianSplats({
   }, [onLoad, onError, onProgress]);
 
   useEffect(() => {
-    if (!gl || !camera || !url) {
-      console.log("[GaussianSplats] Missing dependencies:", { hasGL: !!gl, hasCamera: !!camera, url });
+    if (!gl || !camera || !url || !scene) {
+      console.log("[GaussianSplats] Missing dependencies:", { hasGL: !!gl, hasCamera: !!camera, hasScene: !!scene, url });
       return;
     }
 
@@ -59,28 +59,30 @@ export function GaussianSplats({
 
     console.log("[GaussianSplats] Starting load for URL:", url);
 
-    // Create viewer that integrates with existing Three.js scene
-    // Using selfDrivenMode: false to let R3F control the render loop
+    // Create viewer using dropInMode for integration with existing Three.js scene
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const viewerOptions: any = {
+      // dropInMode: integrate with existing Three.js app
+      // The splatMesh will be added to our scene, and we handle rendering
+      threeScene: scene,
       renderer: gl,
       camera: camera as THREE.PerspectiveCamera,
       useBuiltInControls: false, // Use our own OrbitControls
-      selfDrivenMode: false, // Let R3F control the render loop (not in TS types)
+      selfDrivenMode: false, // We control the render loop
       ignoreDevicePixelRatio: false,
       gpuAcceleratedSort: true,
       enableSIMDInSort: true,
       sharedMemoryForWorkers: false, // Disabled - requires cross-origin isolation headers
       integerBasedSort: false, // Disable - causes issues with large scene ranges
       halfPrecisionCovariancesOnGPU: true,
-      dynamicScene: true, // Try dynamic scene for better tree building
+      dynamicScene: true,
       webXRMode: GaussianSplats3D.WebXRMode.None,
       renderMode: GaussianSplats3D.RenderMode.Always,
-      sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant, // Try instant reveal
+      sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
       antialiased: true,
       focalAdjustment: 1.0,
       logLevel: GaussianSplats3D.LogLevel.Debug,
-      sphericalHarmonicsDegree: 0, // Try degree 0 - PLY might not have higher SH
+      sphericalHarmonicsDegree: 0,
     };
     const viewer = new GaussianSplats3D.Viewer(viewerOptions);
 
@@ -90,7 +92,7 @@ export function GaussianSplats({
     viewer
       .addSplatScene(url, {
         showLoadingUI: false,
-        progressiveLoad: false, // Disable progressive load for compatibility
+        progressiveLoad: false,
         position: position,
         rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
         scale: [scale, scale, scale],
@@ -103,28 +105,32 @@ export function GaussianSplats({
       })
       .then(() => {
         if (!isDisposedRef.current) {
-          console.log("[GaussianSplats] Load complete, starting viewer");
+          console.log("[GaussianSplats] Load complete");
 
-          // Try to get splat count and focus on middle splat
+          // Get splat mesh and info
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const splatMesh = (viewer as any).getSplatMesh?.();
+          const viewerAny = viewer as any;
+          const splatMesh = viewerAny.splatMesh;
+
           if (splatMesh) {
+            console.log("[GaussianSplats] SplatMesh found, visible:", splatMesh.visible);
+            console.log("[GaussianSplats] SplatMesh in scene:", splatMesh.parent?.type);
+
+            // Ensure mesh is visible
+            splatMesh.visible = true;
+            splatMesh.frustumCulled = false;
+
             const splatCount = splatMesh.getSplatCount?.() || 0;
             console.log("[GaussianSplats] Total splats:", splatCount);
 
-            // Focus camera on the middle splat to center the view
+            // Focus camera on the middle splat
             if (splatCount > 0) {
               const middleSplatIdx = Math.floor(splatCount / 2);
-              console.log("[GaussianSplats] Focusing on splat:", middleSplatIdx);
-
-              // Get splat position to log for debugging
               const splatPosition = new THREE.Vector3();
               if (splatMesh.getSplatCenter) {
                 splatMesh.getSplatCenter(middleSplatIdx, splatPosition);
-                // Log individual values for clarity
                 console.log("[GaussianSplats] Middle splat position: x=" + splatPosition.x + ", y=" + splatPosition.y + ", z=" + splatPosition.z);
 
-                // Move camera to look at this position
                 camera.position.set(
                   splatPosition.x + 2,
                   splatPosition.y + 2,
@@ -134,13 +140,13 @@ export function GaussianSplats({
                 console.log("[GaussianSplats] Camera moved to: x=" + camera.position.x + ", y=" + camera.position.y + ", z=" + camera.position.z);
               }
             }
+          } else {
+            console.log("[GaussianSplats] No splatMesh found!");
           }
 
           onLoadRef.current?.();
-
-          // Mark as ready for useFrame rendering
           isReadyRef.current = true;
-          console.log("[GaussianSplats] Viewer ready, will render after R3F");
+          console.log("[GaussianSplats] Ready for rendering");
         }
       })
       .catch((err: Error) => {
@@ -160,29 +166,15 @@ export function GaussianSplats({
         viewerRef.current = null;
       }
     };
-  // Only re-run when URL or core dependencies change, not callbacks
-  }, [url, gl, camera]);
+  }, [url, gl, camera, scene]);
 
-  // Render splats after R3F renders (priority > 0 runs after default)
-  // Using renderPriority 1 to run after R3F's default render
-  useFrame(({ gl }) => {
+  // Update splat sorting each frame (viewer handles the rendering since splatMesh is in scene)
+  useFrame(() => {
     if (viewerRef.current && isReadyRef.current && !isDisposedRef.current) {
-      // Save autoClear state
-      const wasAutoClear = gl.autoClear;
-
-      // Disable autoClear so viewer doesn't clear R3F's render
-      gl.autoClear = false;
-
-      // Update and render the splat viewer
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const viewer = viewerRef.current as any;
-      viewer.update();
-      viewer.render();
-
-      // Restore autoClear
-      gl.autoClear = wasAutoClear;
+      (viewerRef.current as any).update();
     }
-  }, 1); // Priority 1 = runs after default R3F render
+  });
 
   return <group ref={groupRef} />;
 }
