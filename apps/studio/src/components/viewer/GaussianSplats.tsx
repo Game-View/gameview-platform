@@ -24,14 +24,11 @@ export function GaussianSplats({
   onError,
   onProgress,
 }: GaussianSplatsProps) {
-  const { gl, camera, scene } = useThree();
-  // DropInViewer extends THREE.Object3D and can be added directly to scene
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const viewerRef = useRef<any>(null);
+  const { gl, camera } = useThree();
+  const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
   const groupRef = useRef<THREE.Group>(null);
   const isLoadingRef = useRef(false);
   const isDisposedRef = useRef(false);
-  const isReadyRef = useRef(false);
 
   // Use refs for callbacks to avoid effect re-runs
   const onLoadRef = useRef(onLoad);
@@ -57,8 +54,8 @@ export function GaussianSplats({
   }, [position, rotation, scale]);
 
   useEffect(() => {
-    if (!gl || !camera || !url || !scene) {
-      console.log("[GaussianSplats] Missing dependencies:", { hasGL: !!gl, hasCamera: !!camera, hasScene: !!scene, url });
+    if (!gl || !camera || !url) {
+      console.log("[GaussianSplats] Missing dependencies:", { hasGL: !!gl, hasCamera: !!camera, url });
       return;
     }
 
@@ -76,42 +73,34 @@ export function GaussianSplats({
     }
     isLoadingRef.current = true;
 
-    console.log(`[GaussianSplats ${instanceId}] Starting load with DropInViewer for URL:`, url);
+    console.log(`[GaussianSplats ${instanceId}] Starting load with Viewer for URL:`, url);
 
-    // Use DropInViewer - designed to be added to existing Three.js scenes
-    // It extends THREE.Object3D and integrates with the scene graph
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const DropInViewer = (GaussianSplats3D as any).DropInViewer;
+    // Track if THIS specific effect run has been disposed
+    let isThisRunDisposed = false;
 
-    if (!DropInViewer) {
-      console.error("[GaussianSplats] DropInViewer not found in library!");
-      return;
-    }
-
-    const viewer = new DropInViewer({
+    // Use the regular Viewer class (like the player) - NOT DropInViewer
+    // This gives us direct control over rendering
+    const viewer = new GaussianSplats3D.Viewer({
+      renderer: gl,
+      camera: camera as THREE.PerspectiveCamera,
+      useBuiltInControls: false, // We're using our own controls
+      ignoreDevicePixelRatio: false,
       gpuAcceleratedSort: true,
       enableSIMDInSort: true,
       sharedMemoryForWorkers: false, // Disabled - requires cross-origin isolation headers
       integerBasedSort: false, // Disable - causes issues with large scene ranges
       halfPrecisionCovariancesOnGPU: true,
       dynamicScene: true,
+      webXRMode: GaussianSplats3D.WebXRMode.None,
+      renderMode: GaussianSplats3D.RenderMode.Always,
       sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
       antialiased: true,
+      focalAdjustment: 1.0,
       logLevel: GaussianSplats3D.LogLevel.Debug,
       sphericalHarmonicsDegree: 0,
     });
 
     viewerRef.current = viewer;
-
-    // Track if THIS specific effect run has been disposed
-    // (isDisposedRef is shared and can change, but we need per-run tracking)
-    let isThisRunDisposed = false;
-
-    // Add DropInViewer to the R3F scene - this is the key!
-    // DropInViewer extends THREE.Object3D so it can be added like any mesh
-    scene.add(viewer);
-    console.log(`[GaussianSplats ${instanceId}] DropInViewer added to scene, children:`, viewer.children.length);
-    console.log(`[GaussianSplats ${instanceId}] Scene children:`, scene.children.length);
 
     // Load the splat scene using refs for position/rotation/scale
     const pos = positionRef.current;
@@ -119,38 +108,26 @@ export function GaussianSplats({
     const scl = scaleRef.current;
 
     viewer
-      .addSplatScenes([{
-        path: url,
+      .addSplatScene(url, {
+        showLoadingUI: false,
+        progressiveLoad: true,
         position: pos,
-        rotation: [rot[0], rot[1], rot[2], "XYZ"],
+        rotation: [rot[0], rot[1], rot[2], "XYZ"] as [number, number, number, string],
         scale: [scl, scl, scl],
-      }], false) // false = don't show loading UI
+        onProgress: (percent: number) => {
+          onProgressRef.current?.(percent);
+        },
+      })
       .then(() => {
         // Check BOTH the local flag AND verify this viewer is still current
         if (!isThisRunDisposed && viewerRef.current === viewer) {
-          console.log(`[GaussianSplats ${instanceId}] Load complete with DropInViewer`);
+          console.log(`[GaussianSplats ${instanceId}] Load complete`);
 
           // Get splat info for camera positioning
           const splatMesh = viewer.splatMesh;
-          console.log(`[GaussianSplats ${instanceId}] SplatMesh:`, splatMesh);
-          console.log(`[GaussianSplats ${instanceId}] DropInViewer children:`, viewer.children.length, viewer.children.map((c: THREE.Object3D) => c.type));
-
           if (splatMesh) {
             const splatCount = splatMesh.getSplatCount?.() || 0;
             console.log(`[GaussianSplats ${instanceId}] Total splats:`, splatCount);
-            console.log(`[GaussianSplats ${instanceId}] SplatMesh visible:`, splatMesh.visible);
-            console.log(`[GaussianSplats ${instanceId}] SplatMesh parent:`, splatMesh.parent?.type);
-            console.log(`[GaussianSplats ${instanceId}] DropInViewer in scene:`, viewer.parent?.type);
-
-            // Log material info
-            if (splatMesh.material) {
-              console.log(`[GaussianSplats ${instanceId}] Material:`, splatMesh.material.type, {
-                visible: splatMesh.material.visible,
-                transparent: splatMesh.material.transparent,
-                depthWrite: splatMesh.material.depthWrite,
-                depthTest: splatMesh.material.depthTest,
-              });
-            }
 
             // Focus camera on the middle splat
             if (splatCount > 0) {
@@ -159,10 +136,6 @@ export function GaussianSplats({
               if (splatMesh.getSplatCenter) {
                 splatMesh.getSplatCenter(middleSplatIdx, splatPosition);
                 console.log(`[GaussianSplats ${instanceId}] Middle splat position: x=${splatPosition.x.toFixed(2)}, y=${splatPosition.y.toFixed(2)}, z=${splatPosition.z.toFixed(2)}`);
-
-                // Check if position is reasonable
-                const distance = splatPosition.length();
-                console.log(`[GaussianSplats ${instanceId}] Distance from origin: ${distance.toFixed(2)}`);
 
                 camera.position.set(
                   splatPosition.x + 2,
@@ -175,11 +148,13 @@ export function GaussianSplats({
             }
           }
 
+          // Start the viewer's render loop - this is key!
+          viewer.start();
+          console.log(`[GaussianSplats ${instanceId}] Viewer started`);
+
           onLoadRef.current?.();
-          isReadyRef.current = true;
-          console.log(`[GaussianSplats ${instanceId}] Ready for rendering`);
         } else {
-          console.log(`[GaussianSplats ${instanceId}] Load complete but this run was disposed (isThisRunDisposed=${isThisRunDisposed}, viewerMatch=${viewerRef.current === viewer})`);
+          console.log(`[GaussianSplats ${instanceId}] Load complete but this run was disposed`);
         }
       })
       .catch((err: Error) => {
@@ -192,17 +167,16 @@ export function GaussianSplats({
       });
 
     return () => {
-      console.log(`[GaussianSplats ${instanceId}] Cleanup - disposing DropInViewer`);
+      console.log(`[GaussianSplats ${instanceId}] Cleanup - disposing Viewer`);
       // Mark this specific effect run as disposed
       isThisRunDisposed = true;
       isDisposedRef.current = true;
       isLoadingRef.current = false;
-      isReadyRef.current = false;
       if (viewerRef.current === viewer) {
         // Only dispose if this is still the current viewer
-        console.log(`[GaussianSplats ${instanceId}] Removing from scene and disposing`);
-        scene.remove(viewer);
+        console.log(`[GaussianSplats ${instanceId}] Stopping and disposing viewer`);
         try {
+          viewer.stop();
           viewer.dispose();
         } catch (e) {
           console.warn(`[GaussianSplats ${instanceId}] Error during dispose:`, e);
@@ -214,53 +188,21 @@ export function GaussianSplats({
     };
   // Only depend on url and core Three.js objects - position/rotation/scale use refs
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, gl, camera, scene]);
+  }, [url, gl, camera]);
 
   // Frame counter for debugging
   const frameCountRef = useRef(0);
-  const lastLoggedStateRef = useRef<string>("");
 
-  // Update splats BEFORE R3F renders (high priority = runs first)
-  // DropInViewer normally uses onBeforeRender to call update(), but we call it explicitly
-  // to ensure proper sorting/preparation happens before rendering
-  useFrame(({ gl: renderer, camera: frameCamera }) => {
+  // Log rendering status periodically
+  useFrame(() => {
     frameCountRef.current++;
-    const dropInViewer = viewerRef.current;
 
-    // Log state changes (not every frame)
-    const currentState = `viewer=${!!dropInViewer},ready=${isReadyRef.current},disposed=${isDisposedRef.current}`;
-    if (currentState !== lastLoggedStateRef.current) {
-      console.log(`[GaussianSplats] State change at frame ${frameCountRef.current}: ${currentState}`);
-      if (dropInViewer?.viewer) {
-        const iv = dropInViewer.viewer;
-        console.log(`[GaussianSplats] Internal viewer: initialized=${iv.initialized}, splatRenderReady=${iv.splatRenderReady}, renderer=${!!iv.renderer}`);
-      }
-      lastLoggedStateRef.current = currentState;
+    // Log every 300 frames (~5 seconds at 60fps)
+    if (frameCountRef.current % 300 === 0 && viewerRef.current) {
+      const viewer = viewerRef.current;
+      console.log(`[GaussianSplats] Frame ${frameCountRef.current}: initialized=${viewer.initialized}, splatRenderReady=${viewer.splatRenderReady}`);
     }
-
-    // Log every 300 frames (~5 seconds at 60fps) if viewer is ready
-    if (frameCountRef.current % 300 === 0 && dropInViewer && isReadyRef.current) {
-      console.log(`[GaussianSplats] Frame ${frameCountRef.current}: Rendering active`);
-    }
-
-    if (dropInViewer && isReadyRef.current && !isDisposedRef.current) {
-      const internalViewer = dropInViewer.viewer;
-
-      // Call update() to sort splats and prepare for rendering
-      // This is normally called by onBeforeRender, but we call it explicitly
-      // to ensure it runs with the correct renderer and camera
-      if (internalViewer && internalViewer.splatRenderReady) {
-        try {
-          // update() sets up the renderer/camera and runs splat sorting
-          internalViewer.update(renderer, frameCamera);
-        } catch (e) {
-          if (frameCountRef.current % 300 === 0) {
-            console.warn('[GaussianSplats] Update error:', e);
-          }
-        }
-      }
-    }
-  }, 1); // Priority 1 = runs BEFORE R3F's default render pass (priority 0)
+  });
 
   return <group ref={groupRef} />;
 }
