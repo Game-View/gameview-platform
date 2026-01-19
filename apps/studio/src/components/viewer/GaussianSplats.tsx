@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useThree, useFrame } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
 
@@ -132,8 +132,9 @@ export function GaussianSplats({
           }
 
           onLoadRef.current?.();
-          // Don't call viewer.start() - we'll update manually via useFrame
-          console.log("[GaussianSplats] Viewer ready for manual updates");
+          // Start the viewer - needed for internal sorting/animation
+          viewer.start();
+          console.log("[GaussianSplats] Viewer started");
         }
       })
       .catch((err: Error) => {
@@ -154,20 +155,6 @@ export function GaussianSplats({
     };
   // Only re-run when URL or core dependencies change, not callbacks
   }, [url, gl, camera]);
-
-  // Manual render update - integrate with R3F's render loop
-  useFrame(() => {
-    if (viewerRef.current && !isDisposedRef.current) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const viewer = viewerRef.current as any;
-      if (viewer.update) {
-        viewer.update();
-      }
-      if (viewer.render) {
-        viewer.render();
-      }
-    }
-  });
 
   return <group ref={groupRef} />;
 }
