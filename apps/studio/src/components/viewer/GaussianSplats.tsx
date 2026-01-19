@@ -137,6 +137,15 @@ export function GaussianSplats({
           }
 
           onLoadRef.current?.();
+
+          // Add the splat mesh to R3F's scene so it renders properly
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const splatMeshObj = (viewer as any).splatMesh;
+          if (splatMeshObj && groupRef.current) {
+            groupRef.current.add(splatMeshObj);
+            console.log("[GaussianSplats] Added splatMesh to R3F scene");
+          }
+
           // Mark as ready for useFrame updates (selfDrivenMode: false)
           isReadyRef.current = true;
           console.log("[GaussianSplats] Viewer ready for manual updates");
