@@ -47,17 +47,14 @@ export function SceneViewer({
     let isMounted = true;
     const instanceId = Math.random().toString(36).substr(2, 9);
 
-    console.log(`[SceneViewer:${instanceId}] Effect started, waiting for stability...`);
+    // Debug logging disabled for production
+    // console.log(`[SceneViewer:${instanceId}] Effect started, waiting for stability...`);
 
     // Delay to handle React Strict Mode's double-mount cycle
     const initTimeout = setTimeout(() => {
       if (!isMounted) {
-        console.log(`[SceneViewer:${instanceId}] Unmounted during delay, skipping`);
         return;
       }
-
-      console.log(`[SceneViewer:${instanceId}] Initializing...`);
-      console.log(`[SceneViewer:${instanceId}] Container dimensions: ${container.clientWidth}x${container.clientHeight}`);
 
       // Let the viewer create its own renderer, camera, and controls
       // This is the simplest initialization pattern from the library docs
@@ -69,7 +66,7 @@ export function SceneViewer({
         sharedMemoryForWorkers: false,
         renderMode: GaussianSplats3D.RenderMode.Always,
         sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
-        logLevel: GaussianSplats3D.LogLevel.Debug, // Enable debug logging
+        logLevel: GaussianSplats3D.LogLevel.None,
         sphericalHarmonicsDegree: 0,
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,7 +83,6 @@ export function SceneViewer({
         // Find the canvas created by the viewer (should be in body)
         const viewerCanvas = viewerInternal.renderer?.domElement;
         if (viewerCanvas && viewerCanvas.parentElement !== container) {
-          console.log(`[SceneViewer:${instanceId}] Moving canvas to container`);
           // Style the canvas to fill our container
           viewerCanvas.style.width = '100%';
           viewerCanvas.style.height = '100%';
@@ -109,8 +105,6 @@ export function SceneViewer({
         }
       }, 50);
 
-      console.log(`[SceneViewer:${instanceId}] Loading splats from:`, splatUrl);
-
       // Load the splat file
       viewer
         .addSplatScene(splatUrl, {
@@ -124,34 +118,15 @@ export function SceneViewer({
         })
         .then(() => {
           if (!isMounted) {
-            console.log(`[SceneViewer:${instanceId}] Loaded but unmounted, ignoring`);
             return;
           }
-          console.log(`[SceneViewer:${instanceId}] Splats loaded, starting viewer`);
-
-          // DEBUG: Log viewer internal state
-          console.log(`[SceneViewer:${instanceId}] Viewer splatMesh:`, viewerInternal.splatMesh);
-          console.log(`[SceneViewer:${instanceId}] Scene children:`, viewerInternal.scene?.children?.length);
-          if (viewerInternal.splatMesh) {
-            console.log(`[SceneViewer:${instanceId}] SplatMesh visible:`, viewerInternal.splatMesh.visible);
-            console.log(`[SceneViewer:${instanceId}] SplatMesh position:`, viewerInternal.splatMesh.position);
-            console.log(`[SceneViewer:${instanceId}] SplatMesh geometry:`, viewerInternal.splatMesh.geometry);
-          }
-
           setIsLoading(false);
           onLoadRef.current?.();
           viewer.start();
-
-          // DEBUG: Check state after start
-          setTimeout(() => {
-            console.log(`[SceneViewer:${instanceId}] After start - splatMesh:`, viewerInternal.splatMesh);
-            console.log(`[SceneViewer:${instanceId}] After start - camera position:`, viewerInternal.camera?.position);
-            console.log(`[SceneViewer:${instanceId}] After start - renderer info:`, viewerInternal.renderer?.info?.render);
-          }, 500);
         })
         .catch((err: Error) => {
           if (!isMounted) return;
-          console.error(`[SceneViewer:${instanceId}] Failed to load:`, err);
+          console.error(`[SceneViewer] Failed to load:`, err);
           setError(err.message || "Failed to load 3D scene");
           setIsLoading(false);
           onErrorRef.current?.(err);
@@ -180,7 +155,6 @@ export function SceneViewer({
 
     // Cleanup
     return () => {
-      console.log(`[SceneViewer:${instanceId}] Cleanup starting...`);
       isMounted = false;
       clearTimeout(initTimeout);
 

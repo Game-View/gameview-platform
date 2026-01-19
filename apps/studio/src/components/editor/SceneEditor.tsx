@@ -60,10 +60,13 @@ export function SceneEditor({ splatUrl, onSave }: SceneEditorProps) {
         </div>
       )}
 
-      {/* Top layer: R3F Canvas - COMPLETELY REMOVED to test WebGL context conflict */}
-      {/* TODO: Re-enable once splat rendering is working */}
-      {false && (
-        <div className="absolute inset-0" style={{ zIndex: 1 }}>
+      {/* Top layer: R3F Canvas for editor tools (grid, gizmos, objects) */}
+      {/* Shows after splats are loaded - uses pointer-events: none to allow splat navigation */}
+      {splatLoaded && (
+        <div
+          className="absolute inset-0"
+          style={{ zIndex: 1, pointerEvents: 'none' }}
+        >
           <Canvas
             camera={{ position: [5, 5, 5], fov: 50 }}
             gl={{
@@ -73,7 +76,7 @@ export function SceneEditor({ splatUrl, onSave }: SceneEditorProps) {
               preserveDrawingBuffer: true,
             }}
             dpr={[1, 2]}
-            style={{ background: "transparent" }}
+            style={{ background: "transparent", pointerEvents: 'none' }}
             onPointerMissed={() => {
               useEditorStore.getState().selectObject(null);
             }}
