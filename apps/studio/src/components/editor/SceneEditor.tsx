@@ -61,13 +61,14 @@ export function SceneEditor({ splatUrl, onSave }: SceneEditorProps) {
       )}
 
       {/* Top layer: R3F Canvas for editor elements (transparent background) */}
-      {/* DEBUG: Set opacity to 0.3 to see if splat layer renders underneath */}
-      <div className="absolute inset-0" style={{ zIndex: 1, opacity: 0.3 }}>
+      {/* DEBUG: Full opacity - splat layer has magenta bg (div) and cyan clear (canvas) */}
+      <div className="absolute inset-0" style={{ zIndex: 1 }}>
         <Canvas
           camera={{ position: [5, 5, 5], fov: 50 }}
           gl={{
             antialias: true,
             alpha: true, // Enable transparency
+            premultipliedAlpha: false, // Important for proper compositing with layer below
             preserveDrawingBuffer: true,
           }}
           dpr={[1, 2]}

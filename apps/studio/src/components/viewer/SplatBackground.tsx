@@ -68,15 +68,23 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
 
         console.log(`[SplatBackground:${instanceId}] Initializing...`);
 
+        // DEBUG: Log container dimensions
+        console.log(`[SplatBackground:${instanceId}] Container dimensions: ${container.clientWidth}x${container.clientHeight}`);
+
         // Create dedicated renderer for splats
+        // NOTE: Use alpha: true like the working SceneViewer
         const renderer = new THREE.WebGLRenderer({
           antialias: true,
-          alpha: false,
+          alpha: true,
         });
         renderer.setSize(container.clientWidth, container.clientHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.setClearColor(0x1a1a1a);
+        // DEBUG: Use bright cyan to verify canvas is rendering
+        renderer.setClearColor(0x00ffff);
         container.appendChild(renderer.domElement);
+
+        // DEBUG: Verify canvas was added
+        console.log(`[SplatBackground:${instanceId}] Canvas added, size: ${renderer.domElement.width}x${renderer.domElement.height}`);
         rendererRef.current = renderer;
 
         // Create camera
@@ -192,7 +200,7 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
       <div
         ref={containerRef}
         className="absolute inset-0"
-        style={{ zIndex: 0 }}
+        style={{ zIndex: 0, background: "#ff00ff" }} // DEBUG: Magenta to verify div positioning
       />
     );
   }
