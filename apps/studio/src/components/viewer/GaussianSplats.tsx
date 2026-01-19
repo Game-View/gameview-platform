@@ -124,7 +124,8 @@ export function GaussianSplats({
           console.log(`[GaussianSplats ${instanceId}] Load complete`);
 
           // Get splat info for camera positioning
-          const splatMesh = viewer.splatMesh;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const splatMesh = (viewer as any).splatMesh;
           if (splatMesh) {
             const splatCount = splatMesh.getSplatCount?.() || 0;
             console.log(`[GaussianSplats ${instanceId}] Total splats:`, splatCount);
