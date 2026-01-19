@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import * as THREE from "three";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
 
 export interface SceneViewerProps {
@@ -25,7 +24,6 @@ export function SceneViewer({
 }: SceneViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -61,53 +59,50 @@ export function SceneViewer({
       console.log(`[SceneViewer:${instanceId}] Initializing...`);
       console.log(`[SceneViewer:${instanceId}] Container dimensions: ${container.clientWidth}x${container.clientHeight}`);
 
-      // Create Three.js renderer
-      const renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: true,
-      });
-      renderer.setSize(container.clientWidth, container.clientHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      container.appendChild(renderer.domElement);
-      rendererRef.current = renderer;
-
-      // DEBUG: Set bright background to verify canvas is visible
-      renderer.setClearColor(0xff0000); // Bright red
-
-      console.log(`[SceneViewer:${instanceId}] Canvas created: ${renderer.domElement.width}x${renderer.domElement.height}`);
-
-      // Create camera
-      const camera = new THREE.PerspectiveCamera(
-        75,
-        container.clientWidth / container.clientHeight,
-        0.1,
-        1000
-      );
-      camera.position.set(initialPosition.x, initialPosition.y, initialPosition.z);
-      camera.lookAt(initialTarget.x, initialTarget.y, initialTarget.z);
-
-      // Create viewer with orbit controls
+      // Let the viewer create its own renderer, camera, and controls
+      // This is the simplest initialization pattern from the library docs
       const viewer = new GaussianSplats3D.Viewer({
-        renderer,
-        camera,
-        useBuiltInControls: true,
-        ignoreDevicePixelRatio: false,
-        gpuAcceleratedSort: true,
-        enableSIMDInSort: true,
+        cameraUp: [0, 1, 0], // Standard Y-up
+        initialCameraPosition: [initialPosition.x, initialPosition.y, initialPosition.z],
+        initialCameraLookAt: [initialTarget.x, initialTarget.y, initialTarget.z],
         sharedMemoryForWorkers: false,
-        integerBasedSort: true,
-        halfPrecisionCovariancesOnGPU: true,
-        dynamicScene: false,
-        webXRMode: GaussianSplats3D.WebXRMode.None,
-        renderMode: GaussianSplats3D.RenderMode.Always, // Force continuous rendering
-        sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant, // Instant reveal
-        antialiased: true,
-        focalAdjustment: 1.0,
-        logLevel: GaussianSplats3D.LogLevel.None,
+        renderMode: GaussianSplats3D.RenderMode.Always,
+        sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
+        logLevel: GaussianSplats3D.LogLevel.Debug, // Enable debug logging
         sphericalHarmonicsDegree: 0,
       });
 
       viewerRef.current = viewer;
+
+      // Move the viewer's canvas into our container
+      // The viewer creates and appends its canvas to document.body by default
+      setTimeout(() => {
+        // Find the canvas created by the viewer (should be in body)
+        const viewerCanvas = viewer.renderer?.domElement;
+        if (viewerCanvas && viewerCanvas.parentElement !== container) {
+          console.log(`[SceneViewer:${instanceId}] Moving canvas to container`);
+          // Style the canvas to fill our container
+          viewerCanvas.style.width = '100%';
+          viewerCanvas.style.height = '100%';
+          viewerCanvas.style.position = 'absolute';
+          viewerCanvas.style.top = '0';
+          viewerCanvas.style.left = '0';
+          container.appendChild(viewerCanvas);
+
+          // Resize to match container
+          const width = container.clientWidth;
+          const height = container.clientHeight;
+          viewer.renderer?.setSize(width, height);
+          if (viewer.camera) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cam = viewer.camera as any;
+            if (cam.aspect !== undefined) {
+              cam.aspect = width / height;
+              cam.updateProjectionMatrix();
+            }
+          }
+        }
+      }, 50);
 
       console.log(`[SceneViewer:${instanceId}] Loading splats from:`, splatUrl);
 
@@ -128,9 +123,26 @@ export function SceneViewer({
             return;
           }
           console.log(`[SceneViewer:${instanceId}] Splats loaded, starting viewer`);
+
+          // DEBUG: Log viewer internal state
+          console.log(`[SceneViewer:${instanceId}] Viewer splatMesh:`, viewer.splatMesh);
+          console.log(`[SceneViewer:${instanceId}] Scene children:`, viewer.scene?.children?.length);
+          if (viewer.splatMesh) {
+            console.log(`[SceneViewer:${instanceId}] SplatMesh visible:`, viewer.splatMesh.visible);
+            console.log(`[SceneViewer:${instanceId}] SplatMesh position:`, viewer.splatMesh.position);
+            console.log(`[SceneViewer:${instanceId}] SplatMesh geometry:`, viewer.splatMesh.geometry);
+          }
+
           setIsLoading(false);
           onLoadRef.current?.();
           viewer.start();
+
+          // DEBUG: Check state after start
+          setTimeout(() => {
+            console.log(`[SceneViewer:${instanceId}] After start - splatMesh:`, viewer.splatMesh);
+            console.log(`[SceneViewer:${instanceId}] After start - camera position:`, viewer.camera?.position);
+            console.log(`[SceneViewer:${instanceId}] After start - renderer info:`, viewer.renderer?.info?.render);
+          }, 500);
         })
         .catch((err: Error) => {
           if (!isMounted) return;
@@ -142,12 +154,16 @@ export function SceneViewer({
 
       // Handle resize
       const handleResize = () => {
-        if (!container || !isMounted) return;
+        if (!container || !isMounted || !viewer.renderer || !viewer.camera) return;
         const width = container.clientWidth;
         const height = container.clientHeight;
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
-        renderer.setSize(width, height);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cam = viewer.camera as any;
+        if (cam.aspect !== undefined) {
+          cam.aspect = width / height;
+          cam.updateProjectionMatrix();
+        }
+        viewer.renderer.setSize(width, height);
       };
 
       window.addEventListener("resize", handleResize);
@@ -172,17 +188,14 @@ export function SceneViewer({
       }
 
       if (viewerRef.current) {
+        // Remove canvas from container if present
+        const canvas = viewerRef.current.renderer?.domElement;
+        if (canvas && container.contains(canvas)) {
+          container.removeChild(canvas);
+        }
         viewerRef.current.stop();
         viewerRef.current.dispose();
         viewerRef.current = null;
-      }
-
-      if (rendererRef.current) {
-        rendererRef.current.dispose();
-        if (container.contains(rendererRef.current.domElement)) {
-          container.removeChild(rendererRef.current.domElement);
-        }
-        rendererRef.current = null;
       }
     };
   }, [splatUrl]); // Only re-run when URL changes
