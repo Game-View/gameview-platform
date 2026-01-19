@@ -25,7 +25,9 @@ export function GaussianSplats({
   onProgress,
 }: GaussianSplatsProps) {
   const { gl, camera, scene } = useThree();
-  const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
+  // DropInViewer extends THREE.Object3D and can be added directly to scene
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const viewerRef = useRef<any>(null);
   const groupRef = useRef<THREE.Group>(null);
   const isLoadingRef = useRef(false);
   const isDisposedRef = useRef(false);
@@ -57,105 +59,56 @@ export function GaussianSplats({
     isLoadingRef.current = true;
     isDisposedRef.current = false;
 
-    console.log("[GaussianSplats] Starting load for URL:", url);
+    console.log("[GaussianSplats] Starting load with DropInViewer for URL:", url);
 
-    // Create viewer using dropInMode for integration with existing Three.js scene
+    // Use DropInViewer - designed to be added to existing Three.js scenes
+    // It extends THREE.Object3D and integrates with the scene graph
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const viewerOptions: any = {
-      // dropInMode: integrate with existing Three.js app
-      // The splatMesh will be added to our scene, and we handle rendering
-      threeScene: scene,
-      renderer: gl,
-      camera: camera as THREE.PerspectiveCamera,
-      useBuiltInControls: false, // Use our own OrbitControls
-      selfDrivenMode: false, // We control the render loop
-      ignoreDevicePixelRatio: false,
+    const DropInViewer = (GaussianSplats3D as any).DropInViewer;
+
+    if (!DropInViewer) {
+      console.error("[GaussianSplats] DropInViewer not found in library!");
+      return;
+    }
+
+    const viewer = new DropInViewer({
       gpuAcceleratedSort: true,
       enableSIMDInSort: true,
       sharedMemoryForWorkers: false, // Disabled - requires cross-origin isolation headers
       integerBasedSort: false, // Disable - causes issues with large scene ranges
       halfPrecisionCovariancesOnGPU: true,
       dynamicScene: true,
-      webXRMode: GaussianSplats3D.WebXRMode.None,
-      renderMode: GaussianSplats3D.RenderMode.Always,
       sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
       antialiased: true,
-      focalAdjustment: 1.0,
       logLevel: GaussianSplats3D.LogLevel.Debug,
       sphericalHarmonicsDegree: 0,
-    };
-    const viewer = new GaussianSplats3D.Viewer(viewerOptions);
+    });
 
     viewerRef.current = viewer;
 
+    // Add DropInViewer to the R3F scene - this is the key!
+    // DropInViewer extends THREE.Object3D so it can be added like any mesh
+    scene.add(viewer);
+    console.log("[GaussianSplats] DropInViewer added to scene");
+
     // Load the splat scene
     viewer
-      .addSplatScene(url, {
-        showLoadingUI: false,
-        progressiveLoad: false,
+      .addSplatScenes([{
+        path: url,
         position: position,
-        rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
+        rotation: [rotation[0], rotation[1], rotation[2], "XYZ"],
         scale: [scale, scale, scale],
-        onProgress: (percent: number) => {
-          if (!isDisposedRef.current) {
-            console.log("[GaussianSplats] Progress:", percent + "%");
-            onProgressRef.current?.(percent);
-          }
-        },
-      })
+      }], false) // false = don't show loading UI
       .then(() => {
         if (!isDisposedRef.current) {
-          console.log("[GaussianSplats] Load complete");
+          console.log("[GaussianSplats] Load complete with DropInViewer");
 
-          // Get splat mesh and info
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const viewerAny = viewer as any;
-          const splatMesh = viewerAny.splatMesh;
-
+          // Get splat info for camera positioning
+          const splatMesh = viewer.splatMesh;
           if (splatMesh) {
-            console.log("[GaussianSplats] SplatMesh found, visible:", splatMesh.visible);
-            console.log("[GaussianSplats] SplatMesh in scene:", splatMesh.parent?.type);
-
-            // Debug material info
-            const material = splatMesh.material;
-            console.log("[GaussianSplats] Material type:", material?.type);
-            console.log("[GaussianSplats] Material visible:", material?.visible);
-            console.log("[GaussianSplats] Material transparent:", material?.transparent);
-
-            // Ensure mesh is visible and renderable
-            splatMesh.visible = true;
-            splatMesh.frustumCulled = false;
-            splatMesh.renderOrder = 999; // Render last
-
-            // Fix material settings if needed
-            if (material) {
-              material.visible = true;
-              material.transparent = true;
-              material.depthTest = true;
-              material.depthWrite = false; // Splats are transparent
-              material.needsUpdate = true;
-            }
-
-            // CRITICAL: Manually add splatMesh to R3F scene if not already added
-            if (!splatMesh.parent) {
-              console.log("[GaussianSplats] Adding splatMesh to R3F scene manually");
-              scene.add(splatMesh);
-              console.log("[GaussianSplats] SplatMesh now in scene:", splatMesh.parent?.type);
-            }
-
             const splatCount = splatMesh.getSplatCount?.() || 0;
             console.log("[GaussianSplats] Total splats:", splatCount);
-
-            // Debug geometry
-            const geometry = splatMesh.geometry;
-            if (geometry) {
-              console.log("[GaussianSplats] Geometry type:", geometry.type);
-              console.log("[GaussianSplats] Geometry attributes:", Object.keys(geometry.attributes || {}));
-              const posAttr = geometry.attributes?.position;
-              if (posAttr) {
-                console.log("[GaussianSplats] Position attribute count:", posAttr.count);
-              }
-            }
+            console.log("[GaussianSplats] DropInViewer in scene:", viewer.parent?.type);
 
             // Focus camera on the middle splat
             if (splatCount > 0) {
@@ -174,8 +127,6 @@ export function GaussianSplats({
                 console.log("[GaussianSplats] Camera moved to: x=" + camera.position.x + ", y=" + camera.position.y + ", z=" + camera.position.z);
               }
             }
-          } else {
-            console.log("[GaussianSplats] No splatMesh found!");
           }
 
           onLoadRef.current?.();
@@ -191,28 +142,24 @@ export function GaussianSplats({
       });
 
     return () => {
-      console.log("[GaussianSplats] Cleanup - disposing viewer");
+      console.log("[GaussianSplats] Cleanup - disposing DropInViewer");
       isDisposedRef.current = true;
       isLoadingRef.current = false;
       isReadyRef.current = false;
       if (viewerRef.current) {
-        // Remove splatMesh from scene before disposing
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const splatMesh = (viewerRef.current as any).splatMesh;
-        if (splatMesh && splatMesh.parent) {
-          splatMesh.parent.remove(splatMesh);
-        }
+        // Remove from scene
+        scene.remove(viewerRef.current);
         viewerRef.current.dispose();
         viewerRef.current = null;
       }
     };
-  }, [url, gl, camera, scene]);
+  }, [url, gl, camera, scene, position, rotation, scale]);
 
-  // Update splat sorting each frame (viewer handles the rendering since splatMesh is in scene)
+  // DropInViewer handles its own rendering when part of the scene
+  // We just need to call update() each frame for sorting
   useFrame(() => {
     if (viewerRef.current && isReadyRef.current && !isDisposedRef.current) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (viewerRef.current as any).update();
+      viewerRef.current.update();
     }
   });
 
