@@ -233,8 +233,9 @@ export function SceneViewer({
         sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
         logLevel: GaussianSplats3D.LogLevel.None,
         sphericalHarmonicsDegree: 0,
-        // Disable built-in orbit controls when using first-person controls
-        useBuiltInControls: !useFpsControls,
+        // Keep built-in controls - they work for orbit mode
+        // FPS controls layer on top when pointer is locked
+        useBuiltInControls: true,
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewer = new GaussianSplats3D.Viewer(viewerOptions as any);
@@ -395,13 +396,23 @@ export function SceneViewer({
   }, [splatUrl]); // Only re-run when URL changes - other props read at init time
 
   // First-person controls animation loop
+  // Only active when pointer is locked - otherwise orbit controls work
   useEffect(() => {
-    if (!enableFirstPersonControls || isLoading) return;
+    if (!enableFirstPersonControls || isLoading || !isPointerLocked) return;
 
     const keyboardLookSpeed = 90; // degrees per second
     const spinSpeed = 180; // degrees per second
     const verticalSpeed = 4;
     const gravity = 20;
+
+    // Sync rotation from current camera when entering FPS mode
+    const viewerInternal = viewerRef.current as any;
+    if (viewerInternal?.camera) {
+      const euler = new THREE.Euler().setFromQuaternion(viewerInternal.camera.quaternion, 'YXZ');
+      rotationRef.current.yaw = euler.y * (180 / Math.PI);
+      rotationRef.current.pitch = euler.x * (180 / Math.PI);
+      groundLevelRef.current = viewerInternal.camera.position.y;
+    }
 
     const animate = (currentTime: number) => {
       if (!viewerRef.current) return;
@@ -411,8 +422,8 @@ export function SceneViewer({
       lastTimeRef.current = currentTime;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const viewerInternal = viewerRef.current as any;
-      const camera = viewerInternal.camera;
+      const viewerInternalLoop = viewerRef.current as any;
+      const camera = viewerInternalLoop.camera;
       if (!camera) {
         animationFrameRef.current = requestAnimationFrame(animate);
         return;
@@ -518,7 +529,7 @@ export function SceneViewer({
         animationFrameRef.current = null;
       }
     };
-  }, [enableFirstPersonControls, isLoading, movementSpeed]);
+  }, [enableFirstPersonControls, isLoading, isPointerLocked, movementSpeed]);
 
   return (
     <div ref={containerRef} className="w-full h-full relative bg-black">
