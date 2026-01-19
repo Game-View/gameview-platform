@@ -102,7 +102,7 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
         const viewer = new GaussianSplats3D.Viewer({
           renderer,
           camera,
-          useBuiltInControls: false,
+          useBuiltInControls: true, // DEBUG: Enable to test if this fixes rendering
           ignoreDevicePixelRatio: false,
           gpuAcceleratedSort: true,
           enableSIMDInSort: true,
