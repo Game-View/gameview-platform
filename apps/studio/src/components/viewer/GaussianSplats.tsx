@@ -174,11 +174,14 @@ export function GaussianSplats({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, gl, camera, scene]);
 
-  // DropInViewer handles its own rendering when part of the scene
-  // We just need to call update() each frame for sorting
+  // DropInViewer handles its own rendering and sorting when part of the scene
+  // Only call update if the method exists (some versions may not have it)
   useFrame(() => {
     if (viewerRef.current && isReadyRef.current && !isDisposedRef.current) {
-      viewerRef.current.update();
+      // Check if update method exists before calling
+      if (typeof viewerRef.current.update === 'function') {
+        viewerRef.current.update();
+      }
     }
   });
 
