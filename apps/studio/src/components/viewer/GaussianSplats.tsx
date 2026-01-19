@@ -45,19 +45,32 @@ export function GaussianSplats({
     onProgressRef.current = onProgress;
   }, [onLoad, onError, onProgress]);
 
+  // Store position/rotation/scale in refs to avoid effect re-runs
+  const positionRef = useRef(position);
+  const rotationRef = useRef(rotation);
+  const scaleRef = useRef(scale);
+
+  useEffect(() => {
+    positionRef.current = position;
+    rotationRef.current = rotation;
+    scaleRef.current = scale;
+  }, [position, rotation, scale]);
+
   useEffect(() => {
     if (!gl || !camera || !url || !scene) {
       console.log("[GaussianSplats] Missing dependencies:", { hasGL: !!gl, hasCamera: !!camera, hasScene: !!scene, url });
       return;
     }
 
-    // Prevent double-loading in React strict mode
-    if (isLoadingRef.current) {
-      console.log("[GaussianSplats] Already loading, skipping");
+    // Reset disposed flag for new effect run
+    isDisposedRef.current = false;
+
+    // Skip if already loading (React strict mode protection)
+    if (isLoadingRef.current && viewerRef.current) {
+      console.log("[GaussianSplats] Already loading, skipping duplicate");
       return;
     }
     isLoadingRef.current = true;
-    isDisposedRef.current = false;
 
     console.log("[GaussianSplats] Starting load with DropInViewer for URL:", url);
 
@@ -91,13 +104,17 @@ export function GaussianSplats({
     scene.add(viewer);
     console.log("[GaussianSplats] DropInViewer added to scene");
 
-    // Load the splat scene
+    // Load the splat scene using refs for position/rotation/scale
+    const pos = positionRef.current;
+    const rot = rotationRef.current;
+    const scl = scaleRef.current;
+
     viewer
       .addSplatScenes([{
         path: url,
-        position: position,
-        rotation: [rotation[0], rotation[1], rotation[2], "XYZ"],
-        scale: [scale, scale, scale],
+        position: pos,
+        rotation: [rot[0], rot[1], rot[2], "XYZ"],
+        scale: [scl, scl, scl],
       }], false) // false = don't show loading UI
       .then(() => {
         if (!isDisposedRef.current) {
@@ -153,7 +170,9 @@ export function GaussianSplats({
         viewerRef.current = null;
       }
     };
-  }, [url, gl, camera, scene, position, rotation, scale]);
+  // Only depend on url and core Three.js objects - position/rotation/scale use refs
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, gl, camera, scene]);
 
   // DropInViewer handles its own rendering when part of the scene
   // We just need to call update() each frame for sorting
