@@ -220,9 +220,10 @@ export function GaussianSplats({
   const frameCountRef = useRef(0);
   const lastLoggedStateRef = useRef<string>("");
 
-  // Manual rendering after R3F completes
+  // Manual rendering AFTER R3F completes
   // The DropInViewer's onBeforeRender calls update() but doesn't render
   // We need to explicitly render the splatMesh using the internal viewer's render method
+  // Priority -1 means this runs AFTER R3F's render (which is at priority 0)
   useFrame(({ gl: renderer }) => {
     frameCountRef.current++;
     const dropInViewer = viewerRef.current;
@@ -267,7 +268,7 @@ export function GaussianSplats({
         renderer.autoClear = savedAutoClear;
       }
     }
-  });
+  }, -1); // Priority -1 runs AFTER R3F's render pass
 
   return <group ref={groupRef} />;
 }
