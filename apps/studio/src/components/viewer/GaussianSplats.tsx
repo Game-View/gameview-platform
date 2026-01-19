@@ -31,123 +31,119 @@ export function GaussianSplats({
 }: GaussianSplatsProps) {
   const { gl, camera } = useThree();
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
-  const mountedRef = useRef(true);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     if (!gl || !camera) return;
 
-    // Track if this effect instance is still active (handles React Strict Mode)
-    mountedRef.current = true;
+    // Track if this effect instance is still active
+    let isMounted = true;
     const instanceId = Math.random().toString(36).substr(2, 9);
 
-    console.log(`[GaussianSplats:${instanceId}] Initializing Viewer...`);
-    console.log(`[GaussianSplats:${instanceId}] URL:`, url);
+    console.log(`[GaussianSplats:${instanceId}] Effect started, waiting for stability...`);
 
-    // Create viewer with R3F's renderer and camera
-    // selfDrivenMode: false means we control update/render via useFrame
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const viewerOptions: any = {
-      renderer: gl,
-      camera: camera,
-      useBuiltInControls: false,
-      selfDrivenMode: false, // Critical: don't start own render loop
-      ignoreDevicePixelRatio: false,
-      gpuAcceleratedSort: true,
-      enableSIMDInSort: true,
-      sharedMemoryForWorkers: false,
-      integerBasedSort: true,
-      halfPrecisionCovariancesOnGPU: true,
-      dynamicScene: false,
-      webXRMode: GaussianSplats3D.WebXRMode.None,
-      renderMode: GaussianSplats3D.RenderMode.Always,
-      sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
-      antialiased: true,
-      focalAdjustment: 1.0,
-      logLevel: GaussianSplats3D.LogLevel.Debug,
-      sphericalHarmonicsDegree: 0,
-    };
+    // Delay viewer creation to handle React Strict Mode's mount/unmount cycle
+    // This allows the first (discarded) mount to complete cleanup before we start
+    const initTimeout = setTimeout(() => {
+      if (!isMounted) {
+        console.log(`[GaussianSplats:${instanceId}] Unmounted during delay, skipping initialization`);
+        return;
+      }
 
-    const viewer = new GaussianSplats3D.Viewer(viewerOptions);
-    viewerRef.current = viewer;
+      console.log(`[GaussianSplats:${instanceId}] Initializing Viewer...`);
+      console.log(`[GaussianSplats:${instanceId}] URL:`, url);
 
-    console.log(`[GaussianSplats:${instanceId}] Viewer created, loading scene...`);
+      // Create viewer with R3F's renderer and camera
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const viewerOptions: any = {
+        renderer: gl,
+        camera: camera,
+        useBuiltInControls: false,
+        selfDrivenMode: false,
+        ignoreDevicePixelRatio: false,
+        gpuAcceleratedSort: true,
+        enableSIMDInSort: true,
+        sharedMemoryForWorkers: false,
+        integerBasedSort: true,
+        halfPrecisionCovariancesOnGPU: true,
+        dynamicScene: false,
+        webXRMode: GaussianSplats3D.WebXRMode.None,
+        renderMode: GaussianSplats3D.RenderMode.Always,
+        sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
+        antialiased: true,
+        focalAdjustment: 1.0,
+        logLevel: GaussianSplats3D.LogLevel.Debug,
+        sphericalHarmonicsDegree: 0,
+      };
 
-    // Load the splat scene
-    viewer
-      .addSplatScene(url, {
-        showLoadingUI: false,
-        progressiveLoad: true,
-        position: position,
-        rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
-        scale: [scale, scale, scale],
-        onProgress: (percent: number) => {
-          // Only report progress if still mounted
-          if (!mountedRef.current) return;
-          console.log(`[GaussianSplats:${instanceId}] Loading progress: ${percent.toFixed(1)}%`);
-          onProgress?.(percent);
-        },
-      })
-      .then(() => {
-        // Check if component was unmounted during async load
-        if (!mountedRef.current) {
-          console.log(`[GaussianSplats:${instanceId}] Load completed but component unmounted, ignoring`);
-          return;
-        }
+      const viewer = new GaussianSplats3D.Viewer(viewerOptions);
+      viewerRef.current = viewer;
 
-        console.log(`[GaussianSplats:${instanceId}] Scene loaded successfully!`);
+      console.log(`[GaussianSplats:${instanceId}] Viewer created, loading scene...`);
 
-        // Debug: Inspect internal viewer state
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const viewerAny = viewer as any;
-        console.log(`[GaussianSplats:${instanceId}] Viewer internal state:`, {
-          splatMesh: viewerAny.splatMesh,
-          scene: viewerAny.scene,
-          running: viewerAny.running,
-        });
+      // Load the splat scene
+      viewer
+        .addSplatScene(url, {
+          showLoadingUI: false,
+          progressiveLoad: true,
+          position: position,
+          rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
+          scale: [scale, scale, scale],
+          onProgress: (percent: number) => {
+            if (!isMounted) return;
+            console.log(`[GaussianSplats:${instanceId}] Loading progress: ${percent.toFixed(1)}%`);
+            onProgress?.(percent);
+          },
+        })
+        .then(() => {
+          if (!isMounted) {
+            console.log(`[GaussianSplats:${instanceId}] Load completed but unmounted, ignoring`);
+            return;
+          }
 
-        if (viewerAny.splatMesh) {
-          const mesh = viewerAny.splatMesh;
-          console.log(`[GaussianSplats:${instanceId}] SplatMesh details:`, {
-            visible: mesh.visible,
-            frustumCulled: mesh.frustumCulled,
-            renderOrder: mesh.renderOrder,
-            parent: mesh.parent?.type,
-            geometry: mesh.geometry
-              ? {
-                  attributes: Object.keys(mesh.geometry.attributes || {}),
-                  drawRange: mesh.geometry.drawRange,
-                }
-              : null,
-            material: mesh.material
-              ? {
-                  type: mesh.material.type,
-                  visible: mesh.material.visible,
-                  transparent: mesh.material.transparent,
-                  depthWrite: mesh.material.depthWrite,
-                  depthTest: mesh.material.depthTest,
-                }
-              : null,
+          console.log(`[GaussianSplats:${instanceId}] Scene loaded successfully!`);
+
+          // Debug: Inspect internal viewer state
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const viewerAny = viewer as any;
+          console.log(`[GaussianSplats:${instanceId}] Viewer internal state:`, {
+            splatMesh: viewerAny.splatMesh,
+            scene: viewerAny.scene,
+            running: viewerAny.running,
           });
-        }
 
-        setIsReady(true);
-        onLoad?.();
-      })
-      .catch((err: Error) => {
-        // Only report error if still mounted
-        if (!mountedRef.current) {
-          console.log(`[GaussianSplats:${instanceId}] Load failed but component unmounted, ignoring`);
-          return;
-        }
-        console.error(`[GaussianSplats:${instanceId}] Failed to load:`, err);
-        onError?.(err);
-      });
+          if (viewerAny.splatMesh) {
+            const mesh = viewerAny.splatMesh;
+            console.log(`[GaussianSplats:${instanceId}] SplatMesh details:`, {
+              visible: mesh.visible,
+              frustumCulled: mesh.frustumCulled,
+              renderOrder: mesh.renderOrder,
+              parent: mesh.parent?.type,
+              geometryAttributes: mesh.geometry ? Object.keys(mesh.geometry.attributes || {}) : null,
+              materialType: mesh.material?.type,
+            });
+          }
+
+          setIsReady(true);
+          onLoad?.();
+        })
+        .catch((err: Error) => {
+          if (!isMounted) {
+            console.log(`[GaussianSplats:${instanceId}] Load failed but unmounted, ignoring:`, err.message);
+            return;
+          }
+          console.error(`[GaussianSplats:${instanceId}] Failed to load:`, err);
+          onError?.(err);
+        });
+    }, 100); // Small delay to let Strict Mode cleanup complete
 
     return () => {
-      console.log(`[GaussianSplats:${instanceId}] Disposing Viewer...`);
-      mountedRef.current = false;
+      console.log(`[GaussianSplats:${instanceId}] Cleanup starting...`);
+      isMounted = false;
+      clearTimeout(initTimeout);
+
       if (viewerRef.current) {
+        console.log(`[GaussianSplats:${instanceId}] Disposing Viewer...`);
         viewerRef.current.dispose();
         viewerRef.current = null;
       }
@@ -162,7 +158,6 @@ export function GaussianSplats({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const viewer = viewerRef.current as any;
 
-    // Call viewer's update and render methods
     if (typeof viewer.update === "function") {
       viewer.update();
     }
