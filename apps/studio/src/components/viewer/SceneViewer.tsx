@@ -25,102 +25,161 @@ export function SceneViewer({
 }: SceneViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  // Use refs for callbacks to avoid re-triggering effect
+  const onLoadRef = useRef(onLoad);
+  const onErrorRef = useRef(onError);
+  const onProgressRef = useRef(onProgress);
+
+  useEffect(() => {
+    onLoadRef.current = onLoad;
+    onErrorRef.current = onError;
+    onProgressRef.current = onProgress;
+  }, [onLoad, onError, onProgress]);
+
   // Initialize viewer
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !splatUrl) return;
 
     const container = containerRef.current;
+    let isMounted = true;
+    const instanceId = Math.random().toString(36).substr(2, 9);
 
-    // Create Three.js renderer
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-    });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(renderer.domElement);
+    console.log(`[SceneViewer:${instanceId}] Effect started, waiting for stability...`);
 
-    // Create camera
-    const camera = new THREE.PerspectiveCamera(
-      75,
-      container.clientWidth / container.clientHeight,
-      0.1,
-      1000
-    );
-    camera.position.set(initialPosition.x, initialPosition.y, initialPosition.z);
-    camera.lookAt(initialTarget.x, initialTarget.y, initialTarget.z);
+    // Delay to handle React Strict Mode's double-mount cycle
+    const initTimeout = setTimeout(() => {
+      if (!isMounted) {
+        console.log(`[SceneViewer:${instanceId}] Unmounted during delay, skipping`);
+        return;
+      }
 
-    // Create viewer with orbit controls
-    const viewer = new GaussianSplats3D.Viewer({
-      renderer,
-      camera,
-      useBuiltInControls: true,
-      ignoreDevicePixelRatio: false,
-      gpuAcceleratedSort: true,
-      enableSIMDInSort: true,
-      sharedMemoryForWorkers: false,
-      integerBasedSort: true,
-      halfPrecisionCovariancesOnGPU: true,
-      dynamicScene: false,
-      webXRMode: GaussianSplats3D.WebXRMode.None,
-      renderMode: GaussianSplats3D.RenderMode.OnChange,
-      sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual,
-      antialiased: true,
-      focalAdjustment: 1.0,
-      logLevel: GaussianSplats3D.LogLevel.None,
-      sphericalHarmonicsDegree: 0,
-    });
+      console.log(`[SceneViewer:${instanceId}] Initializing...`);
 
-    viewerRef.current = viewer;
+      // Create Three.js renderer
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+      });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(renderer.domElement);
+      rendererRef.current = renderer;
 
-    // Load the splat file
-    viewer
-      .addSplatScene(splatUrl, {
-        showLoadingUI: false,
-        progressiveLoad: true,
-        onProgress: (percent: number) => {
-          setLoadProgress(Math.round(percent));
-          onProgress?.(percent);
-        },
-      })
-      .then(() => {
-        setIsLoading(false);
-        onLoad?.();
-        viewer.start();
-      })
-      .catch((err: Error) => {
-        console.error("Failed to load splat:", err);
-        setError(err.message || "Failed to load 3D scene");
-        setIsLoading(false);
-        onError?.(err);
+      // Create camera
+      const camera = new THREE.PerspectiveCamera(
+        75,
+        container.clientWidth / container.clientHeight,
+        0.1,
+        1000
+      );
+      camera.position.set(initialPosition.x, initialPosition.y, initialPosition.z);
+      camera.lookAt(initialTarget.x, initialTarget.y, initialTarget.z);
+
+      // Create viewer with orbit controls
+      const viewer = new GaussianSplats3D.Viewer({
+        renderer,
+        camera,
+        useBuiltInControls: true,
+        ignoreDevicePixelRatio: false,
+        gpuAcceleratedSort: true,
+        enableSIMDInSort: true,
+        sharedMemoryForWorkers: false,
+        integerBasedSort: true,
+        halfPrecisionCovariancesOnGPU: true,
+        dynamicScene: false,
+        webXRMode: GaussianSplats3D.WebXRMode.None,
+        renderMode: GaussianSplats3D.RenderMode.OnChange,
+        sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual,
+        antialiased: true,
+        focalAdjustment: 1.0,
+        logLevel: GaussianSplats3D.LogLevel.None,
+        sphericalHarmonicsDegree: 0,
       });
 
-    // Handle resize
-    const handleResize = () => {
-      if (!container) return;
-      const width = container.clientWidth;
-      const height = container.clientHeight;
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-      renderer.setSize(width, height);
-    };
+      viewerRef.current = viewer;
 
-    window.addEventListener("resize", handleResize);
+      console.log(`[SceneViewer:${instanceId}] Loading splats from:`, splatUrl);
+
+      // Load the splat file
+      viewer
+        .addSplatScene(splatUrl, {
+          showLoadingUI: false,
+          progressiveLoad: true,
+          onProgress: (percent: number) => {
+            if (!isMounted) return;
+            setLoadProgress(Math.round(percent));
+            onProgressRef.current?.(percent);
+          },
+        })
+        .then(() => {
+          if (!isMounted) {
+            console.log(`[SceneViewer:${instanceId}] Loaded but unmounted, ignoring`);
+            return;
+          }
+          console.log(`[SceneViewer:${instanceId}] Splats loaded, starting viewer`);
+          setIsLoading(false);
+          onLoadRef.current?.();
+          viewer.start();
+        })
+        .catch((err: Error) => {
+          if (!isMounted) return;
+          console.error(`[SceneViewer:${instanceId}] Failed to load:`, err);
+          setError(err.message || "Failed to load 3D scene");
+          setIsLoading(false);
+          onErrorRef.current?.(err);
+        });
+
+      // Handle resize
+      const handleResize = () => {
+        if (!container || !isMounted) return;
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height);
+      };
+
+      window.addEventListener("resize", handleResize);
+
+      // Store cleanup for resize listener
+      (window as unknown as Record<string, () => void>)[`sceneViewerResize_${instanceId}`] = () => {
+        window.removeEventListener("resize", handleResize);
+      };
+    }, 100); // 100ms delay for Strict Mode
 
     // Cleanup
     return () => {
-      window.removeEventListener("resize", handleResize);
-      viewer.dispose();
-      renderer.dispose();
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
+      console.log(`[SceneViewer:${instanceId}] Cleanup starting...`);
+      isMounted = false;
+      clearTimeout(initTimeout);
+
+      // Remove resize listener if it was set
+      const cleanupResize = (window as unknown as Record<string, () => void>)[`sceneViewerResize_${instanceId}`];
+      if (cleanupResize) {
+        cleanupResize();
+        delete (window as unknown as Record<string, () => void>)[`sceneViewerResize_${instanceId}`];
+      }
+
+      if (viewerRef.current) {
+        viewerRef.current.stop();
+        viewerRef.current.dispose();
+        viewerRef.current = null;
+      }
+
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+        if (container.contains(rendererRef.current.domElement)) {
+          container.removeChild(rendererRef.current.domElement);
+        }
+        rendererRef.current = null;
       }
     };
-  }, [splatUrl, initialPosition, initialTarget, onLoad, onError, onProgress]);
+  }, [splatUrl]); // Only re-run when URL changes
 
   return (
     <div ref={containerRef} className="w-full h-full relative bg-black">
