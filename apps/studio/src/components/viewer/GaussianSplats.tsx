@@ -1,16 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useThree } from "@react-three/fiber";
-import * as THREE from "three";
+import { useEffect, useRef, useState } from "react";
+import { useThree, useFrame } from "@react-three/fiber";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
-
-// DropInViewer exists at runtime but isn't in the TypeScript types
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const DropInViewer = (GaussianSplats3D as any).DropInViewer as new (options: Record<string, unknown>) => THREE.Group & {
-  addSplatScene: (url: string, options: Record<string, unknown>) => Promise<void>;
-  dispose: () => Promise<void>;
-};
 
 export interface GaussianSplatsProps {
   url: string;
@@ -25,9 +17,8 @@ export interface GaussianSplatsProps {
 /**
  * GaussianSplats component for rendering Gaussian Splat scenes in R3F
  *
- * Uses DropInViewer which is specifically designed to integrate with existing
- * Three.js scenes. It extends THREE.Group and uses onBeforeRender callback
- * to trigger updates in the Three.js render cycle, avoiding conflicts with R3F.
+ * Uses the Viewer with selfDrivenMode: false to manually integrate
+ * with R3F's render loop via useFrame.
  */
 export function GaussianSplats({
   url,
@@ -38,37 +29,46 @@ export function GaussianSplats({
   onError,
   onProgress,
 }: GaussianSplatsProps) {
-  const { scene } = useThree();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const viewerRef = useRef<any>(null);
+  const { gl, camera } = useThree();
+  const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    console.log("[GaussianSplats] Initializing DropInViewer...");
-    console.log("[GaussianSplats] URL:", url);
+    if (!gl || !camera) return;
 
-    // DropInViewer is designed for integration with existing Three.js scenes
-    // It extends THREE.Group and handles all the rendering integration internally
-    // via onBeforeRender callbacks - no need for useFrame or manual render calls
-    const viewer = new DropInViewer({
+    console.log("[GaussianSplats] Initializing Viewer...");
+    console.log("[GaussianSplats] URL:", url);
+    console.log("[GaussianSplats] Renderer:", gl);
+    console.log("[GaussianSplats] Camera:", camera);
+
+    // Create viewer with R3F's renderer and camera
+    // selfDrivenMode: false means we control update/render via useFrame
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const viewerOptions: any = {
+      renderer: gl,
+      camera: camera,
+      useBuiltInControls: false,
+      selfDrivenMode: false, // Critical: don't start own render loop
+      ignoreDevicePixelRatio: false,
       gpuAcceleratedSort: true,
       enableSIMDInSort: true,
       sharedMemoryForWorkers: false,
       integerBasedSort: true,
       halfPrecisionCovariancesOnGPU: true,
       dynamicScene: false,
-      renderMode: GaussianSplats3D.RenderMode.OnChange,
+      webXRMode: GaussianSplats3D.WebXRMode.None,
+      renderMode: GaussianSplats3D.RenderMode.Always,
       sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
       antialiased: true,
       focalAdjustment: 1.0,
       logLevel: GaussianSplats3D.LogLevel.Debug,
       sphericalHarmonicsDegree: 0,
-    });
+    };
 
+    const viewer = new GaussianSplats3D.Viewer(viewerOptions);
     viewerRef.current = viewer;
 
-    // Add the viewer (THREE.Group) directly to R3F's scene
-    scene.add(viewer);
-    console.log("[GaussianSplats] Added DropInViewer to scene");
+    console.log("[GaussianSplats] Viewer created, loading scene...");
 
     // Load the splat scene
     viewer
@@ -76,7 +76,7 @@ export function GaussianSplats({
         showLoadingUI: false,
         progressiveLoad: true,
         position: position,
-        rotation: [rotation[0], rotation[1], rotation[2], "XYZ"],
+        rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
         scale: [scale, scale, scale],
         onProgress: (percent: number) => {
           console.log(`[GaussianSplats] Loading progress: ${percent.toFixed(1)}%`);
@@ -84,16 +84,15 @@ export function GaussianSplats({
         },
       })
       .then(() => {
-        console.log("[GaussianSplats] Scene loaded successfully");
+        console.log("[GaussianSplats] Scene loaded successfully!");
 
-        // Debug: Inspect internal state
+        // Debug: Inspect internal viewer state
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const viewerAny = viewer as any;
-        console.log("[GaussianSplats] DropInViewer state:", {
-          children: viewer.children.length,
+        console.log("[GaussianSplats] Viewer internal state:", {
           splatMesh: viewerAny.splatMesh,
-          visible: viewer.visible,
-          position: viewer.position,
+          scene: viewerAny.scene,
+          running: viewerAny.running,
         });
 
         if (viewerAny.splatMesh) {
@@ -102,6 +101,7 @@ export function GaussianSplats({
             visible: mesh.visible,
             frustumCulled: mesh.frustumCulled,
             renderOrder: mesh.renderOrder,
+            parent: mesh.parent?.type,
             geometry: mesh.geometry
               ? {
                   attributes: Object.keys(mesh.geometry.attributes || {}),
@@ -115,12 +115,12 @@ export function GaussianSplats({
                   transparent: mesh.material.transparent,
                   depthWrite: mesh.material.depthWrite,
                   depthTest: mesh.material.depthTest,
-                  side: mesh.material.side,
                 }
               : null,
           });
         }
 
+        setIsReady(true);
         onLoad?.();
       })
       .catch((err: Error) => {
@@ -129,17 +129,31 @@ export function GaussianSplats({
       });
 
     return () => {
-      console.log("[GaussianSplats] Disposing DropInViewer...");
+      console.log("[GaussianSplats] Disposing Viewer...");
       if (viewerRef.current) {
-        scene.remove(viewerRef.current);
         viewerRef.current.dispose();
         viewerRef.current = null;
       }
+      setIsReady(false);
     };
-  }, [url, scene, position, rotation, scale, onLoad, onError, onProgress]);
+  }, [url, gl, camera, position, rotation, scale, onLoad, onError, onProgress]);
 
-  // The DropInViewer handles its own rendering via onBeforeRender callbacks
-  // No need for useFrame or manual render calls
+  // Manually update and render in R3F's frame loop
+  useFrame(() => {
+    if (!isReady || !viewerRef.current) return;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const viewer = viewerRef.current as any;
+
+    // Call viewer's update and render methods
+    if (typeof viewer.update === "function") {
+      viewer.update();
+    }
+    if (typeof viewer.render === "function") {
+      viewer.render();
+    }
+  });
+
   return null;
 }
 
