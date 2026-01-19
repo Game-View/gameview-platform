@@ -66,8 +66,8 @@ export function GaussianSplats({
       ignoreDevicePixelRatio: false,
       gpuAcceleratedSort: true,
       enableSIMDInSort: true,
-      sharedMemoryForWorkers: false,
-      integerBasedSort: true,
+      sharedMemoryForWorkers: true, // Enable for better sort performance
+      integerBasedSort: false, // Disable - causes issues with large scene ranges
       halfPrecisionCovariancesOnGPU: true,
       dynamicScene: true, // Try dynamic scene for better tree building
       webXRMode: GaussianSplats3D.WebXRMode.None,
