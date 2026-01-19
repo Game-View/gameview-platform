@@ -27,9 +27,28 @@ export function GaussianSplats({
   const { gl, camera } = useThree();
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
   const groupRef = useRef<THREE.Group>(null);
+  const isLoadingRef = useRef(false);
+  const isDisposedRef = useRef(false);
+
+  // Use refs for callbacks to avoid effect re-runs
+  const onLoadRef = useRef(onLoad);
+  const onErrorRef = useRef(onError);
+  const onProgressRef = useRef(onProgress);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onLoadRef.current = onLoad;
+    onErrorRef.current = onError;
+    onProgressRef.current = onProgress;
+  }, [onLoad, onError, onProgress]);
 
   useEffect(() => {
-    if (!gl || !camera) return;
+    if (!gl || !camera || !url) return;
+
+    // Prevent double-loading in React strict mode
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
+    isDisposedRef.current = false;
 
     // Create viewer that integrates with existing Three.js scene
     const viewer = new GaussianSplats3D.Viewer({
@@ -63,25 +82,34 @@ export function GaussianSplats({
         rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
         scale: [scale, scale, scale],
         onProgress: (percent: number) => {
-          onProgress?.(percent);
+          if (!isDisposedRef.current) {
+            onProgressRef.current?.(percent);
+          }
         },
       })
       .then(() => {
-        onLoad?.();
-        viewer.start();
+        if (!isDisposedRef.current) {
+          onLoadRef.current?.();
+          viewer.start();
+        }
       })
       .catch((err: Error) => {
-        console.error("Failed to load Gaussian splats:", err);
-        onError?.(err);
+        if (!isDisposedRef.current) {
+          console.error("Failed to load Gaussian splats:", err);
+          onErrorRef.current?.(err);
+        }
       });
 
     return () => {
+      isDisposedRef.current = true;
+      isLoadingRef.current = false;
       if (viewerRef.current) {
         viewerRef.current.dispose();
         viewerRef.current = null;
       }
     };
-  }, [url, gl, camera, position, rotation, scale, onLoad, onError, onProgress]);
+  // Only re-run when URL or core dependencies change, not callbacks
+  }, [url, gl, camera]);
 
   return <group ref={groupRef} />;
 }
