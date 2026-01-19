@@ -101,9 +101,10 @@ export function GaussianSplats({
           console.log("[GaussianSplats] Load complete, starting viewer");
 
           // Try to get splat count and focus on middle splat
-          const splatMesh = viewer.getSplatMesh();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const splatMesh = (viewer as any).getSplatMesh?.();
           if (splatMesh) {
-            const splatCount = splatMesh.getSplatCount();
+            const splatCount = splatMesh.getSplatCount?.() || 0;
             console.log("[GaussianSplats] Total splats:", splatCount);
 
             // Focus camera on the middle splat to center the view
@@ -113,16 +114,18 @@ export function GaussianSplats({
 
               // Get splat position to log for debugging
               const splatPosition = new THREE.Vector3();
-              splatMesh.getSplatCenter(middleSplatIdx, splatPosition);
-              console.log("[GaussianSplats] Middle splat position:", splatPosition);
+              if (splatMesh.getSplatCenter) {
+                splatMesh.getSplatCenter(middleSplatIdx, splatPosition);
+                console.log("[GaussianSplats] Middle splat position:", splatPosition);
 
-              // Move camera to look at this position
-              camera.position.set(
-                splatPosition.x + 2,
-                splatPosition.y + 2,
-                splatPosition.z + 2
-              );
-              camera.lookAt(splatPosition);
+                // Move camera to look at this position
+                camera.position.set(
+                  splatPosition.x + 2,
+                  splatPosition.y + 2,
+                  splatPosition.z + 2
+                );
+                camera.lookAt(splatPosition);
+              }
             }
           }
 
