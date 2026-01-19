@@ -120,6 +120,13 @@ export function GaussianSplats({
             splatMesh.visible = true;
             splatMesh.frustumCulled = false;
 
+            // CRITICAL: Manually add splatMesh to R3F scene if not already added
+            if (!splatMesh.parent) {
+              console.log("[GaussianSplats] Adding splatMesh to R3F scene manually");
+              scene.add(splatMesh);
+              console.log("[GaussianSplats] SplatMesh now in scene:", splatMesh.parent?.type);
+            }
+
             const splatCount = splatMesh.getSplatCount?.() || 0;
             console.log("[GaussianSplats] Total splats:", splatCount);
 
@@ -162,6 +169,12 @@ export function GaussianSplats({
       isLoadingRef.current = false;
       isReadyRef.current = false;
       if (viewerRef.current) {
+        // Remove splatMesh from scene before disposing
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const splatMesh = (viewerRef.current as any).splatMesh;
+        if (splatMesh && splatMesh.parent) {
+          splatMesh.parent.remove(splatMesh);
+        }
         viewerRef.current.dispose();
         viewerRef.current = null;
       }
