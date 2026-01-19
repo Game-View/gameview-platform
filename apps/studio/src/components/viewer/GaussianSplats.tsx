@@ -86,7 +86,6 @@ export function GaussianSplats({
       .addSplatScene(url, {
         showLoadingUI: false,
         progressiveLoad: false, // Disable progressive load for compatibility
-        splatAlphaRemovalThreshold: 0, // Don't filter any splats
         position: position,
         rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
         scale: [scale, scale, scale],
