@@ -121,12 +121,22 @@ function CameraSync({ splatRef }: { splatRef: React.RefObject<SplatBackgroundRef
 
   // Make R3F canvas truly transparent so splat layer shows through
   useEffect(() => {
-    gl.setClearColor(0x000000, 0); // Transparent clear color
+    // Set WebGL clear color to transparent
+    gl.setClearColor(0x000000, 0);
+
+    // Also set autoClear to false so we control clearing
+    gl.autoClear = false;
+
+    // Make the canvas DOM element transparent
+    gl.domElement.style.background = "transparent";
+
+    console.log("[CameraSync] Set canvas to transparent");
   }, [gl]);
 
   useFrame(() => {
-    // Clear with transparency before each frame
-    gl.clear();
+    // Manually clear with transparency
+    gl.clearColor();
+    gl.clearDepth();
 
     if (splatRef.current && camera) {
       // Get the direction the camera is looking
@@ -137,7 +147,7 @@ function CameraSync({ splatRef }: { splatRef: React.RefObject<SplatBackgroundRef
       // Update splat background camera
       splatRef.current.updateCamera(camera.position, targetRef.current);
     }
-  });
+  }, -1); // Run before other useFrame callbacks
 
   return null;
 }
