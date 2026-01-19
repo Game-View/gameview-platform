@@ -116,44 +116,6 @@ export function SceneEditor({ splatUrl, onSave }: SceneEditorProps) {
   );
 }
 
-// Camera sync component - keeps splat background camera in sync with R3F camera
-function CameraSync({ splatRef }: { splatRef: React.RefObject<SplatBackgroundRef> }) {
-  const { camera, gl } = useThree();
-  const targetRef = useRef(new THREE.Vector3(0, 0, 0));
-
-  // Make R3F canvas truly transparent so splat layer shows through
-  useEffect(() => {
-    // Set WebGL clear color to transparent
-    gl.setClearColor(0x000000, 0);
-
-    // Also set autoClear to false so we control clearing
-    gl.autoClear = false;
-
-    // Make the canvas DOM element transparent
-    gl.domElement.style.background = "transparent";
-
-    console.log("[CameraSync] Set canvas to transparent");
-  }, [gl]);
-
-  useFrame(() => {
-    // Manually clear with transparency
-    gl.clearColor();
-    gl.clearDepth();
-
-    if (splatRef.current && camera) {
-      // Get the direction the camera is looking
-      const direction = new THREE.Vector3();
-      camera.getWorldDirection(direction);
-      targetRef.current.copy(camera.position).add(direction);
-
-      // Update splat background camera
-      splatRef.current.updateCamera(camera.position, targetRef.current);
-    }
-  }, -1); // Run before other useFrame callbacks
-
-  return null;
-}
-
 // Loading indicator
 function LoadingIndicator() {
   return (
