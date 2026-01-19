@@ -74,6 +74,9 @@ export function SceneViewer({
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewer = new GaussianSplats3D.Viewer(viewerOptions as any);
+      // Cast to any for accessing internal properties not exposed in types
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const viewerInternal = viewer as any;
 
       viewerRef.current = viewer;
 
@@ -81,7 +84,7 @@ export function SceneViewer({
       // The viewer creates and appends its canvas to document.body by default
       setTimeout(() => {
         // Find the canvas created by the viewer (should be in body)
-        const viewerCanvas = viewer.renderer?.domElement;
+        const viewerCanvas = viewerInternal.renderer?.domElement;
         if (viewerCanvas && viewerCanvas.parentElement !== container) {
           console.log(`[SceneViewer:${instanceId}] Moving canvas to container`);
           // Style the canvas to fill our container
@@ -95,10 +98,9 @@ export function SceneViewer({
           // Resize to match container
           const width = container.clientWidth;
           const height = container.clientHeight;
-          viewer.renderer?.setSize(width, height);
-          if (viewer.camera) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const cam = viewer.camera as any;
+          viewerInternal.renderer?.setSize(width, height);
+          if (viewerInternal.camera) {
+            const cam = viewerInternal.camera;
             if (cam.aspect !== undefined) {
               cam.aspect = width / height;
               cam.updateProjectionMatrix();
@@ -128,12 +130,12 @@ export function SceneViewer({
           console.log(`[SceneViewer:${instanceId}] Splats loaded, starting viewer`);
 
           // DEBUG: Log viewer internal state
-          console.log(`[SceneViewer:${instanceId}] Viewer splatMesh:`, viewer.splatMesh);
-          console.log(`[SceneViewer:${instanceId}] Scene children:`, viewer.scene?.children?.length);
-          if (viewer.splatMesh) {
-            console.log(`[SceneViewer:${instanceId}] SplatMesh visible:`, viewer.splatMesh.visible);
-            console.log(`[SceneViewer:${instanceId}] SplatMesh position:`, viewer.splatMesh.position);
-            console.log(`[SceneViewer:${instanceId}] SplatMesh geometry:`, viewer.splatMesh.geometry);
+          console.log(`[SceneViewer:${instanceId}] Viewer splatMesh:`, viewerInternal.splatMesh);
+          console.log(`[SceneViewer:${instanceId}] Scene children:`, viewerInternal.scene?.children?.length);
+          if (viewerInternal.splatMesh) {
+            console.log(`[SceneViewer:${instanceId}] SplatMesh visible:`, viewerInternal.splatMesh.visible);
+            console.log(`[SceneViewer:${instanceId}] SplatMesh position:`, viewerInternal.splatMesh.position);
+            console.log(`[SceneViewer:${instanceId}] SplatMesh geometry:`, viewerInternal.splatMesh.geometry);
           }
 
           setIsLoading(false);
@@ -142,9 +144,9 @@ export function SceneViewer({
 
           // DEBUG: Check state after start
           setTimeout(() => {
-            console.log(`[SceneViewer:${instanceId}] After start - splatMesh:`, viewer.splatMesh);
-            console.log(`[SceneViewer:${instanceId}] After start - camera position:`, viewer.camera?.position);
-            console.log(`[SceneViewer:${instanceId}] After start - renderer info:`, viewer.renderer?.info?.render);
+            console.log(`[SceneViewer:${instanceId}] After start - splatMesh:`, viewerInternal.splatMesh);
+            console.log(`[SceneViewer:${instanceId}] After start - camera position:`, viewerInternal.camera?.position);
+            console.log(`[SceneViewer:${instanceId}] After start - renderer info:`, viewerInternal.renderer?.info?.render);
           }, 500);
         })
         .catch((err: Error) => {
@@ -157,16 +159,15 @@ export function SceneViewer({
 
       // Handle resize
       const handleResize = () => {
-        if (!container || !isMounted || !viewer.renderer || !viewer.camera) return;
+        if (!container || !isMounted || !viewerInternal.renderer || !viewerInternal.camera) return;
         const width = container.clientWidth;
         const height = container.clientHeight;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const cam = viewer.camera as any;
+        const cam = viewerInternal.camera;
         if (cam.aspect !== undefined) {
           cam.aspect = width / height;
           cam.updateProjectionMatrix();
         }
-        viewer.renderer.setSize(width, height);
+        viewerInternal.renderer.setSize(width, height);
       };
 
       window.addEventListener("resize", handleResize);
@@ -192,7 +193,8 @@ export function SceneViewer({
 
       if (viewerRef.current) {
         // Remove canvas from container if present
-        const canvas = viewerRef.current.renderer?.domElement;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const canvas = (viewerRef.current as any).renderer?.domElement;
         if (canvas && container.contains(canvas)) {
           container.removeChild(canvas);
         }
