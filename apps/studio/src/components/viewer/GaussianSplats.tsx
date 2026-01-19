@@ -62,7 +62,7 @@ export function GaussianSplats({
     const viewer = new GaussianSplats3D.Viewer({
       renderer: gl,
       camera: camera as THREE.PerspectiveCamera,
-      useBuiltInControls: true, // Enable temporarily to find the splats
+      useBuiltInControls: false, // Use our own OrbitControls
       ignoreDevicePixelRatio: false,
       gpuAcceleratedSort: true,
       enableSIMDInSort: true,
@@ -99,6 +99,33 @@ export function GaussianSplats({
       .then(() => {
         if (!isDisposedRef.current) {
           console.log("[GaussianSplats] Load complete, starting viewer");
+
+          // Try to get splat count and focus on middle splat
+          const splatMesh = viewer.getSplatMesh();
+          if (splatMesh) {
+            const splatCount = splatMesh.getSplatCount();
+            console.log("[GaussianSplats] Total splats:", splatCount);
+
+            // Focus camera on the middle splat to center the view
+            if (splatCount > 0) {
+              const middleSplatIdx = Math.floor(splatCount / 2);
+              console.log("[GaussianSplats] Focusing on splat:", middleSplatIdx);
+
+              // Get splat position to log for debugging
+              const splatPosition = new THREE.Vector3();
+              splatMesh.getSplatCenter(middleSplatIdx, splatPosition);
+              console.log("[GaussianSplats] Middle splat position:", splatPosition);
+
+              // Move camera to look at this position
+              camera.position.set(
+                splatPosition.x + 2,
+                splatPosition.y + 2,
+                splatPosition.z + 2
+              );
+              camera.lookAt(splatPosition);
+            }
+          }
+
           onLoadRef.current?.();
           viewer.start();
         }
