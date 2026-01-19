@@ -79,22 +79,21 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
         });
         renderer.setSize(container.clientWidth, container.clientHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        // DEBUG: Use bright cyan to verify canvas is rendering
-        renderer.setClearColor(0x00ffff);
+        // Don't set clear color - let the viewer handle it
         container.appendChild(renderer.domElement);
 
         // DEBUG: Verify canvas was added
         console.log(`[SplatBackground:${instanceId}] Canvas added, size: ${renderer.domElement.width}x${renderer.domElement.height}`);
         rendererRef.current = renderer;
 
-        // Create camera
+        // Create camera - match SceneViewer's FOV of 75
         const camera = new THREE.PerspectiveCamera(
-          50,
+          75,
           container.clientWidth / container.clientHeight,
           0.1,
           1000
         );
-        camera.position.set(5, 5, 5);
+        camera.position.set(0, 2, 5); // Match SceneViewer position
         camera.lookAt(0, 0, 0);
         cameraRef.current = camera;
 
@@ -111,8 +110,8 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
           halfPrecisionCovariancesOnGPU: true,
           dynamicScene: false,
           webXRMode: GaussianSplats3D.WebXRMode.None,
-          renderMode: GaussianSplats3D.RenderMode.Always,
-          sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
+          renderMode: GaussianSplats3D.RenderMode.OnChange, // Match SceneViewer
+          sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual, // Match SceneViewer
           antialiased: true,
           focalAdjustment: 1.0,
           logLevel: GaussianSplats3D.LogLevel.Debug,
