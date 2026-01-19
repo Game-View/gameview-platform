@@ -165,7 +165,8 @@ export function GaussianSplats({
   // Manual update loop for selfDrivenMode: false
   useFrame(() => {
     if (viewerRef.current && isReadyRef.current && !isDisposedRef.current) {
-      viewerRef.current.update();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (viewerRef.current as any).update();
     }
   });
 
