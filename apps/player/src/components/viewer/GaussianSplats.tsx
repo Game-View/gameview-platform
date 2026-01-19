@@ -18,7 +18,7 @@ export interface GaussianSplatsProps {
 /**
  * GaussianSplats component for rendering splat scenes in R3F (Player app)
  *
- * Extracts splatMesh from viewer and adds to R3F scene for proper rendering.
+ * Composites splat rendering on top of R3F scene using manual render control.
  */
 export function GaussianSplats({
   url,
@@ -31,7 +31,6 @@ export function GaussianSplats({
 }: GaussianSplatsProps) {
   const { gl, camera, scene } = useThree();
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
-  const splatMeshRef = useRef<THREE.Object3D | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   // Store callbacks in refs to avoid re-running useEffect when they change
@@ -94,30 +93,7 @@ export function GaussianSplats({
         })
         .then(() => {
           if (!isMounted) return;
-
           console.log("[Player] Gaussian splats loaded successfully");
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const viewerAny = viewer as any;
-
-          // Extract splatMesh and add to R3F scene
-          if (viewerAny.splatMesh) {
-            const mesh = viewerAny.splatMesh as THREE.Object3D;
-
-            if (mesh.parent) {
-              mesh.parent.remove(mesh);
-            }
-
-            mesh.visible = true;
-            (mesh as THREE.Mesh).frustumCulled = false;
-            mesh.renderOrder = 1000;
-
-            scene.add(mesh);
-            splatMeshRef.current = mesh;
-
-            console.log("[Player] SplatMesh added to R3F scene");
-          }
-
           setIsReady(true);
           onLoadRef.current?.();
         })
@@ -132,11 +108,6 @@ export function GaussianSplats({
       isMounted = false;
       clearTimeout(initTimeout);
 
-      if (splatMeshRef.current && scene) {
-        scene.remove(splatMeshRef.current);
-        splatMeshRef.current = null;
-      }
-
       if (viewerRef.current) {
         viewerRef.current.dispose();
         viewerRef.current = null;
@@ -146,16 +117,27 @@ export function GaussianSplats({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, gl, camera, scene, JSON.stringify(position), JSON.stringify(rotation), scale]);
 
-  // Update splat sorting each frame
+  // First useFrame: Run early (priority -1) to clear and render R3F scene manually
+  useFrame(({ gl: renderer, scene: r3fScene, camera: r3fCamera }) => {
+    renderer.autoClear = false;
+    renderer.clear(true, true, true);
+    renderer.render(r3fScene, r3fCamera);
+  }, -1);
+
+  // Second useFrame: Run after R3F render (priority 1) to composite splats on top
   useFrame(() => {
     if (!isReady || !viewerRef.current) return;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const viewer = viewerRef.current as any;
+
     if (typeof viewer.update === "function") {
       viewer.update();
     }
-  });
+    if (typeof viewer.render === "function") {
+      viewer.render();
+    }
+  }, 1);
 
   return null;
 }
