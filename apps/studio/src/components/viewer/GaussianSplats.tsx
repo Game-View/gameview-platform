@@ -43,12 +43,20 @@ export function GaussianSplats({
   }, [onLoad, onError, onProgress]);
 
   useEffect(() => {
-    if (!gl || !camera || !url) return;
+    if (!gl || !camera || !url) {
+      console.log("[GaussianSplats] Missing dependencies:", { hasGL: !!gl, hasCamera: !!camera, url });
+      return;
+    }
 
     // Prevent double-loading in React strict mode
-    if (isLoadingRef.current) return;
+    if (isLoadingRef.current) {
+      console.log("[GaussianSplats] Already loading, skipping");
+      return;
+    }
     isLoadingRef.current = true;
     isDisposedRef.current = false;
+
+    console.log("[GaussianSplats] Starting load for URL:", url);
 
     // Create viewer that integrates with existing Three.js scene
     const viewer = new GaussianSplats3D.Viewer({
@@ -67,7 +75,7 @@ export function GaussianSplats({
       sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual,
       antialiased: true,
       focalAdjustment: 1.0,
-      logLevel: GaussianSplats3D.LogLevel.None,
+      logLevel: GaussianSplats3D.LogLevel.Debug,
       sphericalHarmonicsDegree: 0,
     });
 
@@ -83,24 +91,27 @@ export function GaussianSplats({
         scale: [scale, scale, scale],
         onProgress: (percent: number) => {
           if (!isDisposedRef.current) {
+            console.log("[GaussianSplats] Progress:", percent + "%");
             onProgressRef.current?.(percent);
           }
         },
       })
       .then(() => {
         if (!isDisposedRef.current) {
+          console.log("[GaussianSplats] Load complete, starting viewer");
           onLoadRef.current?.();
           viewer.start();
         }
       })
       .catch((err: Error) => {
         if (!isDisposedRef.current) {
-          console.error("Failed to load Gaussian splats:", err);
+          console.error("[GaussianSplats] Failed to load:", err);
           onErrorRef.current?.(err);
         }
       });
 
     return () => {
+      console.log("[GaussianSplats] Cleanup - disposing viewer");
       isDisposedRef.current = true;
       isLoadingRef.current = false;
       if (viewerRef.current) {
