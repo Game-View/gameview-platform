@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
+import * as THREE from "three";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
 
 export interface GaussianSplatsProps {
@@ -17,8 +18,8 @@ export interface GaussianSplatsProps {
 /**
  * GaussianSplats component for rendering Gaussian Splat scenes in R3F
  *
- * Uses the Viewer with selfDrivenMode: false to manually integrate
- * with R3F's render loop via useFrame.
+ * Strategy: Extract the splatMesh from the viewer and add it to R3F's scene.
+ * This lets R3F handle rendering while we call viewer.update() for sorting.
  */
 export function GaussianSplats({
   url,
@@ -29,12 +30,12 @@ export function GaussianSplats({
   onError,
   onProgress,
 }: GaussianSplatsProps) {
-  const { gl, camera } = useThree();
+  const { gl, camera, scene } = useThree();
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
+  const splatMeshRef = useRef<THREE.Object3D | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   // Use refs for callbacks to avoid re-running effect when callbacks change
-  // This is critical because onProgress updates parent state, causing re-renders
   const onLoadRef = useRef(onLoad);
   const onErrorRef = useRef(onError);
   const onProgressRef = useRef(onProgress);
@@ -47,9 +48,8 @@ export function GaussianSplats({
   }, [onLoad, onError, onProgress]);
 
   useEffect(() => {
-    if (!gl || !camera) return;
+    if (!gl || !camera || !scene) return;
 
-    // Track if this effect instance is still active
     let isMounted = true;
     const instanceId = Math.random().toString(36).substr(2, 9);
 
@@ -66,6 +66,7 @@ export function GaussianSplats({
       console.log(`[GaussianSplats:${instanceId}] URL:`, url);
 
       // Create viewer with R3F's renderer and camera
+      // We use selfDrivenMode: false so we control when update() is called
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewerOptions: any = {
         renderer: gl,
@@ -104,7 +105,6 @@ export function GaussianSplats({
           onProgress: (percent: number) => {
             if (!isMounted) return;
             console.log(`[GaussianSplats:${instanceId}] Loading progress: ${percent.toFixed(1)}%`);
-            // Use ref to call latest callback without triggering effect re-run
             onProgressRef.current?.(percent);
           },
         })
@@ -116,25 +116,38 @@ export function GaussianSplats({
 
           console.log(`[GaussianSplats:${instanceId}] Scene loaded successfully!`);
 
-          // Debug: Inspect internal viewer state
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const viewerAny = viewer as any;
-          console.log(`[GaussianSplats:${instanceId}] Viewer internal state:`, {
-            splatMesh: viewerAny.splatMesh,
-            scene: viewerAny.scene,
-            running: viewerAny.running,
-          });
 
+          // Extract the splatMesh and add it to R3F's scene
+          // This is the key: R3F will now render the mesh as part of its scene
           if (viewerAny.splatMesh) {
-            const mesh = viewerAny.splatMesh;
-            console.log(`[GaussianSplats:${instanceId}] SplatMesh details:`, {
+            const mesh = viewerAny.splatMesh as THREE.Object3D;
+
+            console.log(`[GaussianSplats:${instanceId}] SplatMesh found:`, {
               visible: mesh.visible,
-              frustumCulled: mesh.frustumCulled,
+              frustumCulled: (mesh as THREE.Mesh).frustumCulled,
               renderOrder: mesh.renderOrder,
-              parent: mesh.parent?.type,
-              geometryAttributes: mesh.geometry ? Object.keys(mesh.geometry.attributes || {}) : null,
-              materialType: mesh.material?.type,
+              currentParent: mesh.parent?.type,
             });
+
+            // Remove from viewer's internal scene if present
+            if (mesh.parent) {
+              mesh.parent.remove(mesh);
+            }
+
+            // Configure mesh for R3F rendering
+            mesh.visible = true;
+            (mesh as THREE.Mesh).frustumCulled = false;
+            mesh.renderOrder = 1000; // Render after other objects
+
+            // Add to R3F's scene
+            scene.add(mesh);
+            splatMeshRef.current = mesh;
+
+            console.log(`[GaussianSplats:${instanceId}] SplatMesh added to R3F scene`);
+          } else {
+            console.warn(`[GaussianSplats:${instanceId}] No splatMesh found on viewer!`);
           }
 
           setIsReady(true);
@@ -155,6 +168,13 @@ export function GaussianSplats({
       isMounted = false;
       clearTimeout(initTimeout);
 
+      // Remove splatMesh from R3F scene
+      if (splatMeshRef.current && scene) {
+        console.log(`[GaussianSplats:${instanceId}] Removing splatMesh from R3F scene`);
+        scene.remove(splatMeshRef.current);
+        splatMeshRef.current = null;
+      }
+
       if (viewerRef.current) {
         console.log(`[GaussianSplats:${instanceId}] Disposing Viewer...`);
         viewerRef.current.dispose();
@@ -162,23 +182,20 @@ export function GaussianSplats({
       }
       setIsReady(false);
     };
-    // Only re-run effect when URL or transform changes, NOT when callbacks change
-    // Serialize arrays to prevent re-running when parent creates new array references
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, gl, camera, JSON.stringify(position), JSON.stringify(rotation), scale]);
+  }, [url, gl, camera, scene, JSON.stringify(position), JSON.stringify(rotation), scale]);
 
-  // Manually update and render in R3F's frame loop
+  // Call viewer.update() each frame to sort splats based on camera position
+  // R3F handles the actual rendering since the mesh is in its scene
   useFrame(() => {
     if (!isReady || !viewerRef.current) return;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const viewer = viewerRef.current as any;
 
+    // Only call update() for splat sorting - R3F handles rendering
     if (typeof viewer.update === "function") {
       viewer.update();
-    }
-    if (typeof viewer.render === "function") {
-      viewer.render();
     }
   });
 
