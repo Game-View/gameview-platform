@@ -200,7 +200,9 @@ export function GaussianSplats({
 
     // Log every 300 frames (~5 seconds at 60fps)
     if (frameCountRef.current % 300 === 0 && viewerRef.current) {
-      const viewer = viewerRef.current;
+      // Cast to any to access internal properties for debugging
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const viewer = viewerRef.current as any;
       console.log(`[GaussianSplats] Frame ${frameCountRef.current}: initialized=${viewer.initialized}, splatRenderReady=${viewer.splatRenderReady}`);
     }
   });
