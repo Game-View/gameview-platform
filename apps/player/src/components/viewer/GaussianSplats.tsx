@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useThree, useFrame } from "@react-three/fiber";
+import { useEffect, useRef } from "react";
+import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
 
@@ -18,7 +18,7 @@ export interface GaussianSplatsProps {
 /**
  * GaussianSplats component for rendering splat scenes in R3F (Player app)
  *
- * Composites splat rendering on top of R3F scene using manual render control.
+ * Uses selfDrivenMode with shared renderer for proper splat rendering.
  */
 export function GaussianSplats({
   url,
@@ -29,9 +29,8 @@ export function GaussianSplats({
   onError,
   onProgress,
 }: GaussianSplatsProps) {
-  const { gl, camera, scene } = useThree();
+  const { gl, camera } = useThree();
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
-  const [isReady, setIsReady] = useState(false);
 
   // Store callbacks in refs to avoid re-running useEffect when they change
   const onLoadRef = useRef(onLoad);
@@ -44,8 +43,15 @@ export function GaussianSplats({
     onProgressRef.current = onProgress;
   }, [onLoad, onError, onProgress]);
 
+  // Disable R3F's autoClear so viewer can render on same canvas
   useEffect(() => {
-    if (!gl || !camera || !scene || !url) return;
+    if (gl) {
+      gl.autoClear = false;
+    }
+  }, [gl]);
+
+  useEffect(() => {
+    if (!gl || !camera || !url) return;
 
     let isMounted = true;
 
@@ -58,7 +64,7 @@ export function GaussianSplats({
         renderer: gl,
         camera: camera as THREE.PerspectiveCamera,
         useBuiltInControls: false,
-        selfDrivenMode: false,
+        selfDrivenMode: true,
         ignoreDevicePixelRatio: false,
         gpuAcceleratedSort: true,
         enableSIMDInSort: true,
@@ -93,8 +99,8 @@ export function GaussianSplats({
         })
         .then(() => {
           if (!isMounted) return;
-          console.log("[Player] Gaussian splats loaded successfully");
-          setIsReady(true);
+          console.log("[Player] Gaussian splats loaded, starting viewer...");
+          viewer.start();
           onLoadRef.current?.();
         })
         .catch((err: Error) => {
@@ -109,35 +115,13 @@ export function GaussianSplats({
       clearTimeout(initTimeout);
 
       if (viewerRef.current) {
+        viewerRef.current.stop();
         viewerRef.current.dispose();
         viewerRef.current = null;
       }
-      setIsReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, gl, camera, scene, JSON.stringify(position), JSON.stringify(rotation), scale]);
-
-  // First useFrame: Run early (priority -1) to clear and render R3F scene manually
-  useFrame(({ gl: renderer, scene: r3fScene, camera: r3fCamera }) => {
-    renderer.autoClear = false;
-    renderer.clear(true, true, true);
-    renderer.render(r3fScene, r3fCamera);
-  }, -1);
-
-  // Second useFrame: Run after R3F render (priority 1) to composite splats on top
-  useFrame(() => {
-    if (!isReady || !viewerRef.current) return;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const viewer = viewerRef.current as any;
-
-    if (typeof viewer.update === "function") {
-      viewer.update();
-    }
-    if (typeof viewer.render === "function") {
-      viewer.render();
-    }
-  }, 1);
+  }, [url, gl, camera, JSON.stringify(position), JSON.stringify(rotation), scale]);
 
   return null;
 }
