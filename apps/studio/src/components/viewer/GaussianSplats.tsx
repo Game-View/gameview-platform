@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useThree } from "@react-three/fiber";
+import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
 
@@ -116,7 +116,8 @@ export function GaussianSplats({
               const splatPosition = new THREE.Vector3();
               if (splatMesh.getSplatCenter) {
                 splatMesh.getSplatCenter(middleSplatIdx, splatPosition);
-                console.log("[GaussianSplats] Middle splat position:", splatPosition);
+                // Log individual values for clarity
+                console.log("[GaussianSplats] Middle splat position: x=" + splatPosition.x + ", y=" + splatPosition.y + ", z=" + splatPosition.z);
 
                 // Move camera to look at this position
                 camera.position.set(
@@ -125,12 +126,14 @@ export function GaussianSplats({
                   splatPosition.z + 2
                 );
                 camera.lookAt(splatPosition);
+                console.log("[GaussianSplats] Camera moved to: x=" + camera.position.x + ", y=" + camera.position.y + ", z=" + camera.position.z);
               }
             }
           }
 
           onLoadRef.current?.();
-          viewer.start();
+          // Don't call viewer.start() - we'll update manually via useFrame
+          console.log("[GaussianSplats] Viewer ready for manual updates");
         }
       })
       .catch((err: Error) => {
@@ -151,6 +154,20 @@ export function GaussianSplats({
     };
   // Only re-run when URL or core dependencies change, not callbacks
   }, [url, gl, camera]);
+
+  // Manual render update - integrate with R3F's render loop
+  useFrame(() => {
+    if (viewerRef.current && !isDisposedRef.current) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const viewer = viewerRef.current as any;
+      if (viewer.update) {
+        viewer.update();
+      }
+      if (viewer.render) {
+        viewer.render();
+      }
+    }
+  });
 
   return <group ref={groupRef} />;
 }
