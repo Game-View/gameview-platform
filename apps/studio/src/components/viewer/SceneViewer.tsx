@@ -251,11 +251,20 @@ export function SceneViewer({
       initializedUrlRef.current = splatUrl;
       initializingRef.current = false;
 
+      console.log('[SceneViewer] Viewer created, checking renderer...');
+      console.log('[SceneViewer] Renderer:', viewerInternal.renderer);
+      console.log('[SceneViewer] Camera:', viewerInternal.camera);
+
       // Move the viewer's canvas into our container
       // The viewer creates and appends its canvas to document.body by default
       setTimeout(() => {
         // Find the canvas created by the viewer (should be in body)
         const viewerCanvas = viewerInternal.renderer?.domElement;
+        console.log('[SceneViewer] Canvas element:', viewerCanvas);
+        console.log('[SceneViewer] Canvas parent:', viewerCanvas?.parentElement);
+        console.log('[SceneViewer] Container:', container);
+        console.log('[SceneViewer] Container dimensions:', container.clientWidth, 'x', container.clientHeight);
+
         if (viewerCanvas && viewerCanvas.parentElement !== container) {
           // Style the canvas to fill our container
           viewerCanvas.style.width = '100%';
@@ -264,6 +273,7 @@ export function SceneViewer({
           viewerCanvas.style.top = '0';
           viewerCanvas.style.left = '0';
           container.appendChild(viewerCanvas);
+          console.log('[SceneViewer] Canvas moved to container');
 
           // Resize to match container
           const width = container.clientWidth;
@@ -276,10 +286,16 @@ export function SceneViewer({
               cam.updateProjectionMatrix();
             }
           }
+          console.log('[SceneViewer] Renderer resized to:', width, 'x', height);
+        } else if (!viewerCanvas) {
+          console.error('[SceneViewer] No canvas found on renderer!');
+        } else {
+          console.log('[SceneViewer] Canvas already in container');
         }
       }, 50);
 
       // Load the splat file
+      console.log('[SceneViewer] Starting to load splat from:', splatUrl);
       viewer
         .addSplatScene(splatUrl, {
           showLoadingUI: false,
@@ -294,9 +310,13 @@ export function SceneViewer({
           if (!isMounted) {
             return;
           }
+          console.log('[SceneViewer] Splat loaded successfully');
+          console.log('[SceneViewer] Splat count:', viewerInternal.splatMesh?.getSplatCount?.() || 'unknown');
+          console.log('[SceneViewer] Camera position:', viewerInternal.camera?.position);
           setIsLoading(false);
           onLoadRef.current?.();
           viewer.start();
+          console.log('[SceneViewer] Viewer started');
         })
         .catch((err: Error) => {
           if (!isMounted) return;
