@@ -25,7 +25,19 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
   ({ url, onLoad, onError, onProgress }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
+    const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+
+    // Use refs for callbacks to avoid re-running effect
+    const onLoadRef = useRef(onLoad);
+    const onErrorRef = useRef(onError);
+    const onProgressRef = useRef(onProgress);
+
+    useEffect(() => {
+      onLoadRef.current = onLoad;
+      onErrorRef.current = onError;
+      onProgressRef.current = onProgress;
+    }, [onLoad, onError, onProgress]);
 
     // Expose camera update method via ref
     useImperativeHandle(ref, () => ({
@@ -43,91 +55,120 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
 
       const container = containerRef.current;
       let isMounted = true;
+      const instanceId = Math.random().toString(36).substr(2, 9);
 
-      // Create dedicated renderer for splats
-      const renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: false, // Splat layer doesn't need transparency
-      });
-      renderer.setSize(container.clientWidth, container.clientHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.setClearColor(0x1a1a1a); // Dark background
-      container.appendChild(renderer.domElement);
+      console.log(`[SplatBackground:${instanceId}] Effect started, waiting for stability...`);
 
-      // Create camera
-      const camera = new THREE.PerspectiveCamera(
-        50, // Match R3F camera FOV
-        container.clientWidth / container.clientHeight,
-        0.1,
-        1000
-      );
-      camera.position.set(5, 5, 5);
-      camera.lookAt(0, 0, 0);
-      cameraRef.current = camera;
+      // Delay to handle React Strict Mode's double-mount cycle
+      const initTimeout = setTimeout(() => {
+        if (!isMounted) {
+          console.log(`[SplatBackground:${instanceId}] Unmounted during delay, skipping`);
+          return;
+        }
 
-      // Create viewer with its own renderer
-      const viewer = new GaussianSplats3D.Viewer({
-        renderer,
-        camera,
-        useBuiltInControls: false, // We sync camera from R3F
-        ignoreDevicePixelRatio: false,
-        gpuAcceleratedSort: true,
-        enableSIMDInSort: true,
-        sharedMemoryForWorkers: false,
-        integerBasedSort: true,
-        halfPrecisionCovariancesOnGPU: true,
-        dynamicScene: false,
-        webXRMode: GaussianSplats3D.WebXRMode.None,
-        renderMode: GaussianSplats3D.RenderMode.Always,
-        sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
-        antialiased: true,
-        focalAdjustment: 1.0,
-        logLevel: GaussianSplats3D.LogLevel.Debug,
-        sphericalHarmonicsDegree: 0,
-      });
+        console.log(`[SplatBackground:${instanceId}] Initializing...`);
 
-      viewerRef.current = viewer;
+        // Create dedicated renderer for splats
+        const renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: false,
+        });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setClearColor(0x1a1a1a);
+        container.appendChild(renderer.domElement);
+        rendererRef.current = renderer;
 
-      console.log("[SplatBackground] Loading splats from:", url);
+        // Create camera
+        const camera = new THREE.PerspectiveCamera(
+          50,
+          container.clientWidth / container.clientHeight,
+          0.1,
+          1000
+        );
+        camera.position.set(5, 5, 5);
+        camera.lookAt(0, 0, 0);
+        cameraRef.current = camera;
 
-      // Load the splat scene
-      viewer
-        .addSplatScene(url, {
-          showLoadingUI: false,
-          progressiveLoad: true,
-          onProgress: (percent: number) => {
-            if (!isMounted) return;
-            console.log(`[SplatBackground] Loading: ${percent.toFixed(1)}%`);
-            onProgress?.(percent);
-          },
-        })
-        .then(() => {
-          if (!isMounted) return;
-          console.log("[SplatBackground] Splats loaded, starting viewer");
-          viewer.start();
-          onLoad?.();
-        })
-        .catch((err: Error) => {
-          if (!isMounted) return;
-          console.error("[SplatBackground] Failed to load:", err);
-          onError?.(err);
+        // Create viewer
+        const viewer = new GaussianSplats3D.Viewer({
+          renderer,
+          camera,
+          useBuiltInControls: false,
+          ignoreDevicePixelRatio: false,
+          gpuAcceleratedSort: true,
+          enableSIMDInSort: true,
+          sharedMemoryForWorkers: false,
+          integerBasedSort: true,
+          halfPrecisionCovariancesOnGPU: true,
+          dynamicScene: false,
+          webXRMode: GaussianSplats3D.WebXRMode.None,
+          renderMode: GaussianSplats3D.RenderMode.Always,
+          sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
+          antialiased: true,
+          focalAdjustment: 1.0,
+          logLevel: GaussianSplats3D.LogLevel.Debug,
+          sphericalHarmonicsDegree: 0,
         });
 
-      // Handle resize
-      const handleResize = () => {
-        if (!container) return;
-        const width = container.clientWidth;
-        const height = container.clientHeight;
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
-        renderer.setSize(width, height);
-      };
+        viewerRef.current = viewer;
 
-      window.addEventListener("resize", handleResize);
+        console.log(`[SplatBackground:${instanceId}] Loading splats from:`, url);
+
+        viewer
+          .addSplatScene(url, {
+            showLoadingUI: false,
+            progressiveLoad: true,
+            onProgress: (percent: number) => {
+              if (!isMounted) return;
+              console.log(`[SplatBackground:${instanceId}] Loading: ${percent.toFixed(1)}%`);
+              onProgressRef.current?.(percent);
+            },
+          })
+          .then(() => {
+            if (!isMounted) {
+              console.log(`[SplatBackground:${instanceId}] Loaded but unmounted, ignoring`);
+              return;
+            }
+            console.log(`[SplatBackground:${instanceId}] Splats loaded, starting viewer`);
+            viewer.start();
+            onLoadRef.current?.();
+          })
+          .catch((err: Error) => {
+            if (!isMounted) return;
+            console.error(`[SplatBackground:${instanceId}] Failed to load:`, err);
+            onErrorRef.current?.(err);
+          });
+
+        // Handle resize
+        const handleResize = () => {
+          if (!container || !isMounted) return;
+          const width = container.clientWidth;
+          const height = container.clientHeight;
+          camera.aspect = width / height;
+          camera.updateProjectionMatrix();
+          renderer.setSize(width, height);
+        };
+
+        window.addEventListener("resize", handleResize);
+
+        // Store cleanup for resize listener
+        (window as unknown as Record<string, () => void>)[`splatResize_${instanceId}`] = () => {
+          window.removeEventListener("resize", handleResize);
+        };
+      }, 100);
 
       return () => {
+        console.log(`[SplatBackground:${instanceId}] Cleanup starting...`);
         isMounted = false;
-        window.removeEventListener("resize", handleResize);
+        clearTimeout(initTimeout);
+
+        // Remove resize listener if it was set
+        const cleanupResize = (window as unknown as Record<string, () => void>)[`splatResize_${instanceId}`];
+        if (cleanupResize) {
+          cleanupResize();
+          delete (window as unknown as Record<string, () => void>)[`splatResize_${instanceId}`];
+        }
 
         if (viewerRef.current) {
           viewerRef.current.stop();
@@ -135,14 +176,17 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
           viewerRef.current = null;
         }
 
-        renderer.dispose();
-        if (container.contains(renderer.domElement)) {
-          container.removeChild(renderer.domElement);
+        if (rendererRef.current) {
+          rendererRef.current.dispose();
+          if (container.contains(rendererRef.current.domElement)) {
+            container.removeChild(rendererRef.current.domElement);
+          }
+          rendererRef.current = null;
         }
 
         cameraRef.current = null;
       };
-    }, [url, onLoad, onError, onProgress]);
+    }, [url]); // Only re-run when URL changes
 
     return (
       <div
