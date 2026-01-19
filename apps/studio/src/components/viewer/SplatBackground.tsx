@@ -110,7 +110,7 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
           halfPrecisionCovariancesOnGPU: true,
           dynamicScene: false,
           webXRMode: GaussianSplats3D.WebXRMode.None,
-          renderMode: GaussianSplats3D.RenderMode.OnChange, // Match SceneViewer
+          renderMode: GaussianSplats3D.RenderMode.Always, // Always render since controls are blocked by R3F overlay
           sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual, // Match SceneViewer
           antialiased: true,
           focalAdjustment: 1.0,
@@ -139,6 +139,22 @@ export const SplatBackground = forwardRef<SplatBackgroundRef, SplatBackgroundPro
             }
             console.log(`[SplatBackground:${instanceId}] Splats loaded, starting viewer`);
             viewer.start();
+
+            // Force initial render by nudging camera slightly
+            // OnChange mode needs a camera change to trigger render
+            setTimeout(() => {
+              if (!isMounted) return;
+              console.log(`[SplatBackground:${instanceId}] Forcing initial render...`);
+              camera.position.x += 0.001;
+              camera.updateProjectionMatrix();
+              // Then reset
+              setTimeout(() => {
+                if (!isMounted) return;
+                camera.position.x -= 0.001;
+                camera.updateProjectionMatrix();
+              }, 50);
+            }, 100);
+
             onLoadRef.current?.();
           })
           .catch((err: Error) => {
