@@ -77,7 +77,6 @@ export function GaussianSplats({
       focalAdjustment: 1.0,
       logLevel: GaussianSplats3D.LogLevel.Debug,
       sphericalHarmonicsDegree: 0, // Try degree 0 - PLY might not have higher SH
-      splatAlphaRemovalThreshold: 0, // Don't filter any splats
     });
 
     viewerRef.current = viewer;
@@ -87,6 +86,7 @@ export function GaussianSplats({
       .addSplatScene(url, {
         showLoadingUI: false,
         progressiveLoad: false, // Disable progressive load for compatibility
+        splatAlphaRemovalThreshold: 0, // Don't filter any splats
         position: position,
         rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
         scale: [scale, scale, scale],
