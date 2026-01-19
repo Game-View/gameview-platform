@@ -62,8 +62,7 @@ export function SceneViewer({
       // Let the viewer create its own renderer, camera, and controls
       // This is the simplest initialization pattern from the library docs
       // Note: TypeScript types are incomplete, so we use type assertion
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const viewer = new GaussianSplats3D.Viewer({
+      const viewerOptions = {
         cameraUp: [0, 1, 0], // Standard Y-up
         initialCameraPosition: [initialPosition.x, initialPosition.y, initialPosition.z],
         initialCameraLookAt: [initialTarget.x, initialTarget.y, initialTarget.z],
@@ -72,7 +71,9 @@ export function SceneViewer({
         sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
         logLevel: GaussianSplats3D.LogLevel.Debug, // Enable debug logging
         sphericalHarmonicsDegree: 0,
-      } as any);
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const viewer = new GaussianSplats3D.Viewer(viewerOptions as any);
 
       viewerRef.current = viewer;
 
