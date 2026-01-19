@@ -33,6 +33,19 @@ export function GaussianSplats({
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
   const [isReady, setIsReady] = useState(false);
 
+  // Use refs for callbacks to avoid re-running effect when callbacks change
+  // This is critical because onProgress updates parent state, causing re-renders
+  const onLoadRef = useRef(onLoad);
+  const onErrorRef = useRef(onError);
+  const onProgressRef = useRef(onProgress);
+
+  // Keep refs up to date
+  useEffect(() => {
+    onLoadRef.current = onLoad;
+    onErrorRef.current = onError;
+    onProgressRef.current = onProgress;
+  }, [onLoad, onError, onProgress]);
+
   useEffect(() => {
     if (!gl || !camera) return;
 
@@ -43,7 +56,6 @@ export function GaussianSplats({
     console.log(`[GaussianSplats:${instanceId}] Effect started, waiting for stability...`);
 
     // Delay viewer creation to handle React Strict Mode's mount/unmount cycle
-    // This allows the first (discarded) mount to complete cleanup before we start
     const initTimeout = setTimeout(() => {
       if (!isMounted) {
         console.log(`[GaussianSplats:${instanceId}] Unmounted during delay, skipping initialization`);
@@ -92,7 +104,8 @@ export function GaussianSplats({
           onProgress: (percent: number) => {
             if (!isMounted) return;
             console.log(`[GaussianSplats:${instanceId}] Loading progress: ${percent.toFixed(1)}%`);
-            onProgress?.(percent);
+            // Use ref to call latest callback without triggering effect re-run
+            onProgressRef.current?.(percent);
           },
         })
         .then(() => {
@@ -125,7 +138,7 @@ export function GaussianSplats({
           }
 
           setIsReady(true);
-          onLoad?.();
+          onLoadRef.current?.();
         })
         .catch((err: Error) => {
           if (!isMounted) {
@@ -133,9 +146,9 @@ export function GaussianSplats({
             return;
           }
           console.error(`[GaussianSplats:${instanceId}] Failed to load:`, err);
-          onError?.(err);
+          onErrorRef.current?.(err);
         });
-    }, 100); // Small delay to let Strict Mode cleanup complete
+    }, 100);
 
     return () => {
       console.log(`[GaussianSplats:${instanceId}] Cleanup starting...`);
@@ -149,7 +162,10 @@ export function GaussianSplats({
       }
       setIsReady(false);
     };
-  }, [url, gl, camera, position, rotation, scale, onLoad, onError, onProgress]);
+    // Only re-run effect when URL or transform changes, NOT when callbacks change
+    // Serialize arrays to prevent re-running when parent creates new array references
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, gl, camera, JSON.stringify(position), JSON.stringify(rotation), scale]);
 
   // Manually update and render in R3F's frame loop
   useFrame(() => {
