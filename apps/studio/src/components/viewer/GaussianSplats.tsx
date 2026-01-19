@@ -220,31 +220,51 @@ export function GaussianSplats({
   const frameCountRef = useRef(0);
   const lastLoggedStateRef = useRef<string>("");
 
-  // DropInViewer handles its own rendering and sorting when part of the scene
-  // Only call update if the method exists (some versions may not have it)
-  useFrame(() => {
+  // Manual rendering after R3F completes
+  // The DropInViewer's onBeforeRender calls update() but doesn't render
+  // We need to explicitly render the splatMesh using the internal viewer's render method
+  useFrame(({ gl: renderer }) => {
     frameCountRef.current++;
-    const viewer = viewerRef.current;
+    const dropInViewer = viewerRef.current;
 
     // Log state changes (not every frame)
-    const currentState = `viewer=${!!viewer},ready=${isReadyRef.current},disposed=${isDisposedRef.current}`;
+    const currentState = `viewer=${!!dropInViewer},ready=${isReadyRef.current},disposed=${isDisposedRef.current}`;
     if (currentState !== lastLoggedStateRef.current) {
       console.log(`[GaussianSplats] State change at frame ${frameCountRef.current}: ${currentState}`);
-      if (viewer?.viewer) {
-        console.log(`[GaussianSplats] Internal viewer: initialized=${viewer.viewer.initialized}, splatRenderReady=${viewer.viewer.splatRenderReady}`);
+      if (dropInViewer?.viewer) {
+        const iv = dropInViewer.viewer;
+        console.log(`[GaussianSplats] Internal viewer: initialized=${iv.initialized}, splatRenderReady=${iv.splatRenderReady}, renderer=${!!iv.renderer}`);
       }
       lastLoggedStateRef.current = currentState;
     }
 
     // Log every 300 frames (~5 seconds at 60fps) if viewer is ready
-    if (frameCountRef.current % 300 === 0 && viewer && isReadyRef.current) {
+    if (frameCountRef.current % 300 === 0 && dropInViewer && isReadyRef.current) {
       console.log(`[GaussianSplats] Frame ${frameCountRef.current}: Rendering active`);
     }
 
-    if (viewer && isReadyRef.current && !isDisposedRef.current) {
-      // Check if update method exists before calling
-      if (typeof viewer.update === 'function') {
-        viewer.update();
+    if (dropInViewer && isReadyRef.current && !isDisposedRef.current) {
+      const internalViewer = dropInViewer.viewer;
+
+      // Ensure the internal viewer has the renderer and camera
+      if (internalViewer && internalViewer.splatRenderReady) {
+        // Set autoClear to false to preserve R3F's render
+        const savedAutoClear = renderer.autoClear;
+        renderer.autoClear = false;
+
+        // Manually render the splatMesh if the internal render method exists
+        if (typeof internalViewer.render === 'function') {
+          try {
+            internalViewer.render();
+          } catch (e) {
+            // Log only once per state change
+            if (frameCountRef.current % 300 === 0) {
+              console.warn('[GaussianSplats] Render error:', e);
+            }
+          }
+        }
+
+        renderer.autoClear = savedAutoClear;
       }
     }
   });
