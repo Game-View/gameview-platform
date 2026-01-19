@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
+import * as THREE from "three";
 
 export interface SceneViewerProps {
   splatUrl: string;
   thumbnailUrl?: string;
   initialPosition?: { x: number; y: number; z: number };
   initialTarget?: { x: number; y: number; z: number };
+  enableFirstPersonControls?: boolean;
+  movementSpeed?: number;
+  lookSensitivity?: number;
   onLoad?: () => void;
   onError?: (error: Error) => void;
   onProgress?: (progress: number) => void;
@@ -18,6 +22,9 @@ export function SceneViewer({
   thumbnailUrl,
   initialPosition = { x: 0, y: 2, z: 5 },
   initialTarget = { x: 0, y: 0, z: 0 },
+  enableFirstPersonControls = true,
+  movementSpeed = 5,
+  lookSensitivity = 0.002,
   onLoad,
   onError,
   onProgress,
@@ -27,6 +34,30 @@ export function SceneViewer({
   const [isLoading, setIsLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [isPointerLocked, setIsPointerLocked] = useState(false);
+
+  // First-person controls state
+  const keysRef = useRef({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    sprint: false,
+    up: false,
+    down: false,
+    jump: false,
+    lookUp: false,
+    lookDown: false,
+    lookLeft: false,
+    lookRight: false,
+    spin: false,
+  });
+  const rotationRef = useRef({ pitch: 0, yaw: 0 });
+  const velocityRef = useRef({ y: 0 });
+  const isGroundedRef = useRef(true);
+  const groundLevelRef = useRef(initialPosition.y);
+  const animationFrameRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(0);
 
   // Use refs for callbacks to avoid re-triggering effect
   const onLoadRef = useRef(onLoad);
@@ -38,6 +69,126 @@ export function SceneViewer({
     onErrorRef.current = onError;
     onProgressRef.current = onProgress;
   }, [onLoad, onError, onProgress]);
+
+  // Request pointer lock for mouse look
+  const requestPointerLock = useCallback(() => {
+    if (!enableFirstPersonControls) return;
+    const canvas = containerRef.current?.querySelector('canvas');
+    if (canvas) {
+      canvas.requestPointerLock();
+    }
+  }, [enableFirstPersonControls]);
+
+  // Handle pointer lock change
+  useEffect(() => {
+    if (!enableFirstPersonControls) return;
+
+    const handleLockChange = () => {
+      const canvas = containerRef.current?.querySelector('canvas');
+      setIsPointerLocked(document.pointerLockElement === canvas);
+    };
+
+    document.addEventListener("pointerlockchange", handleLockChange);
+    return () => document.removeEventListener("pointerlockchange", handleLockChange);
+  }, [enableFirstPersonControls]);
+
+  // Handle mouse movement for looking
+  useEffect(() => {
+    if (!enableFirstPersonControls) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isPointerLocked) return;
+
+      const { movementX, movementY } = e;
+
+      // Update rotation
+      rotationRef.current.yaw -= movementX * lookSensitivity * 50;
+      rotationRef.current.pitch -= movementY * lookSensitivity * 50;
+
+      // Clamp pitch
+      rotationRef.current.pitch = Math.max(-89, Math.min(89, rotationRef.current.pitch));
+
+      // Normalize yaw
+      rotationRef.current.yaw = rotationRef.current.yaw % 360;
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    return () => document.removeEventListener("mousemove", handleMouseMove);
+  }, [enableFirstPersonControls, isPointerLocked, lookSensitivity]);
+
+  // Handle keyboard input
+  useEffect(() => {
+    if (!enableFirstPersonControls) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.code) {
+        case "KeyW": keysRef.current.forward = true; break;
+        case "KeyS": keysRef.current.backward = true; break;
+        case "KeyA": keysRef.current.left = true; break;
+        case "KeyD": keysRef.current.right = true; break;
+        case "ShiftLeft":
+        case "ShiftRight": keysRef.current.sprint = true; break;
+        case "ArrowUp": keysRef.current.lookUp = true; break;
+        case "ArrowDown": keysRef.current.lookDown = true; break;
+        case "ArrowLeft": keysRef.current.lookLeft = true; break;
+        case "ArrowRight": keysRef.current.lookRight = true; break;
+        case "KeyT": keysRef.current.up = true; break;
+        case "KeyG": keysRef.current.down = true; break;
+        case "Space":
+          if (isGroundedRef.current) {
+            keysRef.current.jump = true;
+            velocityRef.current.y = 8; // Jump force
+            isGroundedRef.current = false;
+          }
+          break;
+        case "KeyQ": keysRef.current.spin = true; break;
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      switch (e.code) {
+        case "KeyW": keysRef.current.forward = false; break;
+        case "KeyS": keysRef.current.backward = false; break;
+        case "KeyA": keysRef.current.left = false; break;
+        case "KeyD": keysRef.current.right = false; break;
+        case "ShiftLeft":
+        case "ShiftRight": keysRef.current.sprint = false; break;
+        case "ArrowUp": keysRef.current.lookUp = false; break;
+        case "ArrowDown": keysRef.current.lookDown = false; break;
+        case "ArrowLeft": keysRef.current.lookLeft = false; break;
+        case "ArrowRight": keysRef.current.lookRight = false; break;
+        case "KeyT": keysRef.current.up = false; break;
+        case "KeyG": keysRef.current.down = false; break;
+        case "Space": keysRef.current.jump = false; break;
+        case "KeyQ": keysRef.current.spin = false; break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [enableFirstPersonControls]);
+
+  // Click to enter pointer lock
+  useEffect(() => {
+    if (!enableFirstPersonControls) return;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleClick = () => {
+      if (!isPointerLocked) {
+        requestPointerLock();
+      }
+    };
+
+    container.addEventListener("click", handleClick);
+    return () => container.removeEventListener("click", handleClick);
+  }, [enableFirstPersonControls, isPointerLocked, requestPointerLock]);
 
   // Initialize viewer
   useEffect(() => {
@@ -68,12 +219,19 @@ export function SceneViewer({
         sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
         logLevel: GaussianSplats3D.LogLevel.None,
         sphericalHarmonicsDegree: 0,
+        // Disable built-in orbit controls when using first-person controls
+        useBuiltInControls: !enableFirstPersonControls,
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewer = new GaussianSplats3D.Viewer(viewerOptions as any);
       // Cast to any for accessing internal properties not exposed in types
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewerInternal = viewer as any;
+
+      // Calculate initial yaw from lookAt target
+      const dx = initialTarget.x - initialPosition.x;
+      const dz = initialTarget.z - initialPosition.z;
+      rotationRef.current.yaw = Math.atan2(dx, dz) * (180 / Math.PI);
 
       viewerRef.current = viewer;
 
@@ -177,7 +335,133 @@ export function SceneViewer({
         viewerRef.current = null;
       }
     };
-  }, [splatUrl]); // Only re-run when URL changes
+  }, [splatUrl, initialPosition, initialTarget, enableFirstPersonControls]);
+
+  // First-person controls animation loop
+  useEffect(() => {
+    if (!enableFirstPersonControls || isLoading) return;
+
+    const keyboardLookSpeed = 90; // degrees per second
+    const spinSpeed = 180; // degrees per second
+    const verticalSpeed = 4;
+    const gravity = 20;
+
+    const animate = (currentTime: number) => {
+      if (!viewerRef.current) return;
+
+      // Calculate delta time
+      const delta = lastTimeRef.current ? (currentTime - lastTimeRef.current) / 1000 : 0.016;
+      lastTimeRef.current = currentTime;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const viewerInternal = viewerRef.current as any;
+      const camera = viewerInternal.camera;
+      if (!camera) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
+      const keys = keysRef.current;
+      const speed = keys.sprint ? movementSpeed * 1.5 : movementSpeed;
+
+      // ===== KEYBOARD LOOK =====
+      if (keys.lookUp) {
+        rotationRef.current.pitch = Math.min(89, rotationRef.current.pitch + keyboardLookSpeed * delta);
+      }
+      if (keys.lookDown) {
+        rotationRef.current.pitch = Math.max(-89, rotationRef.current.pitch - keyboardLookSpeed * delta);
+      }
+      if (keys.lookLeft) {
+        rotationRef.current.yaw += keyboardLookSpeed * delta;
+      }
+      if (keys.lookRight) {
+        rotationRef.current.yaw -= keyboardLookSpeed * delta;
+      }
+      if (keys.spin) {
+        rotationRef.current.yaw += spinSpeed * delta;
+      }
+
+      // Normalize yaw
+      rotationRef.current.yaw = rotationRef.current.yaw % 360;
+
+      // ===== HORIZONTAL MOVEMENT =====
+      let forward = 0;
+      let strafe = 0;
+
+      if (keys.forward) forward += 1;
+      if (keys.backward) forward -= 1;
+      if (keys.left) strafe -= 1;
+      if (keys.right) strafe += 1;
+
+      let moveX = 0;
+      let moveZ = 0;
+
+      if (forward !== 0 || strafe !== 0) {
+        // Normalize diagonal movement
+        const length = Math.sqrt(forward * forward + strafe * strafe);
+        forward /= length;
+        strafe /= length;
+
+        // Get yaw in radians
+        const yawRad = (rotationRef.current.yaw * Math.PI) / 180;
+
+        // Calculate world-space movement
+        moveX = Math.sin(yawRad) * forward + Math.cos(yawRad) * strafe;
+        moveZ = Math.cos(yawRad) * forward - Math.sin(yawRad) * strafe;
+      }
+
+      // ===== VERTICAL MOVEMENT =====
+      let verticalMove = 0;
+      if (keys.up) verticalMove += verticalSpeed * delta;
+      if (keys.down) verticalMove -= verticalSpeed * delta;
+
+      // Apply gravity if not using T/G vertical controls
+      if (!keys.up && !keys.down) {
+        velocityRef.current.y -= gravity * delta;
+      } else {
+        velocityRef.current.y = 0;
+      }
+
+      // Calculate new position
+      const newPos = {
+        x: camera.position.x + moveX * speed * delta,
+        y: camera.position.y + velocityRef.current.y * delta + verticalMove,
+        z: camera.position.z + moveZ * speed * delta,
+      };
+
+      // Ground collision
+      if (newPos.y <= groundLevelRef.current && !keys.up && !keys.down) {
+        newPos.y = groundLevelRef.current;
+        velocityRef.current.y = 0;
+        isGroundedRef.current = true;
+      } else if (keys.up || keys.down) {
+        groundLevelRef.current = newPos.y;
+        isGroundedRef.current = true;
+      }
+
+      // Update camera position
+      camera.position.set(newPos.x, newPos.y, newPos.z);
+
+      // ===== APPLY ROTATION =====
+      const pitchRad = (rotationRef.current.pitch * Math.PI) / 180;
+      const yawRad = (rotationRef.current.yaw * Math.PI) / 180;
+
+      // Create rotation using Euler angles (yaw first, then pitch)
+      const euler = new THREE.Euler(pitchRad, yawRad, 0, "YXZ");
+      camera.quaternion.setFromEuler(euler);
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [enableFirstPersonControls, isLoading, movementSpeed]);
 
   return (
     <div ref={containerRef} className="w-full h-full relative bg-black">
@@ -225,6 +509,27 @@ export function SceneViewer({
             </div>
             <p className="text-white font-medium mb-2">Failed to Load Scene</p>
             <p className="text-gv-neutral-400 text-sm max-w-xs">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Controls hint for first-person mode */}
+      {enableFirstPersonControls && !isLoading && !error && !isPointerLocked && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          <div className="bg-black/70 backdrop-blur-sm px-4 py-2 rounded-gv text-center">
+            <p className="text-white text-sm font-medium mb-1">Click to enable mouse look</p>
+            <p className="text-gv-neutral-400 text-xs">
+              WASD: Move | Mouse: Look | Space: Jump | T/G: Up/Down | Shift: Sprint
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Pointer locked indicator */}
+      {enableFirstPersonControls && !isLoading && !error && isPointerLocked && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          <div className="bg-black/50 backdrop-blur-sm px-3 py-1 rounded-gv">
+            <p className="text-gv-neutral-300 text-xs">Press ESC to release mouse</p>
           </div>
         </div>
       )}
