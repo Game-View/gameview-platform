@@ -66,7 +66,7 @@ export function GaussianSplats({
       ignoreDevicePixelRatio: false,
       gpuAcceleratedSort: true,
       enableSIMDInSort: true,
-      sharedMemoryForWorkers: true, // Enable for better sort performance
+      sharedMemoryForWorkers: false, // Disabled - requires cross-origin isolation headers
       integerBasedSort: false, // Disable - causes issues with large scene ranges
       halfPrecisionCovariancesOnGPU: true,
       dynamicScene: true, // Try dynamic scene for better tree building
