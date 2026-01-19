@@ -99,11 +99,6 @@ export function GaussianSplats({
       .then(() => {
         if (!isDisposedRef.current) {
           console.log("[GaussianSplats] Load complete, starting viewer");
-          // Log scene bounds to understand splat positions
-          const sceneCenter = viewer.getSceneCenter();
-          const sceneRadius = viewer.getSplatMesh()?.getSplatSceneRadius();
-          console.log("[GaussianSplats] Scene center:", sceneCenter);
-          console.log("[GaussianSplats] Scene radius:", sceneRadius);
           onLoadRef.current?.();
           viewer.start();
         }
