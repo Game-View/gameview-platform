@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useCallback, Suspense, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import {
   OrbitControls,
   TransformControls,
@@ -16,7 +16,7 @@ import { Loader2 } from "lucide-react";
 import { useEditorStore } from "@/stores/editor-store";
 import type { PlacedObject, ObjectTransform } from "@/lib/objects";
 import { TriggerZoneVisualization } from "./TriggerZoneVisualization";
-import { GaussianSplats } from "@/components/viewer/GaussianSplats";
+import { SplatBackground, SplatBackgroundRef } from "@/components/viewer/SplatBackground";
 
 interface SceneEditorProps {
   splatUrl?: string;
@@ -25,6 +25,10 @@ interface SceneEditorProps {
 
 export function SceneEditor({ splatUrl, onSave }: SceneEditorProps) {
   const { placedObjects, isDirty } = useEditorStore();
+  const splatRef = useRef<SplatBackgroundRef>(null);
+  const [splatLoaded, setSplatLoaded] = useState(false);
+  const [splatError, setSplatError] = useState<string | null>(null);
+  const [splatProgress, setSplatProgress] = useState(0);
 
   // Auto-save when dirty
   useEffect(() => {
@@ -38,20 +42,96 @@ export function SceneEditor({ splatUrl, onSave }: SceneEditorProps) {
   }, [isDirty, placedObjects, onSave]);
 
   return (
-    <Canvas
-      camera={{ position: [5, 5, 5], fov: 50 }}
-      gl={{ antialias: true, alpha: true }}
-      dpr={[1, 2]}
-      onPointerMissed={() => {
-        // Deselect when clicking empty space
-        useEditorStore.getState().selectObject(null);
-      }}
-    >
-      <Suspense fallback={<LoadingIndicator />}>
-        <EditorScene splatUrl={splatUrl} />
-      </Suspense>
-    </Canvas>
+    <div className="relative w-full h-full">
+      {/* Bottom layer: Splat background with its own renderer */}
+      {splatUrl && (
+        <SplatBackground
+          ref={splatRef}
+          url={splatUrl}
+          onLoad={() => {
+            console.log("[SceneEditor] Splat background loaded");
+            setSplatLoaded(true);
+          }}
+          onError={(err) => {
+            console.error("[SceneEditor] Splat background error:", err);
+            setSplatError(err.message);
+          }}
+          onProgress={(progress) => setSplatProgress(progress)}
+        />
+      )}
+
+      {/* Top layer: R3F Canvas for editor elements (transparent background) */}
+      <div className="absolute inset-0" style={{ zIndex: 1 }}>
+        <Canvas
+          camera={{ position: [5, 5, 5], fov: 50 }}
+          gl={{
+            antialias: true,
+            alpha: true, // Enable transparency
+            preserveDrawingBuffer: true,
+          }}
+          dpr={[1, 2]}
+          style={{ background: "transparent" }}
+          onPointerMissed={() => {
+            useEditorStore.getState().selectObject(null);
+          }}
+        >
+          {/* Camera sync component */}
+          <CameraSync splatRef={splatRef} />
+
+          <Suspense fallback={<LoadingIndicator />}>
+            <EditorScene />
+          </Suspense>
+        </Canvas>
+      </div>
+
+      {/* Loading overlay */}
+      {splatUrl && !splatLoaded && !splatError && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+          <div className="bg-black/70 backdrop-blur-sm px-6 py-4 rounded-gv text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-gv-primary-500 mx-auto mb-2" />
+            <div className="text-sm text-white mb-2">Loading 3D scene...</div>
+            <div className="w-40 h-1.5 bg-gv-neutral-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gv-primary-500 transition-all duration-300"
+                style={{ width: `${splatProgress}%` }}
+              />
+            </div>
+            <div className="text-xs text-gv-neutral-400 mt-1">{Math.round(splatProgress)}%</div>
+          </div>
+        </div>
+      )}
+
+      {/* Error overlay */}
+      {splatError && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+          <div className="bg-red-900/80 backdrop-blur-sm px-6 py-4 rounded-gv text-center max-w-xs">
+            <div className="text-sm text-red-200 font-medium">Failed to load 3D scene</div>
+            <div className="text-xs text-red-300 mt-1">{splatError}</div>
+          </div>
+        </div>
+      )}
+    </div>
   );
+}
+
+// Camera sync component - keeps splat background camera in sync with R3F camera
+function CameraSync({ splatRef }: { splatRef: React.RefObject<SplatBackgroundRef> }) {
+  const { camera } = useThree();
+  const targetRef = useRef(new THREE.Vector3(0, 0, 0));
+
+  useFrame(() => {
+    if (splatRef.current && camera) {
+      // Get the direction the camera is looking
+      const direction = new THREE.Vector3();
+      camera.getWorldDirection(direction);
+      targetRef.current.copy(camera.position).add(direction);
+
+      // Update splat background camera
+      splatRef.current.updateCamera(camera.position, targetRef.current);
+    }
+  });
+
+  return null;
 }
 
 // Loading indicator
@@ -66,16 +146,8 @@ function LoadingIndicator() {
   );
 }
 
-// Main editor scene
-interface EditorSceneProps {
-  splatUrl?: string;
-}
-
-function EditorScene({ splatUrl }: EditorSceneProps) {
-  const [splatLoaded, setSplatLoaded] = useState(false);
-  const [splatError, setSplatError] = useState<string | null>(null);
-  const [splatProgress, setSplatProgress] = useState(0);
-
+// Main editor scene - just editor elements, splats are in separate layer
+function EditorScene() {
   const {
     placedObjects,
     selectedObjectId,
@@ -228,45 +300,6 @@ function EditorScene({ splatUrl }: EditorSceneProps) {
         <planeGeometry args={[100, 100]} />
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
-
-      {/* Gaussian Splat 3D Scene Background */}
-      {splatUrl && (
-        <GaussianSplats
-          url={splatUrl}
-          onLoad={() => setSplatLoaded(true)}
-          onError={(err) => {
-            console.error("Failed to load Gaussian splats:", err);
-            setSplatError(err.message);
-          }}
-          onProgress={(progress) => setSplatProgress(progress)}
-        />
-      )}
-
-      {/* Splat loading indicator */}
-      {splatUrl && !splatLoaded && !splatError && (
-        <Html center position={[0, 2, 0]}>
-          <div className="bg-black/70 backdrop-blur-sm px-4 py-2 rounded-gv text-center">
-            <div className="text-sm text-white mb-1">Loading 3D scene...</div>
-            <div className="w-32 h-1.5 bg-gv-neutral-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gv-primary-500 transition-all duration-300"
-                style={{ width: `${splatProgress}%` }}
-              />
-            </div>
-            <div className="text-xs text-gv-neutral-400 mt-1">{Math.round(splatProgress)}%</div>
-          </div>
-        </Html>
-      )}
-
-      {/* Splat error indicator */}
-      {splatError && (
-        <Html center position={[0, 2, 0]}>
-          <div className="bg-red-900/80 backdrop-blur-sm px-4 py-2 rounded-gv text-center max-w-xs">
-            <div className="text-sm text-red-200 font-medium">Failed to load 3D scene</div>
-            <div className="text-xs text-red-300 mt-1">{splatError}</div>
-          </div>
-        </Html>
-      )}
     </>
   );
 }
