@@ -59,6 +59,7 @@ export function SceneViewer({
       }
 
       console.log(`[SceneViewer:${instanceId}] Initializing...`);
+      console.log(`[SceneViewer:${instanceId}] Container dimensions: ${container.clientWidth}x${container.clientHeight}`);
 
       // Create Three.js renderer
       const renderer = new THREE.WebGLRenderer({
@@ -69,6 +70,7 @@ export function SceneViewer({
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       container.appendChild(renderer.domElement);
       rendererRef.current = renderer;
+      console.log(`[SceneViewer:${instanceId}] Canvas created: ${renderer.domElement.width}x${renderer.domElement.height}`);
 
       // Create camera
       const camera = new THREE.PerspectiveCamera(
@@ -93,7 +95,7 @@ export function SceneViewer({
         halfPrecisionCovariancesOnGPU: true,
         dynamicScene: false,
         webXRMode: GaussianSplats3D.WebXRMode.None,
-        renderMode: GaussianSplats3D.RenderMode.OnChange,
+        renderMode: GaussianSplats3D.RenderMode.Always, // Force continuous rendering
         sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual,
         antialiased: true,
         focalAdjustment: 1.0,
