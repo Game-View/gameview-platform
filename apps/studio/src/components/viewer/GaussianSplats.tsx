@@ -138,17 +138,9 @@ export function GaussianSplats({
 
           onLoadRef.current?.();
 
-          // Add the splat mesh to R3F's scene so it renders properly
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const splatMeshObj = (viewer as any).splatMesh;
-          if (splatMeshObj && groupRef.current) {
-            groupRef.current.add(splatMeshObj);
-            console.log("[GaussianSplats] Added splatMesh to R3F scene");
-          }
-
-          // Mark as ready for useFrame updates (selfDrivenMode: false)
+          // Mark as ready for useFrame rendering
           isReadyRef.current = true;
-          console.log("[GaussianSplats] Viewer ready for manual updates");
+          console.log("[GaussianSplats] Viewer ready, will render after R3F");
         }
       })
       .catch((err: Error) => {
@@ -171,13 +163,26 @@ export function GaussianSplats({
   // Only re-run when URL or core dependencies change, not callbacks
   }, [url, gl, camera]);
 
-  // Manual update loop for selfDrivenMode: false
-  useFrame(() => {
+  // Render splats after R3F renders (priority > 0 runs after default)
+  // Using renderPriority 1 to run after R3F's default render
+  useFrame(({ gl, scene, camera: frameCamera }) => {
     if (viewerRef.current && isReadyRef.current && !isDisposedRef.current) {
+      // Save autoClear state
+      const wasAutoClear = gl.autoClear;
+
+      // Disable autoClear so viewer doesn't clear R3F's render
+      gl.autoClear = false;
+
+      // Update and render the splat viewer
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (viewerRef.current as any).update();
+      const viewer = viewerRef.current as any;
+      viewer.update();
+      viewer.render();
+
+      // Restore autoClear
+      gl.autoClear = wasAutoClear;
     }
-  });
+  }, 1); // Priority 1 = runs after default R3F render
 
   return <group ref={groupRef} />;
 }
