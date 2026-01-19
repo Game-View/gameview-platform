@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useThree } from "@react-three/fiber";
+import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
 
@@ -24,11 +24,12 @@ export function GaussianSplats({
   onError,
   onProgress,
 }: GaussianSplatsProps) {
-  const { gl, camera } = useThree();
+  const { gl, camera, scene } = useThree();
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
   const groupRef = useRef<THREE.Group>(null);
   const isLoadingRef = useRef(false);
   const isDisposedRef = useRef(false);
+  const isReadyRef = useRef(false);
 
   // Use refs for callbacks to avoid effect re-runs
   const onLoadRef = useRef(onLoad);
@@ -59,10 +60,12 @@ export function GaussianSplats({
     console.log("[GaussianSplats] Starting load for URL:", url);
 
     // Create viewer that integrates with existing Three.js scene
+    // Using selfDrivenMode: false to let R3F control the render loop
     const viewer = new GaussianSplats3D.Viewer({
       renderer: gl,
       camera: camera as THREE.PerspectiveCamera,
       useBuiltInControls: false, // Use our own OrbitControls
+      selfDrivenMode: false, // Let R3F control the render loop
       ignoreDevicePixelRatio: false,
       gpuAcceleratedSort: true,
       enableSIMDInSort: true,
@@ -132,9 +135,9 @@ export function GaussianSplats({
           }
 
           onLoadRef.current?.();
-          // Start the viewer - needed for internal sorting/animation
-          viewer.start();
-          console.log("[GaussianSplats] Viewer started");
+          // Mark as ready for useFrame updates (selfDrivenMode: false)
+          isReadyRef.current = true;
+          console.log("[GaussianSplats] Viewer ready for manual updates");
         }
       })
       .catch((err: Error) => {
@@ -148,6 +151,7 @@ export function GaussianSplats({
       console.log("[GaussianSplats] Cleanup - disposing viewer");
       isDisposedRef.current = true;
       isLoadingRef.current = false;
+      isReadyRef.current = false;
       if (viewerRef.current) {
         viewerRef.current.dispose();
         viewerRef.current = null;
@@ -155,6 +159,13 @@ export function GaussianSplats({
     };
   // Only re-run when URL or core dependencies change, not callbacks
   }, [url, gl, camera]);
+
+  // Manual update loop for selfDrivenMode: false
+  useFrame(() => {
+    if (viewerRef.current && isReadyRef.current && !isDisposedRef.current) {
+      viewerRef.current.update();
+    }
+  });
 
   return <group ref={groupRef} />;
 }
