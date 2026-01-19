@@ -74,7 +74,7 @@ https://github.com/Game-View
 |---------|--------|-------|
 | Video Upload | Complete | Signed URL uploads to Supabase |
 | 3D Processing | Complete | OpenSplat via Modal (8hr timeout, A10G GPU) |
-| Scene Viewer | Complete | Three.js Gaussian Splat viewer |
+| Scene Viewer | Complete | Three.js Gaussian Splat viewer (fixed Jan 19) |
 | Import API | Complete | Desktop-rendered PLY import |
 | Object Library | Complete | UI, API, categories, search, drag-drop |
 | Object Placement | Complete | Placement, transforms, GLTF rendering |
@@ -86,6 +86,19 @@ https://github.com/Game-View
 | Publish Flow | Complete | Pre-publish validation, shareable URLs |
 
 **Phase 2 Exit Criteria Met:** Creator can upload video, process to 3D, place objects, configure interactions, define win conditions, and test the complete experience — without writing code.
+
+#### January 19, 2026 - Scene Viewer Fixes
+
+Critical issues discovered and fixed in web editor:
+
+| Issue | Root Cause | Fix |
+|-------|------------|-----|
+| Splats not rendering | Library needed to create own renderer/camera | Let viewer manage its own WebGL context |
+| Controls not responding | Provided renderer broke internal wiring | Use `useBuiltInControls` param |
+| WebGL context exhaustion | React Strict Mode double-mount | Added init guards and safe cleanup |
+| First-person missing | Only orbit controls implemented | Added WASD/mouse look/jump controls |
+
+See `/docs/GAUSSIAN_SPLAT_INTEGRATION.md` for detailed technical learnings.
 
 ### Phase 3: PLATFORM (Sprints 18-22) - IN PROGRESS
 
@@ -125,9 +138,20 @@ https://github.com/Game-View
 
 ## 5. IMMEDIATE PRIORITIES
 
-1. Configure Stripe environment variables for production
-2. Test end-to-end payment flow: Purchase → Webhook → Access
-3. Begin Sprint 21: Social & Engagement (sharing, ratings, leaderboards)
+### P0 - Critical for MVP
+1. **Motion Playback**: Test and fix play button / timeline functionality
+2. **Quality Audit**: Compare web vs desktop render quality
+3. **End-to-End Testing**: Full creator and player flows
+
+### P1 - Important
+4. Configure Stripe environment variables for production
+5. Test payment flow: Purchase → Webhook → Access
+6. Fix "Saved Never" checkbox UI issue in editor
+
+### P2 - Nice to Have
+7. Begin Sprint 21: Social & Engagement (sharing, ratings, leaderboards)
+
+See `/docs/SPRINT_21_PLAN.md` for detailed sprint plan.
 
 ---
 
