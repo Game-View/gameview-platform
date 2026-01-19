@@ -61,11 +61,12 @@ export function GaussianSplats({
 
     // Create viewer that integrates with existing Three.js scene
     // Using selfDrivenMode: false to let R3F control the render loop
-    const viewer = new GaussianSplats3D.Viewer({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const viewerOptions: any = {
       renderer: gl,
       camera: camera as THREE.PerspectiveCamera,
       useBuiltInControls: false, // Use our own OrbitControls
-      selfDrivenMode: false, // Let R3F control the render loop
+      selfDrivenMode: false, // Let R3F control the render loop (not in TS types)
       ignoreDevicePixelRatio: false,
       gpuAcceleratedSort: true,
       enableSIMDInSort: true,
@@ -80,7 +81,8 @@ export function GaussianSplats({
       focalAdjustment: 1.0,
       logLevel: GaussianSplats3D.LogLevel.Debug,
       sphericalHarmonicsDegree: 0, // Try degree 0 - PLY might not have higher SH
-    });
+    };
+    const viewer = new GaussianSplats3D.Viewer(viewerOptions);
 
     viewerRef.current = viewer;
 
