@@ -70,6 +70,10 @@ export function SceneViewer({
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       container.appendChild(renderer.domElement);
       rendererRef.current = renderer;
+
+      // DEBUG: Set bright background to verify canvas is visible
+      renderer.setClearColor(0xff0000); // Bright red
+
       console.log(`[SceneViewer:${instanceId}] Canvas created: ${renderer.domElement.width}x${renderer.domElement.height}`);
 
       // Create camera
@@ -96,7 +100,7 @@ export function SceneViewer({
         dynamicScene: false,
         webXRMode: GaussianSplats3D.WebXRMode.None,
         renderMode: GaussianSplats3D.RenderMode.Always, // Force continuous rendering
-        sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual,
+        sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant, // Instant reveal
         antialiased: true,
         focalAdjustment: 1.0,
         logLevel: GaussianSplats3D.LogLevel.None,
