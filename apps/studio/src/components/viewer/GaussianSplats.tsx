@@ -69,14 +69,15 @@ export function GaussianSplats({
       sharedMemoryForWorkers: false,
       integerBasedSort: true,
       halfPrecisionCovariancesOnGPU: true,
-      dynamicScene: false,
+      dynamicScene: true, // Try dynamic scene for better tree building
       webXRMode: GaussianSplats3D.WebXRMode.None,
       renderMode: GaussianSplats3D.RenderMode.Always,
-      sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual,
+      sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant, // Try instant reveal
       antialiased: true,
       focalAdjustment: 1.0,
       logLevel: GaussianSplats3D.LogLevel.Debug,
-      sphericalHarmonicsDegree: 0,
+      sphericalHarmonicsDegree: 0, // Try degree 0 - PLY might not have higher SH
+      splatAlphaRemovalThreshold: 0, // Don't filter any splats
     });
 
     viewerRef.current = viewer;
@@ -85,7 +86,7 @@ export function GaussianSplats({
     viewer
       .addSplatScene(url, {
         showLoadingUI: false,
-        progressiveLoad: true,
+        progressiveLoad: false, // Disable progressive load for compatibility
         position: position,
         rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
         scale: [scale, scale, scale],
