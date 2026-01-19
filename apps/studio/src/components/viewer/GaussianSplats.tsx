@@ -249,6 +249,18 @@ export function GaussianSplats({
 
       // Ensure the internal viewer has the renderer and camera
       if (internalViewer && internalViewer.splatRenderReady) {
+        // Make sure the internal viewer has the correct renderer and camera
+        // This is normally done by onBeforeRender, but we ensure it here
+        if (internalViewer.renderer !== renderer) {
+          internalViewer.renderer = renderer;
+          if (internalViewer.splatMesh) {
+            internalViewer.splatMesh.setRenderer(renderer);
+          }
+        }
+        if (internalViewer.camera !== camera) {
+          internalViewer.camera = camera;
+        }
+
         // Set autoClear to false to preserve R3F's render
         const savedAutoClear = renderer.autoClear;
         renderer.autoClear = false;
