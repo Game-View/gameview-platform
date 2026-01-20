@@ -1,4 +1,4 @@
-# Game View Platform - Handoff Document
+# Game View Platform - 4D Motion Handoff
 
 > **Last Updated:** January 20, 2026
 > **Current Sprint:** 4D Motion Implementation
