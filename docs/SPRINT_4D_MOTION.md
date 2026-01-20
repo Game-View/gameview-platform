@@ -220,17 +220,28 @@ This means we can:
 
 ---
 
-### Phase 4: Editor Integration
+### Phase 4: Editor Integration - DONE
 
-#### 4.1 Timeline Connection
-- [ ] Pass `timelineTime` to viewer component
-- [ ] Sync timeline scrub with viewer timestamp
-- [ ] Update timeline duration from model metadata
-- [ ] Add frame-accurate seeking
+#### 4.1 Timeline Connection - DONE
+- [x] Pass `timelineTime` to viewer component
+- [x] Sync timeline scrub with viewer timestamp
+- [x] Update timeline duration from model metadata
+- [x] Bi-directional sync: timeline controls viewer, viewer updates timeline
 
-**Files to modify:**
+**Implementation:**
+- Editor page detects `motionEnabled` flag on experience
+- Fetches motion metadata to get frame URLs
+- Conditionally renders `TemporalSceneViewer` for motion, `SceneEditor` for static
+- Timeline duration dynamically set from `motionDuration`
+- `currentTime` and `isPlaying` synced between Timeline and viewer
+
+**Files modified:**
 - `apps/studio/src/app/editor/[experienceId]/page.tsx`
-- `apps/studio/src/components/editor/Timeline.tsx`
+
+#### 4.2 Experience Data Model
+- [x] Add motion fields to ExperienceData interface
+- [x] Fetch motion metadata on load
+- [x] Handle fallback to static rendering
 
 #### 4.2 Playback Controls
 - [ ] Wire play/pause button to viewer

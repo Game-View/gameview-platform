@@ -36,6 +36,20 @@ const SceneEditor = dynamic(
   }
 );
 
+// Dynamic import for TemporalSceneViewer (for motion scenes)
+const TemporalSceneViewer = dynamic(
+  () => import("@/components/viewer/TemporalSceneViewer").then((mod) => mod.TemporalSceneViewer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full flex items-center justify-center bg-gv-neutral-900">
+        <Loader2 className="h-8 w-8 text-gv-primary-500 animate-spin" />
+        <p className="text-gv-neutral-400 ml-3">Loading motion viewer...</p>
+      </div>
+    ),
+  }
+);
+
 interface ExperienceData {
   id: string;
   title: string;
@@ -44,6 +58,12 @@ interface ExperienceData {
   plyUrl: string | null;
   scenesData: PlacedObject[] | null;
   gameConfig: GameConfig | null;
+  // 4D Motion fields
+  motionEnabled: boolean;
+  motionDuration: number | null;
+  motionFps: number | null;
+  motionMetadataUrl: string | null;
+  motionFrameCount: number | null;
   creator: {
     id: string;
     displayName: string;
@@ -83,6 +103,9 @@ export default function ExperienceEditorPage() {
     { id: "scene-1", name: "Main Scene", order: 0 },
   ]);
   const [activeSceneId, setActiveSceneId] = useState("scene-1");
+
+  // 4D Motion state
+  const [motionFrameUrls, setMotionFrameUrls] = useState<string[]>([]);
 
   // Editor store
   const {
@@ -154,6 +177,35 @@ export default function ExperienceEditorPage() {
 
     fetchExperience();
   }, [experienceId, isLoaded, setPlacedObjects]);
+
+  // Fetch motion metadata when experience has motion enabled
+  useEffect(() => {
+    async function fetchMotionMetadata() {
+      if (!experience?.motionEnabled || !experience.motionMetadataUrl) {
+        return;
+      }
+
+      try {
+        console.log("[Editor] Fetching motion metadata from:", experience.motionMetadataUrl);
+        const response = await fetch(experience.motionMetadataUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch motion metadata: ${response.status}`);
+        }
+
+        const metadata = await response.json();
+        if (metadata.frameUrls && Array.isArray(metadata.frameUrls)) {
+          setMotionFrameUrls(metadata.frameUrls);
+          console.log(`[Editor] Loaded ${metadata.frameUrls.length} motion frames`);
+        }
+      } catch (err) {
+        console.error("[Editor] Failed to fetch motion metadata:", err);
+        // Fall back to static rendering
+        setMotionFrameUrls([]);
+      }
+    }
+
+    fetchMotionMetadata();
+  }, [experience?.motionEnabled, experience?.motionMetadataUrl]);
 
   // Save placed objects
   const saveObjects = useCallback(async () => {
@@ -584,8 +636,23 @@ export default function ExperienceEditorPage() {
           {/* Viewer Controls (experience name, back button) */}
           <ViewerControls sceneName={experience.title} onBack={handleBack} isLoading={false} />
 
-          {/* 3D Scene Editor */}
-          <SceneEditor splatUrl={experience.plyUrl || undefined} onSave={saveObjects} />
+          {/* 3D Scene Editor / Motion Viewer */}
+          {experience.motionEnabled && motionFrameUrls.length > 0 ? (
+            // Motion scene - use TemporalSceneViewer with timeline sync
+            <TemporalSceneViewer
+              frameUrls={motionFrameUrls}
+              fps={experience.motionFps || 15}
+              loop={true}
+              currentTime={timelineTime}
+              isPlaying={isTimelinePlaying}
+              onTimeChange={setTimelineTime}
+              onPlaybackChange={setIsTimelinePlaying}
+              enableFirstPersonControls={true}
+            />
+          ) : (
+            // Static scene - use regular SceneEditor
+            <SceneEditor splatUrl={experience.plyUrl || undefined} onSave={saveObjects} />
+          )}
 
           {/* Camera Preview - Floating Panel */}
           {showCameraPreview && (
@@ -601,7 +668,7 @@ export default function ExperienceEditorPage() {
         {/* Timeline */}
         {showTimeline && (
           <Timeline
-            duration={60}
+            duration={experience.motionEnabled && experience.motionDuration ? experience.motionDuration : 60}
             currentTime={timelineTime}
             isPlaying={isTimelinePlaying}
             onTimeChange={setTimelineTime}
