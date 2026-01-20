@@ -17,6 +17,66 @@
 
 ---
 
+## KEY FINDING: 4DGaussians Export (January 20, 2026)
+
+After cloning and analyzing the [4DGaussians](https://github.com/hustvl/4DGaussians) repository, we discovered a critical capability:
+
+### The `export_perframe_3DGS.py` Script
+
+This script exports **standard PLY files for each timestamp**:
+
+```bash
+python export_perframe_3DGS.py --iteration 14000 --configs arguments/dnerf/lego.py --model_path output/dnerf/lego
+```
+
+**Output:** `output/dnerf/lego/gaussian_pertimestamp/`
+- `time_00000.ply`
+- `time_00001.ply`
+- `time_00002.ply`
+- ... (one per frame)
+
+### Why This Changes Everything
+
+1. **Standard PLY format** - Compatible with our existing `@mkkellogg/gaussian-splats-3d` viewer
+2. **No custom renderer needed** - We can reuse `SceneViewer.tsx`
+3. **Simpler architecture** - Just switch which PLY is loaded based on timeline
+4. **Faster MVP** - Days instead of weeks
+
+### Training Parameters (from `arguments/__init__.py`)
+
+```python
+# Key deformation settings
+net_width = 64          # Deformation MLP width
+defor_depth = 1         # Deformation MLP depth
+kplanes_config = {
+  'resolution': [64, 64, 64, 25]  # [spatial³, temporal]
+}
+
+# Training iterations
+iterations = 30_000
+coarse_iterations = 3_000
+
+# Training time: ~8 min (synthetic), ~30 min (real scenes)
+```
+
+### Data Format Required
+
+```
+data/
+└── multipleview/
+    └── scene_name/
+        ├── cam01/
+        │   ├── frame_00001.jpg
+        │   ├── frame_00002.jpg
+        │   └── ...
+        ├── cam02/
+        │   └── ...
+        ├── sparse_/          # COLMAP output
+        └── points3D_multipleview.ply
+```
+
+---
+
 ## Current State (January 20, 2026)
 
 ### What's Working
@@ -49,18 +109,33 @@
 #### 1.2 4D-GS Evaluation
 - [x] Research 4D Gaussian Splatting technology
 - [x] Document architecture options (see `4D_MOTION_ARCHITECTURE.md`)
-- [ ] Clone and test [4DGaussians](https://github.com/hustvl/4DGaussians) locally
+- [x] Clone and test [4DGaussians](https://github.com/hustvl/4DGaussians) locally
+- [x] Analyze export script and output format
 - [ ] Test with sample multi-view video dataset
 - [ ] Measure training time and output quality
-- [ ] Evaluate WebGL rendering options
 
-#### 1.3 Format Decision
-- [ ] Decide on motion format:
-  - Option A: Per-frame PLY files (simple, high storage)
-  - Option B: True 4D-GS model (complex, efficient)
-  - Option C: Hybrid approach
-- [ ] Document format specification
-- [ ] Get stakeholder approval
+#### 1.3 Format Decision - RESOLVED
+**Decision: Per-Frame PLY Export (Option A)**
+
+Key discovery from 4DGaussians analysis:
+- `export_perframe_3DGS.py` exports **standard PLY files per timestamp**
+- Output: `gaussian_pertimestamp/time_00000.ply`, `time_00001.ply`, etc.
+- **These PLY files are compatible with our existing viewer!**
+
+This means we can:
+1. Train 4D-GS model (captures temporal deformation)
+2. Export per-frame PLY files
+3. Load them in our EXISTING web viewer
+4. Switch frames based on timeline position
+
+**No custom WebGL renderer needed for MVP!**
+
+| Approach | Complexity | Storage | Quality |
+|----------|------------|---------|---------|
+| Per-frame PLY | Low | ~50-100MB × N frames | High |
+| Native 4D | High (custom renderer) | ~100-200MB total | High |
+
+**Chosen:** Per-frame PLY for faster time-to-motion
 
 ---
 
@@ -77,17 +152,26 @@
 - `packages/processing/modal_worker.py`
 - `packages/processing/requirements.txt`
 
-#### 2.2 Output Format
-- [ ] Define 4D model output structure:
+#### 2.2 Output Format (Per-Frame PLY)
+- [ ] Define output structure:
   ```
   output/
-  ├── canonical.ply      # Base 3D Gaussians
-  ├── deformation/       # Temporal deformation field
-  │   ├── model.pth      # PyTorch model
-  │   └── config.json    # Training config
-  └── metadata.json      # Duration, fps, timestamps
+  ├── frames/
+  │   ├── frame_00000.ply
+  │   ├── frame_00001.ply
+  │   ├── frame_00002.ply
+  │   └── ... (one per timestamp)
+  ├── metadata.json
+  │   {
+  │     "frameCount": 150,
+  │     "fps": 15,
+  │     "duration": 10.0,
+  │     "frameUrls": ["...", "...", ...]
+  │   }
+  └── thumbnail.jpg
   ```
-- [ ] Implement output upload to Supabase
+- [ ] Implement batch upload to Supabase Storage
+- [ ] Generate metadata.json with frame URLs
 - [ ] Update database schema for temporal data
 
 #### 2.3 Database Schema
@@ -103,40 +187,44 @@
 
 ---
 
-### Phase 3: WebGL Viewer
+### Phase 3: WebGL Viewer (SIMPLIFIED)
 
-#### 3.1 Viewer Research
-- [ ] Evaluate existing 4D-GS WebGL implementations
-- [ ] Check if gsplat.js supports temporal
-- [ ] Assess porting effort from PyTorch renderer
-- [ ] Make build-vs-buy decision
+**Key Insight:** Using per-frame PLY export, we can reuse our existing viewer!
 
-#### 3.2 Temporal Viewer Component
-- [ ] Create new `TemporalSplatViewer` component
-- [ ] Implement model loading (canonical + deformation)
-- [ ] Implement timestamp interpolation
-- [ ] Add playback API:
+#### 3.1 Frame-Switching Viewer
+- [ ] Extend `SceneViewer` to support multiple PLY URLs
+- [ ] Implement frame preloading (load N frames ahead)
+- [ ] Add `setFrame(index: number)` method
+- [ ] Implement smooth frame switching (< 100ms)
+
+#### 3.2 Playback Controller
+- [ ] Create `FramePlaybackController` class:
   ```typescript
-  interface TemporalSplatViewer {
-    loadModel(canonicalUrl: string, deformationUrl: string): Promise<void>;
-    setTime(t: number): void;  // 0 to duration
+  interface FramePlaybackController {
+    frameUrls: string[];        // Array of PLY URLs
+    fps: number;               // Playback framerate
+    currentFrame: number;
+    isPlaying: boolean;
+
     play(): void;
     pause(): void;
+    setFrame(index: number): void;
     setPlaybackSpeed(speed: number): void;
-    getCurrentTime(): number;
+    onFrameChange: (frame: number) => void;
   }
   ```
-- [ ] Test with sample 4D model
-
-**Files to create:**
-- `apps/studio/src/components/viewer/TemporalSplatViewer.tsx`
-- `apps/studio/src/lib/temporal-renderer.ts`
+- [ ] Implement animation loop with requestAnimationFrame
+- [ ] Handle loop/repeat behavior
 
 #### 3.3 Performance Optimization
-- [ ] Implement frame caching
-- [ ] Add LOD for distant views
-- [ ] Profile GPU memory usage
-- [ ] Target 30fps minimum playback
+- [ ] Preload frames in background (Web Workers)
+- [ ] Cache loaded PLY data in memory
+- [ ] Implement frame dropping if behind
+- [ ] Target 30fps playback minimum
+
+**Files to modify:**
+- `apps/studio/src/components/viewer/SceneViewer.tsx`
+- `apps/studio/src/lib/frame-playback.ts` (new)
 
 ---
 
