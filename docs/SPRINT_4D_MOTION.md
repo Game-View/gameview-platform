@@ -187,7 +187,7 @@ This means we can:
   - `outputMotionMetadataUrl` String
   - `outputMotionFrameCount` Int
   - `outputMotionDuration` Float
-- [ ] Create and run migration
+- [x] Create and run migration (used `prisma db push`)
 - [x] Update Prisma schema
 
 #### 2.4 API Integration - DONE
