@@ -192,29 +192,16 @@ This means we can:
 **Key Insight:** Using per-frame PLY export, we can reuse our existing viewer!
 
 #### 3.1 Frame-Switching Viewer
-- [ ] Extend `SceneViewer` to support multiple PLY URLs
+- [x] Create `TemporalSceneViewer` component wrapping SceneViewer
 - [ ] Implement frame preloading (load N frames ahead)
-- [ ] Add `setFrame(index: number)` method
 - [ ] Implement smooth frame switching (< 100ms)
 
-#### 3.2 Playback Controller
-- [ ] Create `FramePlaybackController` class:
-  ```typescript
-  interface FramePlaybackController {
-    frameUrls: string[];        // Array of PLY URLs
-    fps: number;               // Playback framerate
-    currentFrame: number;
-    isPlaying: boolean;
-
-    play(): void;
-    pause(): void;
-    setFrame(index: number): void;
-    setPlaybackSpeed(speed: number): void;
-    onFrameChange: (frame: number) => void;
-  }
-  ```
-- [ ] Implement animation loop with requestAnimationFrame
-- [ ] Handle loop/repeat behavior
+#### 3.2 Playback Controller - DONE
+- [x] Create `FramePlaybackController` class in `lib/frame-playback.ts`
+- [x] Implement animation loop with requestAnimationFrame
+- [x] Handle loop/repeat behavior
+- [x] Create `useFramePlayback` React hook
+- [x] Support play/pause/stop/seek/step operations
 
 #### 3.3 Performance Optimization
 - [ ] Preload frames in background (Web Workers)
@@ -222,9 +209,9 @@ This means we can:
 - [ ] Implement frame dropping if behind
 - [ ] Target 30fps playback minimum
 
-**Files to modify:**
-- `apps/studio/src/components/viewer/SceneViewer.tsx`
-- `apps/studio/src/lib/frame-playback.ts` (new)
+**Files created:**
+- `apps/studio/src/lib/frame-playback.ts` - Playback controller + hook
+- `apps/studio/src/components/viewer/TemporalSceneViewer.tsx` - Frame-aware viewer
 
 ---
 
