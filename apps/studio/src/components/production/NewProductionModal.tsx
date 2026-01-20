@@ -41,6 +41,7 @@ interface ProductionSettings {
   name: string;
   preset: "fast" | "balanced" | "high";
   videos: VideoFile[];
+  motionEnabled: boolean;
 }
 
 interface NewProductionModalProps {
@@ -116,6 +117,7 @@ export function NewProductionModal({
   // Form state
   const [productionName, setProductionName] = useState("");
   const [selectedPreset, setSelectedPreset] = useState<"fast" | "balanced" | "high">("balanced");
+  const [motionEnabled, setMotionEnabled] = useState(false);
   const [videos, setVideos] = useState<VideoFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
 
@@ -152,6 +154,7 @@ export function NewProductionModal({
       setCurrentStep("name");
       setProductionName("");
       setSelectedPreset("balanced");
+      setMotionEnabled(false);
       setVideos([]);
       setIsSubmitting(false);
     }
@@ -400,6 +403,7 @@ export function NewProductionModal({
       await onSubmit({
         name: productionName,
         preset: selectedPreset,
+        motionEnabled,
         videos,
       });
       onClose();
@@ -697,7 +701,88 @@ export function NewProductionModal({
 
             {/* Step 3: Settings */}
             {currentStep === "settings" && (
-              <div className="space-y-4">
+              <div className="space-y-6">
+                {/* Output Type Toggle */}
+                <div>
+                  <label className="block text-sm font-medium text-white mb-3">
+                    Output Type
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setMotionEnabled(false)}
+                      className={`flex flex-col items-center gap-3 p-4 rounded-gv border transition-all text-center ${
+                        !motionEnabled
+                          ? "border-gv-primary-500 bg-gv-primary-500/10"
+                          : "border-gv-neutral-700 hover:border-gv-neutral-600 bg-gv-neutral-800/50"
+                      }`}
+                    >
+                      <div
+                        className={`w-12 h-12 rounded-gv flex items-center justify-center ${
+                          !motionEnabled
+                            ? "bg-gv-primary-500/20 text-gv-primary-400"
+                            : "bg-gv-neutral-700 text-gv-neutral-400"
+                        }`}
+                      >
+                        <Video className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <span className="font-medium text-white block">Static 3D</span>
+                        <span className="text-xs text-gv-neutral-400">
+                          Single frozen moment
+                        </span>
+                      </div>
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          !motionEnabled
+                            ? "border-gv-primary-500 bg-gv-primary-500"
+                            : "border-gv-neutral-600"
+                        }`}
+                      >
+                        {!motionEnabled && <Check className="h-3 w-3 text-white" />}
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setMotionEnabled(true)}
+                      className={`flex flex-col items-center gap-3 p-4 rounded-gv border transition-all text-center ${
+                        motionEnabled
+                          ? "border-gv-primary-500 bg-gv-primary-500/10"
+                          : "border-gv-neutral-700 hover:border-gv-neutral-600 bg-gv-neutral-800/50"
+                      }`}
+                    >
+                      <div
+                        className={`w-12 h-12 rounded-gv flex items-center justify-center ${
+                          motionEnabled
+                            ? "bg-gv-primary-500/20 text-gv-primary-400"
+                            : "bg-gv-neutral-700 text-gv-neutral-400"
+                        }`}
+                      >
+                        <Sparkles className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <span className="font-medium text-white block">4D Motion</span>
+                        <span className="text-xs text-gv-neutral-400">
+                          Moving 3D scene
+                        </span>
+                      </div>
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          motionEnabled
+                            ? "border-gv-primary-500 bg-gv-primary-500"
+                            : "border-gv-neutral-600"
+                        }`}
+                      >
+                        {motionEnabled && <Check className="h-3 w-3 text-white" />}
+                      </div>
+                    </button>
+                  </div>
+                  {motionEnabled && (
+                    <p className="mt-2 text-xs text-gv-primary-400">
+                      4D Motion captures movement over time. Processing takes longer but creates immersive moving scenes.
+                    </p>
+                  )}
+                </div>
+
+                {/* Quality Presets */}
                 <div>
                   <label className="block text-sm font-medium text-white mb-3">
                     Processing Quality
@@ -784,6 +869,14 @@ export function NewProductionModal({
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gv-neutral-400">
+                      Output Type
+                    </span>
+                    <span className={`font-medium ${motionEnabled ? "text-gv-primary-400" : "text-white"}`}>
+                      {motionEnabled ? "4D Motion" : "Static 3D"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gv-neutral-400">
                       Quality Preset
                     </span>
                     <span className="text-white font-medium">
@@ -795,7 +888,7 @@ export function NewProductionModal({
                       Estimated Time
                     </span>
                     <span className="text-white font-medium">
-                      {QUALITY_PRESETS[selectedPreset].time}
+                      {motionEnabled ? "1-2 hours" : QUALITY_PRESETS[selectedPreset].time}
                     </span>
                   </div>
                 </div>
