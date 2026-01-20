@@ -39,99 +39,36 @@ app = modal.App("gameview-4d-processing")
 
 # GPU image with CUDA + 4DGaussians dependencies
 # NOTE: 4DGaussians requires PyTorch + specific CUDA dependencies
+# Using colmap pre-built image to avoid complex build issues
 processing_image_4d = (
-    modal.Image.from_registry("nvidia/cuda:12.1.0-devel-ubuntu22.04", add_python="3.10")
+    modal.Image.from_registry("colmap/colmap:latest")
     .env({"DEBIAN_FRONTEND": "noninteractive", "TZ": "UTC"})
     .apt_install([
-        # Build version marker
-        "tree",
-        "file",
-        "htop",
-        "jq",
-        "ffmpeg",
-        "libgl1-mesa-glx",
-        "libglib2.0-0",
-        "wget",
+        # Python and build tools
+        "python3",
+        "python3-pip",
+        "python3-dev",
         "git",
         "curl",
-        "unzip",
-        # Build dependencies
+        "wget",
+        "ffmpeg",
         "ninja-build",
         "build-essential",
-        "libboost-all-dev",
-        "libeigen3-dev",
-        "libflann-dev",
-        "libfreeimage-dev",
-        "libmetis-dev",
-        "libgoogle-glog-dev",
-        "libgflags-dev",
-        "libsqlite3-dev",
-        "libssl-dev",
-        "libatlas-base-dev",
-        "libsuitesparse-dev",
-        # OpenGL dependencies
-        "libgl1-mesa-dev",
-        "libglx-dev",
-        "libglu1-mesa-dev",
-        "libegl1-mesa-dev",
-        "libglew-dev",
-        "libglfw3-dev",
-        # Qt5 for COLMAP
-        "qtbase5-dev",
-        "libqt5opengl5-dev",
-        # OpenCV
-        "libopencv-dev",
+        # CUDA toolkit for PyTorch
+        "nvidia-cuda-toolkit",
     ])
     .run_commands([
-        # === Install CMake 3.28+ ===
-        "wget -q https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz -O /tmp/cmake.tar.gz",
-        "tar -xzf /tmp/cmake.tar.gz -C /opt",
-        "ln -sf /opt/cmake-3.28.3-linux-x86_64/bin/cmake /usr/local/bin/cmake",
-        "rm /tmp/cmake.tar.gz",
-
-        # === Build Ceres Solver 2.2 with CUDA support ===
-        "git clone --branch 2.2.0 --depth 1 https://github.com/ceres-solver/ceres-solver.git /opt/ceres-solver",
-        "mkdir -p /opt/ceres-solver/build",
-        "cd /opt/ceres-solver/build && /usr/local/bin/cmake .. "
-        "-DCMAKE_BUILD_TYPE=Release "
-        "-DBUILD_TESTING=OFF "
-        "-DBUILD_EXAMPLES=OFF "
-        "-DUSE_CUDA=ON "
-        "-DCMAKE_CUDA_ARCHITECTURES='70;75;80;86;89' "
-        "&& make -j$(nproc) && make install",
-
-        # === Build COLMAP with CUDA ===
-        "git clone --branch 3.9.1 --depth 1 https://github.com/colmap/colmap.git /opt/colmap && "
-        "sed -i '31i #include <memory>' /opt/colmap/src/colmap/image/line.cc && "
-        "mkdir -p /opt/colmap/build && "
-        "cd /opt/colmap/build && "
-        "/usr/local/bin/cmake .. "
-        "-DCMAKE_BUILD_TYPE=Release "
-        "-DCUDA_ENABLED=ON "
-        "-DGUI_ENABLED=OFF "
-        "-DCMAKE_CUDA_ARCHITECTURES='70;75;80;86;89' && "
-        "make -j$(nproc) && "
-        "make install",
-
-        # === Build GLOMAP ===
-        "git clone --recursive https://github.com/colmap/glomap.git /opt/glomap",
-        "mkdir -p /opt/glomap/build",
-        "cd /opt/glomap/build && /usr/local/bin/cmake .. "
-        "-DCMAKE_BUILD_TYPE=Release "
-        "-GNinja "
-        "&& ninja",
-        "cp /opt/glomap/build/glomap/glomap /usr/local/bin/glomap",
-        "chmod 755 /usr/local/bin/glomap",
+        # Create symlink for python
+        "ln -sf /usr/bin/python3 /usr/bin/python",
 
         # === Clone 4DGaussians ===
         "git clone https://github.com/hustvl/4DGaussians.git /opt/4DGaussians",
         "cd /opt/4DGaussians && git submodule update --init --recursive",
     ])
     .pip_install(
-        # PyTorch with CUDA 12.1 support
-        "torch==2.1.0+cu121",
-        "torchvision==0.16.0+cu121",
-        extra_index_url="https://download.pytorch.org/whl/cu121",
+        # PyTorch with CUDA support
+        "torch==2.1.0",
+        "torchvision==0.16.0",
     )
     .pip_install([
         # 4DGaussians dependencies
@@ -140,7 +77,6 @@ processing_image_4d = (
         "Pillow",
         "plyfile",
         "tqdm",
-        "mmcv>=2.0.0",
         "scipy",
         "lpips",
         "tensorboard",
@@ -148,11 +84,6 @@ processing_image_4d = (
         "requests",
         "supabase",
         "fastapi",
-    ])
-    .run_commands([
-        # Install 4DGaussians custom CUDA extensions
-        "cd /opt/4DGaussians && pip install -e submodules/depth-diff-gaussian-rasterization",
-        "cd /opt/4DGaussians && pip install -e submodules/simple-knn",
     ])
 )
 
