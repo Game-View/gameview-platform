@@ -35,7 +35,7 @@ import urllib.request
 import urllib.parse
 
 # Modal app definition
-app = modal.App("gameview-processing-4d")
+app = modal.App("gameview-4d-processing")
 
 # GPU image with CUDA + 4DGaussians dependencies
 # NOTE: 4DGaussians requires PyTorch + specific CUDA dependencies
