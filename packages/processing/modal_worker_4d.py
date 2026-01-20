@@ -37,39 +37,25 @@ import urllib.parse
 # Modal app definition
 app = modal.App("gameview-4d-processing")
 
-# GPU image with CUDA + 4DGaussians dependencies
-# NOTE: 4DGaussians requires PyTorch + specific CUDA dependencies
-# Using colmap pre-built image to avoid complex build issues
+# GPU image with CUDA + 4DGaussians dependencies (COLMAP-free version)
+# Uses official PyTorch CUDA image - much simpler and faster to build
 processing_image_4d = (
-    modal.Image.from_registry("colmap/colmap:latest")
+    modal.Image.from_registry("pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel")
     .env({"DEBIAN_FRONTEND": "noninteractive", "TZ": "UTC"})
     .apt_install([
-        # Python and build tools
-        "python3",
-        "python3-pip",
-        "python3-dev",
         "git",
-        "curl",
         "wget",
         "ffmpeg",
         "ninja-build",
         "build-essential",
-        # CUDA toolkit for PyTorch
-        "nvidia-cuda-toolkit",
+        "libgl1-mesa-glx",
+        "libglib2.0-0",
     ])
     .run_commands([
-        # Create symlink for python
-        "ln -sf /usr/bin/python3 /usr/bin/python",
-
-        # === Clone 4DGaussians ===
+        # Clone 4DGaussians
         "git clone https://github.com/hustvl/4DGaussians.git /opt/4DGaussians",
         "cd /opt/4DGaussians && git submodule update --init --recursive",
     ])
-    .pip_install(
-        # PyTorch with CUDA support
-        "torch==2.1.0",
-        "torchvision==0.16.0",
-    )
     .pip_install([
         # 4DGaussians dependencies
         "numpy",
@@ -84,6 +70,11 @@ processing_image_4d = (
         "requests",
         "supabase",
         "fastapi",
+    ])
+    .run_commands([
+        # Build 4DGaussians CUDA extensions
+        "cd /opt/4DGaussians && pip install -e submodules/depth-diff-gaussian-rasterization",
+        "cd /opt/4DGaussians && pip install -e submodules/simple-knn",
     ])
 )
 
