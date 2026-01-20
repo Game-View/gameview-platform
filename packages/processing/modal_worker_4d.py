@@ -127,12 +127,12 @@ processing_image_4d = (
         "git clone https://github.com/hustvl/4DGaussians.git /opt/4DGaussians",
         "cd /opt/4DGaussians && git submodule update --init --recursive",
     ])
-    .pip_install([
+    .pip_install(
         # PyTorch with CUDA 12.1 support
         "torch==2.1.0+cu121",
         "torchvision==0.16.0+cu121",
-        "--extra-index-url", "https://download.pytorch.org/whl/cu121",
-    ])
+        extra_index_url="https://download.pytorch.org/whl/cu121",
+    )
     .pip_install([
         # 4DGaussians dependencies
         "numpy",
