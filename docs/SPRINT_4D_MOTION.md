@@ -141,28 +141,27 @@ This means we can:
 
 ### Phase 2: Processing Pipeline
 
-#### 2.1 Modal Worker Updates
-- [ ] Create new Modal worker variant for 4D-GS
-- [ ] Install 4DGaussians dependencies (PyTorch, CUDA)
-- [ ] Modify frame extraction to preserve timestamps
-- [ ] Configure 4D-GS training parameters
-- [ ] Test end-to-end processing
+#### 2.1 Modal Worker Updates - DONE
+- [x] Create new Modal worker variant for 4D-GS (`modal_worker_4d.py`)
+- [x] Install 4DGaussians dependencies (PyTorch, CUDA)
+- [x] Modify frame extraction to preserve timestamps
+- [x] Configure 4D-GS training parameters
+- [ ] Deploy and test end-to-end processing
 
-**Files to modify:**
-- `packages/processing/modal_worker.py`
-- `packages/processing/requirements.txt`
+**Files created:**
+- `packages/processing/modal_worker_4d.py` - New 4D processing worker
 
-#### 2.2 Output Format (Per-Frame PLY)
-- [ ] Define output structure:
+#### 2.2 Output Format (Per-Frame PLY) - DONE
+- [x] Define output structure (implemented in worker):
   ```
   output/
   ├── frames/
   │   ├── frame_00000.ply
   │   ├── frame_00001.ply
-  │   ├── frame_00002.ply
   │   └── ... (one per timestamp)
   ├── metadata.json
   │   {
+  │     "motionEnabled": true,
   │     "frameCount": 150,
   │     "fps": 15,
   │     "duration": 10.0,
@@ -170,20 +169,26 @@ This means we can:
   │   }
   └── thumbnail.jpg
   ```
-- [ ] Implement batch upload to Supabase Storage
-- [ ] Generate metadata.json with frame URLs
-- [ ] Update database schema for temporal data
+- [x] Implement batch upload to Supabase Storage
+- [x] Generate metadata.json with frame URLs
+- [x] Update database schema for temporal data
 
-#### 2.3 Database Schema
-- [ ] Add motion-related fields to scenes table:
-  ```sql
-  ALTER TABLE scenes ADD COLUMN motion_enabled BOOLEAN DEFAULT FALSE;
-  ALTER TABLE scenes ADD COLUMN motion_duration_seconds FLOAT;
-  ALTER TABLE scenes ADD COLUMN motion_fps INTEGER;
-  ALTER TABLE scenes ADD COLUMN deformation_model_url TEXT;
-  ```
-- [ ] Create migration
-- [ ] Update Prisma schema
+#### 2.3 Database Schema - DONE
+- [x] Add motion-related fields to Experience model:
+  - `motionEnabled` Boolean
+  - `motionDuration` Float
+  - `motionFps` Int
+  - `motionMetadataUrl` String
+  - `motionFrameCount` Int
+- [x] Add motion-related fields to ProcessingJob model:
+  - `motionEnabled` Boolean
+  - `motionFps` Int
+  - `motionMaxFrames` Int
+  - `outputMotionMetadataUrl` String
+  - `outputMotionFrameCount` Int
+  - `outputMotionDuration` Float
+- [ ] Create and run migration
+- [x] Update Prisma schema
 
 ---
 
