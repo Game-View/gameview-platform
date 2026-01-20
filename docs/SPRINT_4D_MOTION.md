@@ -190,6 +190,18 @@ This means we can:
 - [ ] Create and run migration
 - [x] Update Prisma schema
 
+#### 2.4 API Integration - DONE
+- [x] Update `/api/processing/trigger` to route 4D jobs to 4D Modal worker
+- [x] Add `MODAL_4D_WEBHOOK_URL` environment variable support
+- [x] Pass motion settings (fps, maxFrames) in payload
+- [x] Update `/api/processing/callback` to handle motion outputs
+- [x] Store motion metadata URL and frame count in database
+- [x] Update Experience with motion fields on completion
+
+**Files modified:**
+- `apps/studio/src/app/api/processing/trigger/route.ts`
+- `apps/studio/src/app/api/processing/callback/route.ts`
+
 ---
 
 ### Phase 3: WebGL Viewer (SIMPLIFIED)
@@ -425,6 +437,7 @@ Spark (the AI assistant in Game View Studio) needs to be updated to understand:
 |------|--------|
 | Jan 20, 2026 | Initial sprint plan created |
 | Jan 20, 2026 | Research phase items marked based on completed work |
+| Jan 20, 2026 | Added API integration section (trigger + callback routes) |
 
 ---
 
