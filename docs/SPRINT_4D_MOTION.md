@@ -388,6 +388,27 @@ This means we can:
 
 ---
 
+## Future Tasks (Post-MVP)
+
+### Spark AI Assistant Training
+**Priority:** Medium | **When:** After 4D motion is working end-to-end
+
+Spark (the AI assistant in Game View Studio) needs to be updated to understand:
+- We create interactive games from **4D Gaussian Splats** generated from uploaded videos
+- Motion is the core differentiator - objects/people actually move in 3D space
+- The workflow: Video upload → 4D-GS processing → Per-frame PLYs → Motion playback
+- How to guide creators through motion-enabled experiences
+- Timeline controls and motion preview functionality
+
+**Tasks:**
+- [ ] Update Spark's system prompt with 4D motion context
+- [ ] Add example conversations about motion features
+- [ ] Train on new terminology (4D-GS, temporal Gaussians, frame playback)
+- [ ] Add guidance for optimal video capture for motion reconstruction
+- [ ] Update brief generation to include motion-specific options
+
+---
+
 ## References
 
 - [4D Gaussian Splatting (CVPR 2024)](https://github.com/hustvl/4DGaussians)
