@@ -7,20 +7,26 @@ Pipeline:
 1. Download source videos from Supabase
 2. Extract frames with TIMESTAMPS preserved
 3. Organize frames by camera view
-4. Run COLMAP for feature extraction + matching
-5. Run GLOMAP for sparse reconstruction
-6. Train 4D Gaussian Splatting (temporal motion)
-7. Export per-frame PLY files
-8. Upload results to Supabase (frames + metadata)
-9. Callback to notify completion
+4. Run DUSt3R for camera pose estimation (COLMAP-free)
+5. Train 4D Gaussian Splatting (temporal motion)
+6. Export per-frame PLY files
+7. Upload results to Supabase (frames + metadata)
+8. Callback to notify completion
 
 Key difference from static pipeline:
 - Uses 4DGaussians instead of OpenSplat
 - Preserves temporal information
 - Exports PER-FRAME PLY files for motion playback
 - Outputs metadata.json with frame URLs and timing
+- Uses DUSt3R for camera pose estimation (no COLMAP build issues)
 
 Based on: https://github.com/hustvl/4DGaussians (CVPR 2024)
+SfM: https://github.com/naver/dust3r (CVPR 2024)
+
+NOTE: Quality preset affects SfM approach:
+- Fast: DUSt3R quick mode (fewer iterations)
+- Balanced: DUSt3R standard mode
+- High: DUSt3R thorough mode (more iterations, better poses)
 """
 
 import modal
@@ -37,8 +43,8 @@ import urllib.parse
 # Modal app definition
 app = modal.App("gameview-4d-processing")
 
-# GPU image with CUDA + 4DGaussians dependencies (COLMAP-free version)
-# Uses official PyTorch CUDA image - much simpler and faster to build
+# GPU image with CUDA + DUSt3R + 4DGaussians dependencies
+# Fully cloud-based, no local processing required
 processing_image_4d = (
     modal.Image.from_registry("pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel")
     .env({"DEBIAN_FRONTEND": "noninteractive", "TZ": "UTC"})
@@ -51,13 +57,10 @@ processing_image_4d = (
         "libgl1-mesa-glx",
         "libglib2.0-0",
     ])
-    .run_commands([
-        # Clone 4DGaussians
-        "git clone https://github.com/hustvl/4DGaussians.git /opt/4DGaussians",
-        "cd /opt/4DGaussians && git submodule update --init --recursive",
-    ])
     .pip_install([
-        # 4DGaussians dependencies
+        # DUSt3R for camera pose estimation (COLMAP replacement)
+        "dust3r @ git+https://github.com/naver/dust3r.git",
+        # Core dependencies
         "numpy",
         "opencv-python-headless",
         "Pillow",
@@ -66,12 +69,16 @@ processing_image_4d = (
         "scipy",
         "lpips",
         "tensorboard",
+        "roma",  # DUSt3R dependency for rotations
         # Supabase and API
         "requests",
         "supabase",
         "fastapi",
     ])
     .run_commands([
+        # Clone 4DGaussians
+        "git clone https://github.com/hustvl/4DGaussians.git /opt/4DGaussians",
+        "cd /opt/4DGaussians && git submodule update --init --recursive",
         # Build 4DGaussians CUDA extensions
         "cd /opt/4DGaussians && pip install -e submodules/depth-diff-gaussian-rasterization",
         "cd /opt/4DGaussians && pip install -e submodules/simple-knn",
