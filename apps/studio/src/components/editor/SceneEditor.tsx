@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useCallback, Suspense, useState } from "react";
-import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import {
   OrbitControls,
   TransformControls,
@@ -60,31 +60,33 @@ export function SceneEditor({ splatUrl, onSave }: SceneEditorProps) {
         </div>
       )}
 
-      {/* Top layer: R3F Canvas for editor elements (transparent background) */}
-      {/* DEBUG: HIDDEN to test if SplatBackground renders without R3F covering it */}
-      <div className="absolute inset-0" style={{ zIndex: 1, display: "none" }}>
-        <Canvas
-          camera={{ position: [5, 5, 5], fov: 50 }}
-          gl={{
-            antialias: true,
-            alpha: true, // Enable transparency
-            premultipliedAlpha: false, // Important for proper compositing with layer below
-            preserveDrawingBuffer: true,
-          }}
-          dpr={[1, 2]}
-          style={{ background: "transparent" }}
-          onPointerMissed={() => {
-            useEditorStore.getState().selectObject(null);
-          }}
+      {/* Top layer: R3F Canvas for editor tools (grid, gizmos, objects) */}
+      {/* Shows after splats are loaded - uses pointer-events: none to allow splat navigation */}
+      {splatLoaded && (
+        <div
+          className="absolute inset-0"
+          style={{ zIndex: 1, pointerEvents: 'none' }}
         >
-          {/* Camera sync component - temporarily disabled */}
-          {/* <CameraSync /> */}
-
-          <Suspense fallback={<LoadingIndicator />}>
-            <EditorScene />
-          </Suspense>
-        </Canvas>
-      </div>
+          <Canvas
+            camera={{ position: [5, 5, 5], fov: 50 }}
+            gl={{
+              antialias: true,
+              alpha: true,
+              premultipliedAlpha: false,
+              preserveDrawingBuffer: true,
+            }}
+            dpr={[1, 2]}
+            style={{ background: "transparent", pointerEvents: 'none' }}
+            onPointerMissed={() => {
+              useEditorStore.getState().selectObject(null);
+            }}
+          >
+            <Suspense fallback={<LoadingIndicator />}>
+              <EditorScene />
+            </Suspense>
+          </Canvas>
+        </div>
+      )}
 
       {/* Loading overlay */}
       {splatUrl && !splatLoaded && !splatError && (

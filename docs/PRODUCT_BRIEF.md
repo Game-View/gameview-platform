@@ -1,6 +1,6 @@
 # GAME VIEW STUDIO
 ## Product Brief: AI-Powered Experience Creation Platform
-**Version 1.2 | December 2024**
+**Version 1.3 | January 2026**
 
 ---
 
@@ -19,6 +19,38 @@ We're building the platform that lets creators — musicians, athletes, brands, 
 - **Video in, game out** — iPhone/GoPro footage transforms into explorable 3D
 - **AI-guided creation** — Claude helps you build, not just a blank canvas
 - **Nobody else does this** — You can make cartoon games elsewhere. You can make synthetic 3D worlds. But turning your real space into an interactive experience? That's only us.
+
+---
+
+### 1.5 THE CORE DIFFERENTIATOR: MOTION
+
+> **"Motion motion motion, quality quality quality"**
+
+**MOTION IS THE ENTIRE VALUE PROPOSITION.**
+
+Without motion, Game View is "just another 3D viewer." With motion, we're creating an entirely new category of content — real-world 4D experiences where objects and people actually move in 3D space.
+
+#### What Motion Means
+- **Not camera animation** — Moving a virtual camera through a static scene
+- **TRUE 4D MOTION** — The Gaussians themselves change position over time
+- **Objects move** — People walk, things happen, the scene is ALIVE
+- **Loops seamlessly** — A 10-second video loops every 10 seconds forever
+
+#### Technical Foundation: 4D Gaussian Splatting
+Game View uses cutting-edge 4D Gaussian Splatting technology (CVPR 2024):
+- Traditional 3D Gaussians: (x, y, z, color, opacity)
+- 4D Gaussians: (x, y, z, **t**, color, opacity) + deformation field
+- Real-time playback at any timestamp
+- Smooth interpolation between frames
+
+#### Quality Standards
+- Match or exceed desktop app quality
+- 30+ FPS playback on mid-tier hardware
+- Smooth motion without frame skipping
+- High-fidelity color and detail preservation
+
+**See:** `docs/SPRINT_4D_MOTION.md` for implementation plan
+**See:** `docs/4D_MOTION_ARCHITECTURE.md` for technical details
 
 ---
 

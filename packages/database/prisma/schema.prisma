@@ -139,7 +139,7 @@ model Experience {
   thumbnailUrl String?
   previewUrl   String? // Short video preview
   videoUrl     String? // Source 360 video
-  plyUrl       String? // Gaussian splat PLY file
+  plyUrl       String? // Gaussian splat PLY file (first frame for motion scenes)
   camerasJson  String? // cameras.json URL
   category     Category
   subcategory  String
@@ -151,6 +151,13 @@ model Experience {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   publishedAt  DateTime?
+
+  // 4D Motion support (Sprint 4D-Motion)
+  motionEnabled     Boolean   @default(false) // True if this experience has motion
+  motionDuration    Float?    // Motion duration in seconds
+  motionFps         Int?      // Motion playback framerate
+  motionMetadataUrl String?   // URL to metadata.json with frame URLs
+  motionFrameCount  Int?      // Total number of motion frames
 
   // Game data for interactive playback (Sprint 18 - Phase 3)
   scenesData   Json? // Array of scene data: [{id, splatUrl, placedObjects, interactions, portals, spawnPoints}]
@@ -171,6 +178,7 @@ model Experience {
   @@index([status])
   @@index([publishedAt])
   @@index([briefId])
+  @@index([motionEnabled])
 }
 
 model Series {
@@ -364,12 +372,22 @@ model ProcessingJob {
   fps             Int @default(10)
   duration        Int @default(10)
 
+  // 4D Motion settings (Sprint 4D-Motion)
+  motionEnabled   Boolean @default(false) // Process as 4D motion
+  motionFps       Int     @default(15)    // Motion playback FPS
+  motionMaxFrames Int     @default(150)   // Max frames to export
+
   // Source & output
   sourceVideoUrl   String
   outputPlyUrl     String?
   outputCamerasUrl String?
   outputThumbnail  String?
   outputPreview    String?
+
+  // 4D Motion outputs (Sprint 4D-Motion)
+  outputMotionMetadataUrl String? // URL to metadata.json with frame URLs
+  outputMotionFrameCount  Int?    // Number of frames exported
+  outputMotionDuration    Float?  // Duration in seconds
 
   // Timing
   queuedAt       DateTime  @default(now())
@@ -391,6 +409,7 @@ model ProcessingJob {
 
   @@index([status])
   @@index([queuedAt])
+  @@index([motionEnabled])
 }
 
 // ============================================
