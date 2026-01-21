@@ -1,6 +1,6 @@
 # Game View Platform - 4D Motion Handoff
 
-> **Last Updated:** January 20, 2026
+> **Last Updated:** January 21, 2026
 > **Current Sprint:** 4D Motion Implementation
 > **Branch:** `claude/fix-splats-rendering-sh1k7`
 
@@ -69,7 +69,7 @@ See `docs/4D_MOTION_ARCHITECTURE.md` for full technical analysis.
 
 **Sprint Plan:** `docs/SPRINT_4D_MOTION.md`
 
-### Current Phase: Research & Validation
+### Current Phase: 4D Worker Build & Testing
 
 **Completed:**
 - [x] Research 4D-GS technology (CVPR 2024)
@@ -77,12 +77,19 @@ See `docs/4D_MOTION_ARCHITECTURE.md` for full technical analysis.
 - [x] Fix static splat rendering
 - [x] Implement first-person controls
 - [x] Fix WebGL context management
+- [x] Create `modal_worker_4d.py` for 4D processing
+- [x] Add DUSt3R for cloud-based SfM (strategic)
+- [x] Use COLMAP for SfM (simpler, proven approach)
+- [x] Fix CUDA arch detection for 4D Gaussian rasterizer build
+
+**In Progress:**
+- [ ] Modal 4D worker image building (includes depth-diff-gaussian-rasterization)
 
 **Next Steps:**
-- [ ] Clone and test 4DGaussians locally
-- [ ] Test with sample multi-view video
-- [ ] Evaluate WebGL rendering options
-- [ ] Get access to gvdw desktop for format analysis
+- [ ] Test 4D worker end-to-end with sample video
+- [ ] Verify per-frame PLY export works
+- [ ] Connect TemporalSceneViewer to frame playback
+- [ ] Test motion playback in browser
 
 ---
 
@@ -98,8 +105,9 @@ apps/studio/src/components/editor/Timeline.tsx       # Timeline UI (disconnected
 
 ### Processing Pipeline
 ```
-packages/processing/modal_worker.py  # GPU processing (needs 4D-GS update)
-packages/queue/src/worker.ts         # Job queue
+packages/processing/modal_worker.py     # Static 3D (OpenSplat) - PRODUCTION
+packages/processing/modal_worker_4d.py  # 4D Motion (4DGaussians) - BUILDING
+packages/queue/src/worker.ts            # Job queue
 ```
 
 ### Documentation
@@ -193,12 +201,29 @@ Processing happens via Modal workers - check Modal dashboard for logs.
 ## Recent Commits (This Branch)
 
 ```
-6d2b658 Add 4D motion architecture research documentation
-e0edcf5 Improve splat render quality settings
-37a466b Fix ESLint errors - remove unused var, add eslint-disable
-6657146 Fix controls conflict - keep orbit controls, layer FPS on top
-93f8747 Add diagnostic logging to debug splat rendering
+eb8ed0c Fix CUDA arch detection error in 4D Gaussian rasterizer build
+b316cbd Add cache buster to force Modal image rebuild
+da5398b Use COLMAP for SfM in 4D worker (simpler, proven approach)
+c4f6419 Remove broken DUSt3R pip install - not a pip-installable package
+abdf532 Add DUSt3R for cloud-based SfM, document strategic importance
 ```
+
+### Key Technical Decisions
+
+1. **COLMAP for SfM** (not DUSt3R/MASt3R)
+   - DUSt3R is not pip-installable and has complex dependencies
+   - COLMAP is proven, GPU-accelerated, and works with apt-get
+   - Sequential matcher handles video frames well
+
+2. **CUDA Arch Detection Fix**
+   - Set `TORCH_CUDA_ARCH_LIST` environment variable at build time
+   - Architectures: 7.0 (V100), 7.5 (T4), 8.0 (A100), 8.6 (A10G), 8.9 (L4)
+   - Enables building CUDA extensions without GPU present during image build
+
+3. **Per-Frame PLY Export**
+   - Uses `export_perframe_3DGS.py` from 4DGaussians
+   - Outputs standard PLY files that work with existing GaussianSplats3D viewer
+   - No custom WebGL renderer needed!
 
 ---
 

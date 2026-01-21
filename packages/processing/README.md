@@ -56,6 +56,26 @@ Add to Vercel environment variables:
 modal run modal_worker.py
 ```
 
+## Workers
+
+This package contains **two Modal workers**:
+
+| Worker | File | Purpose | Output |
+|--------|------|---------|--------|
+| **Static 3D** | `modal_worker.py` | Single-frame 3D splats | One PLY file |
+| **4D Motion** | `modal_worker_4d.py` | Temporal motion capture | Per-frame PLY files |
+
+### Static Worker (Production)
+- Uses OpenSplat for 3D Gaussian Splatting
+- GLOMAP for GPU-accelerated bundle adjustment
+- Best for: still scenes, product shots, environments
+
+### 4D Motion Worker (Building)
+- Uses 4DGaussians (CVPR 2024) for temporal modeling
+- COLMAP for SfM (simpler, proven approach)
+- Exports per-frame PLY files for motion playback
+- Best for: moving subjects, sports, action captures
+
 ## Architecture
 
 ```
@@ -282,10 +302,62 @@ We evaluated alternatives:
 - **InstantSplat**: Custom license requiring consent ❌
 - **GLOMAP + COLMAP**: Apache 2.0 / BSD-3 (commercial ready) ✅
 
+## 4D Motion Worker
+
+The 4D Motion worker (`modal_worker_4d.py`) enables temporal motion capture using 4DGaussians.
+
+### Deploy 4D Worker
+
+```bash
+cd packages/processing
+modal deploy modal_worker_4d.py
+```
+
+**Note:** First deployment takes 30-60 minutes to build the image with 4DGaussians CUDA extensions.
+
+### 4D Pipeline Flow
+
+```
+Video → FFmpeg → COLMAP (SfM) → 4DGaussians Training → Per-Frame PLY Export → Upload
+```
+
+### 4D Output Structure
+
+```
+production-outputs/
+  {production_id}/
+    scene.ply           # First frame (backwards compatible)
+    thumbnail.jpg       # Preview image
+    metadata.json       # Frame URLs, FPS, duration
+    frames/
+      frame_00000.ply   # Per-timestamp PLY files
+      frame_00001.ply
+      ...
+```
+
+### 4D Technical Details
+
+- **Base Image:** `pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel`
+- **SfM:** COLMAP (apt package, simpler than GPU-COLMAP)
+- **Training:** 4DGaussians with k-planes deformation field
+- **Export:** `export_perframe_3DGS.py` → standard PLY files
+- **CUDA Architectures:** 7.0, 7.5, 8.0, 8.6, 8.9+PTX (set via `TORCH_CUDA_ARCH_LIST`)
+
+### 4D Viewer Integration
+
+The per-frame PLY files are standard Gaussian Splat format - they work with the existing `@mkkellogg/gaussian-splats-3d` viewer. Motion playback is achieved by:
+
+1. Preloading frames into memory
+2. Swapping the active PLY file each frame
+3. Synchronizing with timeline UI
+
+See `apps/studio/src/components/viewer/TemporalSceneViewer.tsx` for implementation.
+
 ## References
 
 - [GLOMAP Paper](https://arxiv.org/abs/2404.11324)
 - [COLMAP Documentation](https://colmap.github.io/)
 - [Ceres Solver CUDA Support](http://ceres-solver.org/installation.html#cuda)
 - [cuDSS Documentation](https://developer.nvidia.com/cudss)
+- [4DGaussians Paper](https://guanjunwu.github.io/4dgs/) (CVPR 2024)
 - [Modal Documentation](https://modal.com/docs)
