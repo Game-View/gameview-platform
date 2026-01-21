@@ -115,8 +115,11 @@ export const productionRouter = router({
       // Trigger queue via internal API (avoids importing BullMQ here)
       // The API route will handle adding to BullMQ
       try {
+        const queueUrl = `${getInternalApiUrl()}/api/productions/queue`;
+        console.log("[Production] Triggering queue at:", queueUrl);
+
         const queueResponse = await fetch(
-          `${getInternalApiUrl()}/api/productions/queue`,
+          queueUrl,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -131,21 +134,40 @@ export const productionRouter = router({
           }
         );
 
-        if (!queueResponse.ok) {
-          throw new Error("Failed to queue production");
+        // Always try to read the response body for better error messages
+        let responseBody: string | null = null;
+        try {
+          responseBody = await queueResponse.text();
+        } catch {
+          // Ignore body read errors
         }
+
+        if (!queueResponse.ok) {
+          console.error("[Production] Queue failed:", queueResponse.status, responseBody);
+          throw new Error(`Queue returned ${queueResponse.status}: ${responseBody || 'No response body'}`);
+        }
+
+        console.log("[Production] Queue success:", responseBody?.substring(0, 200));
       } catch (error) {
-        // Mark job as failed if queue fails
-        await ctx.db.processingJob.update({
-          where: { id: job.id },
-          data: {
-            status: "FAILED",
-            errorMessage: "Failed to queue job",
-          },
-        });
+        console.error("[Production] Queue error:", error);
+
+        // Mark job as failed if queue fails - wrap in try-catch to prevent double errors
+        try {
+          await ctx.db.processingJob.update({
+            where: { id: job.id },
+            data: {
+              status: "FAILED",
+              errorMessage: error instanceof Error ? error.message : "Failed to queue job",
+            },
+          });
+        } catch (dbError) {
+          console.error("[Production] Failed to update job status:", dbError);
+          // Continue - we still want to return the error to the user
+        }
+
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to start production",
+          message: error instanceof Error ? error.message : "Failed to start production",
         });
       }
 
@@ -435,12 +457,24 @@ export const productionRouter = router({
       });
 
       // Re-queue
-      const sourceVideos = JSON.parse(job.sourceVideoUrl || "[]");
+      let sourceVideos = [];
+      try {
+        sourceVideos = JSON.parse(job.sourceVideoUrl || "[]");
+      } catch {
+        console.error("[Production] Failed to parse sourceVideoUrl for retry:", job.sourceVideoUrl);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to parse source video data for retry",
+        });
+      }
       const preset = getPresetFromSettings(job);
 
       try {
-        await fetch(
-          `${getInternalApiUrl()}/api/productions/queue`,
+        const queueUrl = `${getInternalApiUrl()}/api/productions/queue`;
+        console.log("[Production] Re-triggering queue at:", queueUrl);
+
+        const queueResponse = await fetch(
+          queueUrl,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -453,7 +487,14 @@ export const productionRouter = router({
             }),
           }
         );
-      } catch {
+
+        if (!queueResponse.ok) {
+          const errorText = await queueResponse.text().catch(() => 'No response body');
+          console.error("[Production] Re-queue failed:", queueResponse.status, errorText);
+          throw new Error(`Re-queue returned ${queueResponse.status}`);
+        }
+      } catch (error) {
+        console.error("[Production] Re-queue error:", error);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to re-queue production",
