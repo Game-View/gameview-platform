@@ -66,6 +66,7 @@ export const productionRouter = router({
           })
         ).min(2, "At least 2 camera angles required"),
         preset: productionPreset.default("balanced"),
+        motionEnabled: z.boolean().default(false), // 4D motion processing
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -104,6 +105,7 @@ export const productionRouter = router({
           status: "QUEUED",
           sourceVideoUrl: JSON.stringify(input.sourceVideos), // Store as JSON for now
           ...settings,
+          motionEnabled: input.motionEnabled,
         },
         include: {
           experience: true,
@@ -124,6 +126,7 @@ export const productionRouter = router({
               creatorId: ctx.creatorId,
               sourceVideos: input.sourceVideos,
               preset: input.preset,
+              motionEnabled: input.motionEnabled,
             }),
           }
         );
@@ -152,6 +155,7 @@ export const productionRouter = router({
         status: "queued",
         name: input.name,
         preset: input.preset,
+        motionEnabled: input.motionEnabled,
         videoCount: input.sourceVideos.length,
         createdAt: job.queuedAt,
       };

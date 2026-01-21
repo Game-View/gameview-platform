@@ -80,7 +80,10 @@ export async function POST(req: NextRequest) {
       size: 0, // Size not critical for processing
     }));
 
-    // Prepare Modal payload
+    // Determine if this is a 4D motion job
+    const isMotionJob = job.motionEnabled === true;
+
+    // Prepare Modal payload (base settings for both static and motion)
     const modalPayload = {
       production_id: productionId,
       experience_id: job.experienceId,
@@ -91,14 +94,26 @@ export async function POST(req: NextRequest) {
         imagePercentage: job.imagePercentage,
         fps: job.fps,
         duration: job.duration,
+        // 4D motion-specific settings (only used by 4D worker)
+        ...(isMotionJob && {
+          motionEnabled: true,
+          motionFps: job.motionFps || 15,
+          motionMaxFrames: job.motionMaxFrames || 150,
+        }),
       },
       callback_url: callbackUrl,
     };
 
-    // Trigger Modal function via webhook
-    const modalWebhookUrl = process.env.MODAL_WEBHOOK_URL || "https://smithjps512--gameview-processing-trigger.modal.run";
+    // Select the appropriate Modal webhook based on job type
+    const defaultStaticUrl = "https://smithjps512--gameview-processing-trigger.modal.run";
+    const default4DUrl = "https://smithjps512--gameview-4d-processing-trigger.modal.run";
 
-    console.log("[Processing] Triggering Modal webhook:", modalWebhookUrl);
+    const modalWebhookUrl = isMotionJob
+      ? (process.env.MODAL_4D_WEBHOOK_URL || default4DUrl)
+      : (process.env.MODAL_WEBHOOK_URL || defaultStaticUrl);
+
+    console.log(`[Processing] Triggering ${isMotionJob ? "4D motion" : "static"} processing`);
+    console.log("[Processing] Modal webhook:", modalWebhookUrl);
     console.log("[Processing] Payload:", JSON.stringify(modalPayload, null, 2));
 
     const modalResponse = await fetch(modalWebhookUrl, {

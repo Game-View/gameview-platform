@@ -7,12 +7,11 @@ Pipeline:
 1. Download source videos from Supabase
 2. Extract frames with TIMESTAMPS preserved
 3. Organize frames by camera view
-4. Run COLMAP for feature extraction + matching
-5. Run GLOMAP for sparse reconstruction
-6. Train 4D Gaussian Splatting (temporal motion)
-7. Export per-frame PLY files
-8. Upload results to Supabase (frames + metadata)
-9. Callback to notify completion
+4. Run COLMAP for camera pose estimation
+5. Train 4D Gaussian Splatting (temporal motion)
+6. Export per-frame PLY files
+7. Upload results to Supabase (frames + metadata)
+8. Callback to notify completion
 
 Key difference from static pipeline:
 - Uses 4DGaussians instead of OpenSplat
@@ -21,6 +20,7 @@ Key difference from static pipeline:
 - Outputs metadata.json with frame URLs and timing
 
 Based on: https://github.com/hustvl/4DGaussians (CVPR 2024)
+SfM: COLMAP (apt package)
 """
 
 import modal
@@ -35,122 +35,51 @@ import urllib.request
 import urllib.parse
 
 # Modal app definition
-app = modal.App("gameview-processing-4d")
+app = modal.App("gameview-4d-processing")
 
-# GPU image with CUDA + 4DGaussians dependencies
-# NOTE: 4DGaussians requires PyTorch + specific CUDA dependencies
+# GPU image with CUDA + COLMAP + 4DGaussians dependencies
+# Fully cloud-based, no local processing required
+# Cache buster v3: Fix CUDA arch detection for rasterizer build
 processing_image_4d = (
-    modal.Image.from_registry("nvidia/cuda:12.1.0-devel-ubuntu22.04", add_python="3.10")
-    .env({"DEBIAN_FRONTEND": "noninteractive", "TZ": "UTC"})
+    modal.Image.from_registry("pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel")
+    .env({
+        "DEBIAN_FRONTEND": "noninteractive",
+        "TZ": "UTC",
+        # Set CUDA architectures for building without GPU present
+        # 7.0=V100, 7.5=T4, 8.0=A100, 8.6=A10G/RTX3090, 8.9=L4/RTX4090
+        "TORCH_CUDA_ARCH_LIST": "7.0;7.5;8.0;8.6;8.9+PTX",
+    })
     .apt_install([
-        # Build version marker
-        "tree",
-        "file",
-        "htop",
-        "jq",
-        "ffmpeg",
-        "libgl1-mesa-glx",
-        "libglib2.0-0",
-        "wget",
         "git",
-        "curl",
-        "unzip",
-        # Build dependencies
+        "wget",
+        "ffmpeg",
         "ninja-build",
         "build-essential",
-        "libboost-all-dev",
-        "libeigen3-dev",
-        "libflann-dev",
-        "libfreeimage-dev",
-        "libmetis-dev",
-        "libgoogle-glog-dev",
-        "libgflags-dev",
-        "libsqlite3-dev",
-        "libssl-dev",
-        "libatlas-base-dev",
-        "libsuitesparse-dev",
-        # OpenGL dependencies
-        "libgl1-mesa-dev",
-        "libglx-dev",
-        "libglu1-mesa-dev",
-        "libegl1-mesa-dev",
-        "libglew-dev",
-        "libglfw3-dev",
-        # Qt5 for COLMAP
-        "qtbase5-dev",
-        "libqt5opengl5-dev",
-        # OpenCV
-        "libopencv-dev",
-    ])
-    .run_commands([
-        # === Install CMake 3.28+ ===
-        "wget -q https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz -O /tmp/cmake.tar.gz",
-        "tar -xzf /tmp/cmake.tar.gz -C /opt",
-        "ln -sf /opt/cmake-3.28.3-linux-x86_64/bin/cmake /usr/local/bin/cmake",
-        "rm /tmp/cmake.tar.gz",
-
-        # === Build Ceres Solver 2.2 with CUDA support ===
-        "git clone --branch 2.2.0 --depth 1 https://github.com/ceres-solver/ceres-solver.git /opt/ceres-solver",
-        "mkdir -p /opt/ceres-solver/build",
-        "cd /opt/ceres-solver/build && /usr/local/bin/cmake .. "
-        "-DCMAKE_BUILD_TYPE=Release "
-        "-DBUILD_TESTING=OFF "
-        "-DBUILD_EXAMPLES=OFF "
-        "-DUSE_CUDA=ON "
-        "-DCMAKE_CUDA_ARCHITECTURES='70;75;80;86;89' "
-        "&& make -j$(nproc) && make install",
-
-        # === Build COLMAP with CUDA ===
-        "git clone --branch 3.9.1 --depth 1 https://github.com/colmap/colmap.git /opt/colmap && "
-        "sed -i '31i #include <memory>' /opt/colmap/src/colmap/image/line.cc && "
-        "mkdir -p /opt/colmap/build && "
-        "cd /opt/colmap/build && "
-        "/usr/local/bin/cmake .. "
-        "-DCMAKE_BUILD_TYPE=Release "
-        "-DCUDA_ENABLED=ON "
-        "-DGUI_ENABLED=OFF "
-        "-DCMAKE_CUDA_ARCHITECTURES='70;75;80;86;89' && "
-        "make -j$(nproc) && "
-        "make install",
-
-        # === Build GLOMAP ===
-        "git clone --recursive https://github.com/colmap/glomap.git /opt/glomap",
-        "mkdir -p /opt/glomap/build",
-        "cd /opt/glomap/build && /usr/local/bin/cmake .. "
-        "-DCMAKE_BUILD_TYPE=Release "
-        "-GNinja "
-        "&& ninja",
-        "cp /opt/glomap/build/glomap/glomap /usr/local/bin/glomap",
-        "chmod 755 /usr/local/bin/glomap",
-
-        # === Clone 4DGaussians ===
-        "git clone https://github.com/hustvl/4DGaussians.git /opt/4DGaussians",
-        "cd /opt/4DGaussians && git submodule update --init --recursive",
+        "libgl1-mesa-glx",
+        "libglib2.0-0",
+        "colmap",  # SfM for camera pose estimation
     ])
     .pip_install([
-        # PyTorch with CUDA 12.1 support
-        "torch==2.1.0+cu121",
-        "torchvision==0.16.0+cu121",
-        "--extra-index-url", "https://download.pytorch.org/whl/cu121",
-    ])
-    .pip_install([
-        # 4DGaussians dependencies
+        # Core dependencies
         "numpy",
         "opencv-python-headless",
         "Pillow",
         "plyfile",
         "tqdm",
-        "mmcv>=2.0.0",
         "scipy",
         "lpips",
         "tensorboard",
+        "roma",  # Rotation utilities
         # Supabase and API
         "requests",
         "supabase",
         "fastapi",
     ])
     .run_commands([
-        # Install 4DGaussians custom CUDA extensions
+        # Clone 4DGaussians
+        "git clone https://github.com/hustvl/4DGaussians.git /opt/4DGaussians",
+        "cd /opt/4DGaussians && git submodule update --init --recursive",
+        # Build 4DGaussians CUDA extensions
         "cd /opt/4DGaussians && pip install -e submodules/depth-diff-gaussian-rasterization",
         "cd /opt/4DGaussians && pip install -e submodules/simple-knn",
     ])
@@ -425,14 +354,13 @@ def process_production_4d(
             "--database_path", str(database_path),
         ], check=True, capture_output=True)
 
-        # Sparse reconstruction with GLOMAP
-        send_progress(callback_url, production_id, "glomap", 40, "Reconstructing 3D structure")
+        # Sparse reconstruction with COLMAP
+        send_progress(callback_url, production_id, "colmap_mapper", 40, "Reconstructing 3D structure")
         sparse_dir = colmap_dir / "sparse"
         sparse_dir.mkdir(exist_ok=True)
 
-        glomap_bin = "/usr/local/bin/glomap"
         subprocess.run([
-            glomap_bin, "mapper",
+            "colmap", "mapper",
             "--database_path", str(database_path),
             "--image_path", str(colmap_images),
             "--output_path", str(sparse_dir),

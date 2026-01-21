@@ -187,8 +187,20 @@ This means we can:
   - `outputMotionMetadataUrl` String
   - `outputMotionFrameCount` Int
   - `outputMotionDuration` Float
-- [ ] Create and run migration
+- [x] Create and run migration (used `prisma db push`)
 - [x] Update Prisma schema
+
+#### 2.4 API Integration - DONE
+- [x] Update `/api/processing/trigger` to route 4D jobs to 4D Modal worker
+- [x] Add `MODAL_4D_WEBHOOK_URL` environment variable support
+- [x] Pass motion settings (fps, maxFrames) in payload
+- [x] Update `/api/processing/callback` to handle motion outputs
+- [x] Store motion metadata URL and frame count in database
+- [x] Update Experience with motion fields on completion
+
+**Files modified:**
+- `apps/studio/src/app/api/processing/trigger/route.ts`
+- `apps/studio/src/app/api/processing/callback/route.ts`
 
 ---
 
@@ -390,6 +402,36 @@ This means we can:
 
 ## Future Tasks (Post-MVP)
 
+### Structure from Motion (SfM) Infrastructure
+**Priority:** HIGH | **Strategic Importance:** Core competitive advantage
+
+**The Problem:**
+Camera pose estimation is the foundation of ALL 3D/4D reconstruction. Current options:
+- **COLMAP**: Gold standard, but nightmare to build/deploy in cloud
+- **DUSt3R**: Newer, easier to deploy, but less battle-tested
+- **Others**: Various tradeoffs between quality, speed, and deployability
+
+**Why This Matters:**
+Motion quality depends entirely on accurate camera poses. Poor poses = poor reconstruction = poor motion. This is NOT just a technical detail - it's the foundation of our "video in, game out" promise.
+
+**Strategic Decision (Jan 20, 2026):**
+- **MVP**: Use DUSt3R for cloud-based pose estimation (testing now)
+- **Long-term**: Evaluate building proprietary SfM solution optimized for:
+  - iPhone/GoPro footage (our primary input)
+  - Multi-camera setups (venues filmed from multiple angles)
+  - Cloud deployment (Modal/serverless GPU)
+  - Quality at scale (consistent results across diverse content)
+
+**Quality Preset Integration:**
+The user's quality choice (Fast/Balanced/High) could drive SfM approach:
+- Fast: Quick pose estimation, good for previews
+- Balanced: Standard processing, production quality
+- High: Thorough reconstruction, maximum quality
+
+**This is a problem worth solving properly - the market for high-quality 4D content is huge.**
+
+---
+
 ### Spark AI Assistant Training
 **Priority:** Medium | **When:** After 4D motion is working end-to-end
 
@@ -413,6 +455,8 @@ Spark (the AI assistant in Game View Studio) needs to be updated to understand:
 
 - [4D Gaussian Splatting (CVPR 2024)](https://github.com/hustvl/4DGaussians)
 - [4D-GS Paper](https://arxiv.org/abs/2310.08528)
+- [DUSt3R - Dense SfM (CVPR 2024)](https://github.com/naver/dust3r)
+- [MASt3R - Improved DUSt3R](https://github.com/naver/mast3r)
 - [4D Motion Architecture Doc](./4D_MOTION_ARCHITECTURE.md)
 - [Gaussian Splat Integration Doc](./GAUSSIAN_SPLAT_INTEGRATION.md)
 - [gvdw Desktop Repository](https://github.com/Game-View/gvdw)
@@ -425,6 +469,7 @@ Spark (the AI assistant in Game View Studio) needs to be updated to understand:
 |------|--------|
 | Jan 20, 2026 | Initial sprint plan created |
 | Jan 20, 2026 | Research phase items marked based on completed work |
+| Jan 20, 2026 | Added API integration section (trigger + callback routes) |
 
 ---
 

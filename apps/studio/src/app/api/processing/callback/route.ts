@@ -54,8 +54,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check for valid outputs (must have at least plyUrl)
-    const hasValidOutputs = success && outputs && outputs.plyUrl;
+    // Check for valid outputs (must have at least plyUrl for static, or motionMetadataUrl for 4D)
+    const isMotionOutput = outputs?.motionMetadataUrl && outputs?.motionFrameCount;
+    const hasValidOutputs = success && outputs && (outputs.plyUrl || isMotionOutput);
 
     if (hasValidOutputs) {
       // Processing succeeded with valid outputs - update job and experience
@@ -63,36 +64,68 @@ export async function POST(req: NextRequest) {
         ? Math.floor((Date.now() - job.startedAt.getTime()) / 1000)
         : null;
 
+      // Build update data for processing job
+      const jobUpdateData: Record<string, unknown> = {
+        status: "COMPLETED",
+        stage: null,
+        progress: 100,
+        outputPlyUrl: outputs.plyUrl || null,
+        outputCamerasUrl: outputs.camerasUrl || null,
+        outputThumbnail: outputs.thumbnailUrl || null,
+        outputPreview: outputs.previewUrl || null,
+        completedAt: new Date(),
+        processingTime,
+      };
+
+      // Add motion-specific outputs if present
+      if (isMotionOutput) {
+        jobUpdateData.outputMotionMetadataUrl = outputs.motionMetadataUrl;
+        jobUpdateData.outputMotionFrameCount = outputs.motionFrameCount;
+        jobUpdateData.outputMotionDuration = outputs.motionDuration || null;
+      }
+
       // Update processing job
       await db.processingJob.update({
         where: { id: production_id },
-        data: {
-          status: "COMPLETED",
-          stage: null,
-          progress: 100,
-          outputPlyUrl: outputs.plyUrl,
-          outputCamerasUrl: outputs.camerasUrl,
-          outputThumbnail: outputs.thumbnailUrl,
-          outputPreview: outputs.previewUrl || null,
-          completedAt: new Date(),
-          processingTime,
-        },
+        data: jobUpdateData,
       });
+
+      // Build update data for experience
+      const experienceUpdateData: Record<string, unknown> = {
+        status: "PUBLISHED",
+        publishedAt: new Date(),
+      };
+
+      if (isMotionOutput) {
+        // 4D motion output - set motion fields
+        experienceUpdateData.motionEnabled = true;
+        experienceUpdateData.motionMetadataUrl = outputs.motionMetadataUrl;
+        experienceUpdateData.motionFrameCount = outputs.motionFrameCount;
+        experienceUpdateData.motionDuration = outputs.motionDuration || null;
+        experienceUpdateData.motionFps = outputs.motionFps || 15;
+        // Also set the first frame PLY as the static fallback
+        if (outputs.plyUrl) {
+          experienceUpdateData.plyUrl = outputs.plyUrl;
+        }
+        experienceUpdateData.camerasJson = outputs.camerasUrl || null;
+        experienceUpdateData.thumbnailUrl = outputs.thumbnailUrl || null;
+        experienceUpdateData.previewUrl = outputs.previewUrl || null;
+      } else {
+        // Static output - set standard fields
+        experienceUpdateData.plyUrl = outputs.plyUrl;
+        experienceUpdateData.camerasJson = outputs.camerasUrl;
+        experienceUpdateData.thumbnailUrl = outputs.thumbnailUrl;
+        experienceUpdateData.previewUrl = outputs.previewUrl || null;
+        experienceUpdateData.motionEnabled = false;
+      }
 
       // Update experience with output URLs
       await db.experience.update({
         where: { id: experience_id },
-        data: {
-          plyUrl: outputs.plyUrl,
-          camerasJson: outputs.camerasUrl,
-          thumbnailUrl: outputs.thumbnailUrl,
-          previewUrl: outputs.previewUrl || null,
-          status: "PUBLISHED", // Auto-publish on completion (or keep DRAFT)
-          publishedAt: new Date(),
-        },
+        data: experienceUpdateData,
       });
 
-      console.log(`[Callback] Production ${production_id} completed successfully`);
+      console.log(`[Callback] Production ${production_id} completed successfully (motion: ${isMotionOutput})`);
 
       // TODO: Send notification to user (email, push, etc.)
 

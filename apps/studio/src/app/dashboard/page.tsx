@@ -388,6 +388,7 @@ export default function DashboardPage() {
   const handleCreateProduction = async (settings: {
     name: string;
     preset: "fast" | "balanced" | "high";
+    motionEnabled: boolean;
     videos: Array<{ id: string; name: string; size: number; url?: string; path?: string }>;
   }) => {
     // Check if we have uploaded URLs (real upload) or mock data (simulated)
@@ -403,6 +404,7 @@ export default function DashboardPage() {
             json: {
               name: settings.name,
               preset: settings.preset,
+              motionEnabled: settings.motionEnabled,
               sourceVideos: settings.videos.map((v) => ({
                 url: v.url!,
                 filename: v.name,
