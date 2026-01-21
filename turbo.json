@@ -29,6 +29,7 @@
       "dependsOn": ["^dev:prepare"]
     },
     "dev:prepare": {
+      "dependsOn": ["^dev:prepare"],
       "outputs": ["dist/**"]
     },
     "lint": {
