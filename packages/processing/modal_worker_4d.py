@@ -39,10 +39,16 @@ app = modal.App("gameview-4d-processing")
 
 # GPU image with CUDA + COLMAP + 4DGaussians dependencies
 # Fully cloud-based, no local processing required
-# Cache buster v2: Force rebuild - removed broken DUSt3R pip install
+# Cache buster v3: Fix CUDA arch detection for rasterizer build
 processing_image_4d = (
     modal.Image.from_registry("pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel")
-    .env({"DEBIAN_FRONTEND": "noninteractive", "TZ": "UTC"})
+    .env({
+        "DEBIAN_FRONTEND": "noninteractive",
+        "TZ": "UTC",
+        # Set CUDA architectures for building without GPU present
+        # 7.0=V100, 7.5=T4, 8.0=A100, 8.6=A10G/RTX3090, 8.9=L4/RTX4090
+        "TORCH_CUDA_ARCH_LIST": "7.0;7.5;8.0;8.6;8.9+PTX",
+    })
     .apt_install([
         "git",
         "wget",
