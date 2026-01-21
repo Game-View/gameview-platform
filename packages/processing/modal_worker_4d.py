@@ -58,8 +58,6 @@ processing_image_4d = (
         "libglib2.0-0",
     ])
     .pip_install([
-        # DUSt3R for camera pose estimation (COLMAP replacement)
-        "dust3r @ git+https://github.com/naver/dust3r.git",
         # Core dependencies
         "numpy",
         "opencv-python-headless",
