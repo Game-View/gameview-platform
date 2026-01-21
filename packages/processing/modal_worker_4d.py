@@ -39,6 +39,7 @@ app = modal.App("gameview-4d-processing")
 
 # GPU image with CUDA + COLMAP + 4DGaussians dependencies
 # Fully cloud-based, no local processing required
+# Cache buster v2: Force rebuild - removed broken DUSt3R pip install
 processing_image_4d = (
     modal.Image.from_registry("pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel")
     .env({"DEBIAN_FRONTEND": "noninteractive", "TZ": "UTC"})
