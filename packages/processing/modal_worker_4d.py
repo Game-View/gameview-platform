@@ -7,7 +7,7 @@ Pipeline:
 1. Download source videos from Supabase
 2. Extract frames with TIMESTAMPS preserved
 3. Organize frames by camera view
-4. Run DUSt3R for camera pose estimation (COLMAP-free)
+4. Run COLMAP for camera pose estimation
 5. Train 4D Gaussian Splatting (temporal motion)
 6. Export per-frame PLY files
 7. Upload results to Supabase (frames + metadata)
@@ -18,15 +18,9 @@ Key difference from static pipeline:
 - Preserves temporal information
 - Exports PER-FRAME PLY files for motion playback
 - Outputs metadata.json with frame URLs and timing
-- Uses DUSt3R for camera pose estimation (no COLMAP build issues)
 
 Based on: https://github.com/hustvl/4DGaussians (CVPR 2024)
-SfM: https://github.com/naver/dust3r (CVPR 2024)
-
-NOTE: Quality preset affects SfM approach:
-- Fast: DUSt3R quick mode (fewer iterations)
-- Balanced: DUSt3R standard mode
-- High: DUSt3R thorough mode (more iterations, better poses)
+SfM: COLMAP (apt package)
 """
 
 import modal
@@ -43,7 +37,7 @@ import urllib.parse
 # Modal app definition
 app = modal.App("gameview-4d-processing")
 
-# GPU image with CUDA + DUSt3R + 4DGaussians dependencies
+# GPU image with CUDA + COLMAP + 4DGaussians dependencies
 # Fully cloud-based, no local processing required
 processing_image_4d = (
     modal.Image.from_registry("pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel")
@@ -56,6 +50,7 @@ processing_image_4d = (
         "build-essential",
         "libgl1-mesa-glx",
         "libglib2.0-0",
+        "colmap",  # SfM for camera pose estimation
     ])
     .pip_install([
         # Core dependencies
@@ -67,7 +62,7 @@ processing_image_4d = (
         "scipy",
         "lpips",
         "tensorboard",
-        "roma",  # DUSt3R dependency for rotations
+        "roma",  # Rotation utilities
         # Supabase and API
         "requests",
         "supabase",
@@ -352,14 +347,13 @@ def process_production_4d(
             "--database_path", str(database_path),
         ], check=True, capture_output=True)
 
-        # Sparse reconstruction with GLOMAP
-        send_progress(callback_url, production_id, "glomap", 40, "Reconstructing 3D structure")
+        # Sparse reconstruction with COLMAP
+        send_progress(callback_url, production_id, "colmap_mapper", 40, "Reconstructing 3D structure")
         sparse_dir = colmap_dir / "sparse"
         sparse_dir.mkdir(exist_ok=True)
 
-        glomap_bin = "/usr/local/bin/glomap"
         subprocess.run([
-            glomap_bin, "mapper",
+            "colmap", "mapper",
             "--database_path", str(database_path),
             "--image_path", str(colmap_images),
             "--output_path", str(sparse_dir),
