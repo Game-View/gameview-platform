@@ -83,10 +83,13 @@ See `docs/4D_MOTION_ARCHITECTURE.md` for full technical analysis.
 - [x] Fix CUDA arch detection for 4D Gaussian rasterizer build
 
 **In Progress:**
-- [ ] Modal 4D worker image building (includes depth-diff-gaussian-rasterization)
+- [ ] Test 4D worker end-to-end with sample video
+
+**Deployed:**
+- [x] Modal 4D worker image built and deployed (Jan 21, 2026)
+- **4D Endpoint:** `https://smithjps512--gameview-4d-processing-trigger-4d.modal.run`
 
 **Next Steps:**
-- [ ] Test 4D worker end-to-end with sample video
 - [ ] Verify per-frame PLY export works
 - [ ] Connect TemporalSceneViewer to frame playback
 - [ ] Test motion playback in browser
