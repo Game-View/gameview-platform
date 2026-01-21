@@ -209,6 +209,14 @@ export const productionRouter = router({
         });
       }
 
+      // Check if experience exists (data integrity)
+      if (!job.experience) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Production has no associated experience",
+        });
+      }
+
       // Verify ownership
       if (job.experience.creator.userId !== ctx.userId) {
         throw new TRPCError({
@@ -297,20 +305,22 @@ export const productionRouter = router({
       }
 
       return {
-        items: jobs.map((job) => ({
-          id: job.id,
-          experienceId: job.experienceId,
-          name: job.experience.title,
-          thumbnailUrl: job.experience.thumbnailUrl || job.outputThumbnail,
-          status: job.status.toLowerCase(),
-          stage: job.stage?.toLowerCase(),
-          progress: job.progress,
-          preset: getPresetFromSettings(job),
-          videoCount: getVideoCount(job.sourceVideoUrl),
-          error: job.errorMessage,
-          createdAt: job.queuedAt,
-          completedAt: job.completedAt,
-        })),
+        items: jobs
+          .filter((job) => job.experience !== null) // Skip orphaned jobs
+          .map((job) => ({
+            id: job.id,
+            experienceId: job.experienceId,
+            name: job.experience!.title,
+            thumbnailUrl: job.experience!.thumbnailUrl || job.outputThumbnail,
+            status: job.status.toLowerCase(),
+            stage: job.stage?.toLowerCase(),
+            progress: job.progress,
+            preset: getPresetFromSettings(job),
+            videoCount: getVideoCount(job.sourceVideoUrl),
+            error: job.errorMessage,
+            createdAt: job.queuedAt,
+            completedAt: job.completedAt,
+          })),
         nextCursor,
       };
     }),
@@ -372,6 +382,14 @@ export const productionRouter = router({
         });
       }
 
+      // Check if experience exists (data integrity)
+      if (!job.experience) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Production has no associated experience",
+        });
+      }
+
       if (job.experience.creator.id !== ctx.creatorId) {
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -420,6 +438,14 @@ export const productionRouter = router({
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Production not found",
+        });
+      }
+
+      // Check if experience exists (data integrity)
+      if (!job.experience) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Production has no associated experience",
         });
       }
 
@@ -523,6 +549,14 @@ export const productionRouter = router({
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Production not found",
+        });
+      }
+
+      // Check if experience exists (data integrity)
+      if (!job.experience) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Production has no associated experience",
         });
       }
 
