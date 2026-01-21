@@ -83,7 +83,16 @@ export async function POST(request: NextRequest) {
         console.log("[API] Modal response status:", modalResponse.status);
 
         if (modalResponse.ok) {
-          const modalResult = await modalResponse.json();
+          let modalResult;
+          try {
+            const responseText = await modalResponse.text();
+            console.log("[API] Modal response body:", responseText.substring(0, 500));
+            modalResult = JSON.parse(responseText);
+          } catch (parseError) {
+            console.error("[API] Failed to parse Modal response:", parseError);
+            // Fall through to other options
+            throw parseError;
+          }
           console.log("[API] Modal success - call_id:", modalResult.call_id);
 
           // Update job status to processing
@@ -153,8 +162,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error("[API] Failed to queue production:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to queue production" },
+      { error: "Failed to queue production", details: errorMessage },
       { status: 500 }
     );
   }

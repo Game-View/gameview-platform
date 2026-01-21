@@ -97,7 +97,19 @@ export default function DashboardPage() {
         }
 
         if (productionsRes.ok) {
-          const prodData = await productionsRes.json();
+          let prodData;
+          try {
+            const responseText = await productionsRes.text();
+            if (!responseText) {
+              console.error("[Dashboard] Productions response empty");
+              return;
+            }
+            prodData = JSON.parse(responseText);
+          } catch (parseError) {
+            console.error("[Dashboard] Failed to parse productions response:", parseError);
+            toast.error("Failed to load productions", "Server returned invalid response");
+            return;
+          }
 
           // tRPC batch format returns an array - get first result
           const result = Array.isArray(prodData) ? prodData[0] : prodData;
@@ -143,6 +155,13 @@ export default function DashboardPage() {
           }
         } else {
           console.error("[Dashboard] Productions fetch failed:", productionsRes.status);
+          // Try to get error details
+          try {
+            const errorText = await productionsRes.text();
+            console.error("[Dashboard] Productions error body:", errorText);
+          } catch {
+            // Ignore
+          }
           toast.error("Failed to load productions", "Please try refreshing the page.");
         }
       } catch (error) {
@@ -228,7 +247,16 @@ export default function DashboardPage() {
         const response = await fetch("/api/trpc/production.list?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: { limit: 50 } } })));
 
         if (response.ok) {
-          const prodData = await response.json();
+          let prodData;
+          try {
+            const responseText = await response.text();
+            if (!responseText) return;
+            prodData = JSON.parse(responseText);
+          } catch {
+            // Ignore parse errors during polling
+            return;
+          }
+
           // tRPC batch format returns an array - get first result
           const result = Array.isArray(prodData) ? prodData[0] : prodData;
           if (result?.result?.data?.json?.items && Array.isArray(result.result.data.json.items)) {
@@ -414,7 +442,45 @@ export default function DashboardPage() {
           }),
         });
 
-        const data = await response.json();
+        // Handle non-OK responses before parsing JSON
+        if (!response.ok) {
+          console.error("[Production] API returned error status:", response.status);
+          let errorMessage = `Server error (${response.status})`;
+          try {
+            const errorText = await response.text();
+            console.error("[Production] Error response body:", errorText);
+            // Try to parse as JSON for better error message
+            if (errorText) {
+              try {
+                const errorData = JSON.parse(errorText);
+                errorMessage = errorData.error?.message || errorData.message || errorMessage;
+              } catch {
+                // Not JSON, use status message
+              }
+            }
+          } catch {
+            // Ignore body read errors
+          }
+          toast.error("Production failed", errorMessage);
+          return;
+        }
+
+        // Parse response body with error handling
+        let data;
+        try {
+          const responseText = await response.text();
+          if (!responseText) {
+            console.error("[Production] Empty response body");
+            toast.error("Production failed", "Server returned empty response");
+            return;
+          }
+          data = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error("[Production] Failed to parse response:", parseError);
+          toast.error("Production failed", "Server returned invalid response");
+          return;
+        }
+
         console.log("[Production] API Response:", JSON.stringify(data, null, 2));
 
         // Check for tRPC error response
