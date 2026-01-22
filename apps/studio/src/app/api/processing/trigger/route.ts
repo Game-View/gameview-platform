@@ -66,19 +66,42 @@ export async function POST(req: NextRequest) {
     }
 
     // Build the callback URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL;
+    // VERCEL_URL doesn't include the protocol, so we need to add it
+    let baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!baseUrl && process.env.VERCEL_URL) {
+      baseUrl = `https://${process.env.VERCEL_URL}`;
+    }
+    if (!baseUrl) {
+      baseUrl = "http://localhost:3000";
+    }
     const callbackUrl = `${baseUrl}/api/processing/callback`;
 
     // Get video URLs from storage
-    // The sourceVideoUrl contains the comma-separated paths
-    const videoPaths = job.sourceVideoUrl.split(",");
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-    const sourceVideos = videoPaths.map((path, index) => ({
-      url: `${supabaseUrl}/storage/v1/object/public/production-videos/${path.trim()}`,
-      filename: `video_${index}.mp4`,
-      size: 0, // Size not critical for processing
-    }));
+    // The sourceVideoUrl is stored as JSON array from the production router
+    let sourceVideos: Array<{ url: string; filename: string; size: number }>;
+    try {
+      // Try to parse as JSON (new format from production.create)
+      const parsed = JSON.parse(job.sourceVideoUrl);
+      if (Array.isArray(parsed)) {
+        // Already in correct format with urls
+        sourceVideos = parsed.map((v: { url?: string; filename?: string; size?: number }, index: number) => ({
+          url: v.url || "",
+          filename: v.filename || `video_${index}.mp4`,
+          size: v.size || 0,
+        }));
+      } else {
+        throw new Error("Not an array");
+      }
+    } catch {
+      // Fallback: treat as comma-separated paths (legacy format)
+      const videoPaths = job.sourceVideoUrl.split(",");
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      sourceVideos = videoPaths.map((path, index) => ({
+        url: `${supabaseUrl}/storage/v1/object/public/production-videos/${path.trim()}`,
+        filename: `video_${index}.mp4`,
+        size: 0,
+      }));
+    }
 
     // Determine if this is a 4D motion job
     const isMotionJob = job.motionEnabled === true;
