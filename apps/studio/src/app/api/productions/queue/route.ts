@@ -18,7 +18,7 @@ import { db } from "@gameview/database";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { productionId, experienceId, creatorId, sourceVideos, preset } = body;
+    const { productionId, experienceId, creatorId, sourceVideos, preset, motionEnabled } = body;
 
     if (!productionId || !experienceId || !sourceVideos || !preset) {
       return NextResponse.json(
@@ -27,11 +27,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Determine if this is a 4D motion job
+    const isMotionJob = motionEnabled === true;
+
     // Option 1: Use Modal for GPU processing (preferred)
-    // MODAL_ENDPOINT_URL format: https://<username>--gameview-processing-trigger.modal.run
-    const modalEndpointUrl = process.env.MODAL_ENDPOINT_URL;
+    // Select the appropriate Modal endpoint based on job type
+    const defaultStaticUrl = "https://smithjps512--gameview-processing-trigger.modal.run";
+    const default4DUrl = "https://smithjps512--gameview-4d-processing-trigger-4d.modal.run";
+
+    const modalEndpointUrl = isMotionJob
+      ? (process.env.MODAL_4D_WEBHOOK_URL || default4DUrl)
+      : (process.env.MODAL_ENDPOINT_URL || defaultStaticUrl);
+
     console.log("[API] Queue route called for production:", productionId);
-    console.log("[API] MODAL_ENDPOINT_URL:", modalEndpointUrl ? `${modalEndpointUrl.substring(0, 30)}...` : "NOT SET");
+    console.log(`[API] Job type: ${isMotionJob ? "4D motion" : "static"}`);
+    console.log("[API] Modal endpoint:", modalEndpointUrl ? `${modalEndpointUrl.substring(0, 50)}...` : "NOT SET");
 
     if (modalEndpointUrl) {
       console.log("[API] Triggering Modal processing for:", productionId);
@@ -67,6 +77,12 @@ export async function POST(request: NextRequest) {
             imagePercentage: job.imagePercentage,
             fps: job.fps,
             duration: job.duration,
+            // 4D motion-specific settings (only used by 4D worker)
+            ...(isMotionJob && {
+              motionEnabled: true,
+              motionFps: job.motionFps || 15,
+              motionMaxFrames: job.motionMaxFrames || 150,
+            }),
           },
           callback_url: callbackUrl,
         };
