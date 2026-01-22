@@ -1,47 +1,117 @@
 # Game View Platform
 
-Unified monorepo for all Game View products. Transform video into playable 3D experiences.
+Unified monorepo for all Game View products. Transform 2D video into playable 4D motion experiences.
 
 **Film your venue. Describe your vision. Publish your experience.**
+
+---
+
+## What Makes Game View Different
+
+Game View is the **inverse of traditional game engines**:
+
+| Traditional Engines | Game View |
+|---------------------|-----------|
+| Build synthetic 3D worlds | Capture real-world 2D video |
+| Bolt on real imagery | Reconstruct video into 4D motion |
+| Animated/simulated motion | Real, captured, preserved motion |
+| Virtual worlds mimicking reality | Real worlds made interactive |
+
+**The Core Technology: 4D Motion Reconstruction**
+
+We reconstruct standard 2D video (HD/4K/8K from any camera) into **4D motion environments** — user-controllable 3D worlds where time and motion are preserved. Players don't explore a frozen snapshot; they're inside living footage, controlling their viewpoint while the world moves around them.
+
+> **Motion is the entire value proposition.** Without motion, we're "just another 3D viewer." With motion, we're creating an entirely new category of content.
+
+---
 
 ## Architecture
 
 ```
 gameview-platform/
 ├── apps/
-│   ├── studio/      # Game View Studio (Next.js) - Phase 1 COMPLETE
+│   ├── studio/      # Game View Studio (Next.js) - Creator platform
 │   │   ├── src/
 │   │   │   ├── app/           # Next.js App Router pages
-│   │   │   ├── components/    # React components
-│   │   │   ├── lib/           # API clients, utilities
+│   │   │   ├── components/    # React components (viewers, editor, timeline)
+│   │   │   ├── lib/           # API clients, frame playback, utilities
 │   │   │   ├── hooks/         # Custom React hooks
 │   │   │   └── stores/        # Zustand state stores
 │   │   └── docs/              # Studio documentation
 │   ├── hub/         # Game View Hub (Next.js) - coming soon
-│   └── player/      # Game View Player (Next.js) - coming soon
+│   └── player/      # Game View Player (Next.js) - "YouTube for 3D"
 ├── packages/
 │   ├── ui/          # Shared React components (@gameview/ui)
 │   ├── types/       # TypeScript types (@gameview/types)
 │   ├── config/      # Shared configs (@gameview/config)
 │   ├── api/         # API client (@gameview/api)
-│   └── splat/       # 3D Gaussian Splat viewer (@gameview/splat)
-└── core/            # gvcore-cli reference (C++)
+│   └── processing/  # GPU processing workers (Modal)
+├── docs/            # Platform documentation
+│   ├── SPRINT_4D_MOTION.md        # Active sprint plan
+│   ├── 4D_MOTION_ARCHITECTURE.md  # Technical research
+│   ├── 4D_HANDOFF.md              # Session handoff notes
+│   └── PRODUCT_BRIEF.md           # Product vision
+└── CLAUDE.md        # AI assistant instructions (read first!)
 ```
 
-## Game View Studio (Phase 1 Complete)
+---
 
-The AI-powered creator platform:
+## Spark: The Persistent AI Companion
+
+Spark is not a feature — **Spark is always present**.
+
+Powered by Anthropic's Claude, Spark is the AI companion that understands what creators want to build and **codes their game in the background**. Creators never write code. They describe, arrange, and publish.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              SPARK                                          │
+│            Persistent AI companion across the entire journey                │
+└─────────────────────────────────────────────────────────────────────────────┘
+        │                    │                    │                    │
+        ▼                    ▼                    ▼                    ▼
+   ┌─────────┐          ┌─────────┐          ┌─────────┐          ┌─────────┐
+   │ CAPTURE │          │  BRIEF  │          │ STUDIO  │          │ PUBLISH │
+   └─────────┘          └─────────┘          └─────────┘          └─────────┘
+
+"How should I         "I want a treasure   "Add a timer and     "How do players
+ record my venue?"     hunt for my class"   scoring system"      access this?"
+```
 
 | Feature | Description |
 |---------|-------------|
-| **SPARK** | AI conversation to discover project vision |
-| **Brief Extraction** | Auto-extract project specs from chat |
-| **Dashboard** | Manage, search, filter projects |
-| **Inline Editing** | Edit briefs directly |
-| **Command Palette** | Cmd/Ctrl+K quick actions |
-| **Toast Notifications** | User feedback system |
+| **Capture Guidance** | Spark advises on camera angles, lighting, coverage |
+| **Brief Creation** | AI conversation to discover and refine project vision |
+| **Auto-Implementation** | Spark generates game mechanics, scoring, interactions from the brief |
+| **In-Editor Assistance** | "Add a 10-minute timer" → Spark builds it |
+| **Publishing Support** | Guidance on distribution, access links, launch |
 
-### Quick Start - Studio
+---
+
+## The Pipeline: 2D Video → 4D Motion → Game
+
+```
+2D VIDEO              RECONSTRUCT              STUDIO                 PLAYER
+   │                      │                       │                      │
+   ▼                      ▼                       ▼                      ▼
+┌──────────────┐    ┌──────────────┐    ┌──────────────────┐    ┌──────────────┐
+│ HD/4K/8K     │    │ 4DGaussians  │    │ 4D motion        │    │ Game View    │
+│ Multi-camera │───▶│ COLMAP       │───▶│ + Objects        │───▶│ Player       │
+│ Any camera   │    │ FFmpeg       │    │ + Spark logic    │    │              │
+│              │    │              │    │ + Interactions   │    │ "YouTube     │
+│              │    │ (Modal GPU)  │    │                  │    │  for 3D"     │
+└──────────────┘    └──────────────┘    └──────────────────┘    └──────────────┘
+```
+
+**Processing Pipeline:**
+1. **Frame extraction** (FFmpeg) — Extract frames with timestamps
+2. **Structure from Motion** (COLMAP) — Compute camera poses
+3. **4D Gaussian Splatting** (4DGaussians) — Train temporal model
+4. **Per-frame export** — Standard PLY files per timestamp
+5. **Upload** — Frame sequence to Supabase Storage
+
+---
+
+## Quick Start
 
 ```bash
 # Install dependencies
@@ -49,69 +119,25 @@ pnpm install
 
 # Run Studio in development
 pnpm --filter studio dev
+
+# Open http://localhost:3000
 ```
 
-Open http://localhost:3000
-
-See [Studio Developer Guide](apps/studio/docs/STUDIO_GUIDE.md) for complete documentation.
-
-## Prerequisites
+### Prerequisites
 
 - Node.js 20+
 - pnpm 9+
-- Rust 1.75+ (for Tauri desktop app)
 
-### Platform-Specific
-
-**Windows:**
-- Visual Studio Build Tools
-
-**Linux:**
-```bash
-sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
-```
-
-## Development
-
-### Package Scripts
+### Development Commands
 
 ```bash
-# Build all packages
-pnpm build
-
-# Run linting
-pnpm lint
-
-# Type check
-pnpm typecheck
-
-# Format code
-pnpm format
+pnpm build        # Build all packages
+pnpm lint         # Run linting
+pnpm typecheck    # Type check
+pnpm format       # Format code
 ```
 
-### Run Individual Apps
-
-```bash
-# Studio (Next.js)
-pnpm --filter studio dev
-
-# Desktop (Tauri) - coming soon
-pnpm --filter desktop tauri:dev
-```
-
-### Adding a New Package
-
-1. Create directory in `packages/` or `apps/`
-2. Add `package.json` with `workspace:*` dependencies
-3. Run `pnpm install` to link packages
-
-### Shared Components
-
-The `@gameview/ui` package contains all shared React components:
-
-```tsx
-import { Button, Card, ProcessingProgress } from '@gameview/ui';
-```
+---
 
 ## Technology Stack
 
@@ -120,56 +146,63 @@ import { Button, Card, ProcessingProgress } from '@gameview/ui';
 | **Frontend** | React 18, TypeScript 5, Tailwind CSS 3 |
 | **Framework** | Next.js 14 (App Router) |
 | **Auth** | Clerk |
-| **Database** | Supabase (PostgreSQL) |
-| **AI** | Claude API (Anthropic) |
+| **Database** | Supabase (PostgreSQL), Prisma ORM |
+| **AI** | Claude API (Anthropic) — powers Spark |
 | **State** | Zustand |
-| **3D** | Three.js, React Three Fiber |
+| **4D Rendering** | Three.js, React Three Fiber, @mkkellogg/gaussian-splats-3d |
+| **4D Processing** | 4DGaussians, COLMAP, FFmpeg |
+| **GPU** | Modal (A10G instances) |
 | **Build** | Turborepo, pnpm workspaces |
+| **Deploy** | Vercel |
 
-## Processing Engine
+---
 
-The `gvcore-cli` processes video into 3D Gaussian Splats:
+## Current Development Focus
 
-```bash
-gvcore-cli run \
-  --input video1.mp4 \
-  --input video2.mp4 \
-  --output ./output \
-  --brush-path /path/to/brush_app
-```
+**Active Sprint:** 4D Motion Implementation
 
-Pipeline stages:
-1. Frame extraction (FFmpeg)
-2. Structure from Motion (COLMAP)
-3. 3D Gaussian Splatting (Brush)
+The platform currently supports static 3D rendering. We're implementing true 4D motion where objects and people move in 3D space — matching the desktop app capability.
 
-See [CLI Documentation](/cli/README.md) for details.
+| Status | Component |
+|--------|-----------|
+| ✅ Complete | Spark brief creation |
+| ✅ Complete | Static splat rendering |
+| ✅ Complete | First-person controls (WASD, mouse look) |
+| ✅ Complete | Timeline UI |
+| 🔄 In Progress | **4D motion playback** |
+| 🔄 In Progress | **Timeline ↔ Viewer connection** |
+| ⏳ Next | Object placement in 4D scenes |
+| ⏳ Next | Spark game logic integration |
+
+**See:** `docs/SPRINT_4D_MOTION.md` for detailed task list
+
+---
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [Game View Guide](/docs/GAME_VIEW_GUIDE.md) | Complete platform overview |
-| [Studio Guide](apps/studio/docs/STUDIO_GUIDE.md) | Studio developer documentation |
-| [CLI README](/cli/README.md) | Processing CLI documentation |
+| [CLAUDE.md](./CLAUDE.md) | **Read first** — AI assistant instructions |
+| [Sprint Plan](./docs/SPRINT_4D_MOTION.md) | Active sprint tasks and progress |
+| [4D Architecture](./docs/4D_MOTION_ARCHITECTURE.md) | Technical research and decisions |
+| [Handoff Notes](./docs/4D_HANDOFF.md) | Session context for continuity |
+| [Product Brief](./docs/PRODUCT_BRIEF.md) | Product vision and requirements |
 
-## Development Phases
+---
 
-### Phase 1: SPARK (Complete)
-- AI conversation for project discovery
-- Brief extraction and persistence
-- Project dashboard with management
+## For AI Assistants (Claude Code)
 
-### Phase 2: BUILD (Next)
-- Video upload and processing
-- 3D Gaussian Splat viewer
-- Scene building tools
-- Interaction placement
+**Before writing any code, read `CLAUDE.md` in the repo root.**
 
-### Phase 3: PLATFORM (Future)
-- Experience publishing
-- Creator marketplace
-- Player experience
+Key points:
+1. **4D motion is the foundation** — not static 3D Gaussian Splatting
+2. **Spark is persistent** — not just a Phase 1 feature
+3. **Production ID connects everything** — Spark, Studio, Player
+4. **Check the sprint plan** — `docs/SPRINT_4D_MOTION.md` has current tasks
+
+If your implementation produces a frozen/static scene, it's wrong.
+
+---
 
 ## License
 
