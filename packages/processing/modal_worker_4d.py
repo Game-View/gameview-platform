@@ -325,46 +325,110 @@ def process_production_4d(
         print(f"[{production_id}] Running COLMAP...")
 
         # Collect all frames into single directory for COLMAP
+        # Use camera prefix naming so COLMAP can group images by camera
+        # Format: cam00_frame_00001.jpg, cam00_frame_00002.jpg, cam01_frame_00001.jpg, etc.
         colmap_images = colmap_dir / "images"
         colmap_images.mkdir(exist_ok=True)
 
-        frame_idx = 0
+        num_cameras = 0
+        total_frames = 0
         for cam_dir in sorted(data_dir.iterdir()):
             if cam_dir.is_dir() and cam_dir.name.startswith("cam"):
+                cam_name = cam_dir.name  # e.g., "cam00", "cam01"
+                num_cameras += 1
                 for frame in sorted(cam_dir.glob("*.jpg")):
-                    shutil.copy(frame, colmap_images / f"frame_{frame_idx:06d}.jpg")
-                    frame_idx += 1
+                    # Preserve camera info in filename for COLMAP camera grouping
+                    new_name = f"{cam_name}_{frame.name}"  # e.g., "cam00_frame_00001.jpg"
+                    shutil.copy(frame, colmap_images / new_name)
+                    total_frames += 1
 
-        print(f"[{production_id}] Total frames for COLMAP: {frame_idx}")
+        print(f"[{production_id}] Total frames for COLMAP: {total_frames} from {num_cameras} camera(s)")
 
         database_path = colmap_dir / "database.db"
 
-        # Feature extraction
-        subprocess.run([
+        # Feature extraction - configure for multi-camera setup
+        # DO NOT use single_camera=1 for multi-camera footage!
+        # Use OPENCV camera model which handles most camera types well
+        feature_cmd = [
             "colmap", "feature_extractor",
             "--database_path", str(database_path),
             "--image_path", str(colmap_images),
-            "--ImageReader.single_camera", "1",
-        ], check=True, capture_output=True)
+            "--ImageReader.camera_model", "OPENCV",
+            # For multi-camera: each camera gets its own intrinsics
+            # COLMAP will group images by prefix automatically
+            "--ImageReader.single_camera", "0",
+            # GPU acceleration for faster processing
+            "--SiftExtraction.use_gpu", "1",
+            # Limit image size to manage memory with many frames
+            "--SiftExtraction.max_image_size", "1600",
+            "--SiftExtraction.max_num_features", "8192",
+        ]
+        print(f"[{production_id}] Running: {' '.join(feature_cmd)}")
 
-        # Feature matching
+        result = subprocess.run(feature_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"[{production_id}] Feature extraction stderr: {result.stderr}")
+            raise Exception(f"COLMAP feature extraction failed: {result.stderr[:500]}")
+
+        # Feature matching - use vocab tree for large image sets, sequential for small
         send_progress(callback_url, production_id, "colmap_matching", 30, "Matching features")
-        subprocess.run([
-            "colmap", "sequential_matcher",
-            "--database_path", str(database_path),
-        ], check=True, capture_output=True)
+
+        if total_frames > 500:
+            # For large sets, use exhaustive matching with spatial verification
+            # This is more robust for multi-camera setups
+            print(f"[{production_id}] Using exhaustive matching for {total_frames} frames")
+            match_cmd = [
+                "colmap", "exhaustive_matcher",
+                "--database_path", str(database_path),
+                "--SiftMatching.use_gpu", "1",
+                "--SiftMatching.max_num_matches", "32768",
+            ]
+        else:
+            # Sequential matcher works well for video frames from same camera
+            print(f"[{production_id}] Using sequential matching for {total_frames} frames")
+            match_cmd = [
+                "colmap", "sequential_matcher",
+                "--database_path", str(database_path),
+                "--SiftMatching.use_gpu", "1",
+                "--SequentialMatching.overlap", "10",
+                "--SequentialMatching.quadratic_overlap", "1",
+            ]
+
+        result = subprocess.run(match_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"[{production_id}] Feature matching stderr: {result.stderr}")
+            raise Exception(f"COLMAP feature matching failed: {result.stderr[:500]}")
 
         # Sparse reconstruction with COLMAP
         send_progress(callback_url, production_id, "colmap_mapper", 40, "Reconstructing 3D structure")
         sparse_dir = colmap_dir / "sparse"
         sparse_dir.mkdir(exist_ok=True)
 
-        subprocess.run([
+        # Mapper settings optimized for multi-camera video footage
+        mapper_cmd = [
             "colmap", "mapper",
             "--database_path", str(database_path),
             "--image_path", str(colmap_images),
             "--output_path", str(sparse_dir),
-        ], check=True, capture_output=True)
+            # Multi-camera specific settings
+            "--Mapper.ba_refine_focal_length", "1",
+            "--Mapper.ba_refine_principal_point", "0",
+            "--Mapper.ba_refine_extra_params", "1",
+            # Robustness settings for multi-view
+            "--Mapper.min_num_matches", "15",
+            "--Mapper.init_min_num_inliers", "100",
+            "--Mapper.abs_pose_min_num_inliers", "30",
+            "--Mapper.filter_max_reproj_error", "4.0",
+            # Try to register more images
+            "--Mapper.multiple_models", "0",
+        ]
+        print(f"[{production_id}] Running: {' '.join(mapper_cmd)}")
+
+        result = subprocess.run(mapper_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"[{production_id}] COLMAP mapper stderr: {result.stderr}")
+            print(f"[{production_id}] COLMAP mapper stdout: {result.stdout}")
+            raise Exception(f"COLMAP sparse reconstruction failed: {result.stderr[:500]}")
 
         # Find the reconstruction model
         model_subdir = None
