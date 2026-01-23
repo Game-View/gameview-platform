@@ -362,8 +362,8 @@ def process_production_4d(
             # For multi-camera: each camera gets its own intrinsics
             # COLMAP will group images by prefix automatically
             "--ImageReader.single_camera", "0",
-            # GPU acceleration for faster processing
-            "--SiftExtraction.use_gpu", "1",
+            # CPU mode for SIFT - Modal headless servers can't create OpenGL context for GPU
+            "--SiftExtraction.use_gpu", "0",
             # Limit image size to manage memory with many frames
             "--SiftExtraction.max_image_size", "1600",
             "--SiftExtraction.max_num_features", "8192",
@@ -385,7 +385,7 @@ def process_production_4d(
             match_cmd = [
                 "colmap", "exhaustive_matcher",
                 "--database_path", str(database_path),
-                "--SiftMatching.use_gpu", "1",
+                "--SiftMatching.use_gpu", "0",
                 "--SiftMatching.max_num_matches", "32768",
             ]
         else:
@@ -394,7 +394,7 @@ def process_production_4d(
             match_cmd = [
                 "colmap", "sequential_matcher",
                 "--database_path", str(database_path),
-                "--SiftMatching.use_gpu", "1",
+                "--SiftMatching.use_gpu", "0",
                 "--SequentialMatching.overlap", "10",
                 "--SequentialMatching.quadratic_overlap", "1",
             ]
