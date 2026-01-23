@@ -346,6 +346,11 @@ def process_production_4d(
 
         database_path = colmap_dir / "database.db"
 
+        # Create environment with offscreen Qt for COLMAP on headless servers
+        # COLMAP's GPU feature extraction uses Qt internally, which needs a display
+        colmap_env = os.environ.copy()
+        colmap_env["QT_QPA_PLATFORM"] = "offscreen"
+
         # Feature extraction - configure for multi-camera setup
         # DO NOT use single_camera=1 for multi-camera footage!
         # Use OPENCV camera model which handles most camera types well
@@ -365,10 +370,10 @@ def process_production_4d(
         ]
         print(f"[{production_id}] Running: {' '.join(feature_cmd)}")
 
-        result = subprocess.run(feature_cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"[{production_id}] Feature extraction stderr: {result.stderr}")
-            raise Exception(f"COLMAP feature extraction failed: {result.stderr[:500]}")
+        proc = subprocess.run(feature_cmd, capture_output=True, text=True, env=colmap_env)
+        if proc.returncode != 0:
+            print(f"[{production_id}] Feature extraction stderr: {proc.stderr}")
+            raise Exception(f"COLMAP feature extraction failed: {proc.stderr[:500]}")
 
         # Feature matching - use vocab tree for large image sets, sequential for small
         send_progress(callback_url, production_id, "colmap_matching", 30, "Matching features")
@@ -394,10 +399,10 @@ def process_production_4d(
                 "--SequentialMatching.quadratic_overlap", "1",
             ]
 
-        result = subprocess.run(match_cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"[{production_id}] Feature matching stderr: {result.stderr}")
-            raise Exception(f"COLMAP feature matching failed: {result.stderr[:500]}")
+        proc = subprocess.run(match_cmd, capture_output=True, text=True, env=colmap_env)
+        if proc.returncode != 0:
+            print(f"[{production_id}] Feature matching stderr: {proc.stderr}")
+            raise Exception(f"COLMAP feature matching failed: {proc.stderr[:500]}")
 
         # Sparse reconstruction with COLMAP
         send_progress(callback_url, production_id, "colmap_mapper", 40, "Reconstructing 3D structure")
@@ -424,11 +429,11 @@ def process_production_4d(
         ]
         print(f"[{production_id}] Running: {' '.join(mapper_cmd)}")
 
-        result = subprocess.run(mapper_cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"[{production_id}] COLMAP mapper stderr: {result.stderr}")
-            print(f"[{production_id}] COLMAP mapper stdout: {result.stdout}")
-            raise Exception(f"COLMAP sparse reconstruction failed: {result.stderr[:500]}")
+        proc = subprocess.run(mapper_cmd, capture_output=True, text=True, env=colmap_env)
+        if proc.returncode != 0:
+            print(f"[{production_id}] COLMAP mapper stderr: {proc.stderr}")
+            print(f"[{production_id}] COLMAP mapper stdout: {proc.stdout}")
+            raise Exception(f"COLMAP sparse reconstruction failed: {proc.stderr[:500]}")
 
         # Find the reconstruction model
         model_subdir = None
@@ -453,7 +458,7 @@ def process_production_4d(
             "--input_path", str(model_subdir),
             "--output_path", str(points_ply),
             "--output_type", "PLY",
-        ], check=True, capture_output=True)
+        ], check=True, capture_output=True, env=colmap_env)
 
         # Stage 4: Train 4D Gaussian Splatting
         send_progress(callback_url, production_id, "training_4d", 50, "Training 4D Gaussian Splatting (this takes a while)")
