@@ -718,7 +718,6 @@ def process_production_4d(
 
 @app.function(
     image=processing_image_4d,
-    retries=0,  # No retries on trigger either
     secrets=[supabase_secret],
 )
 @modal.fastapi_endpoint(method="POST")
