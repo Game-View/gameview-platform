@@ -274,17 +274,43 @@ def process_production_4d(
                 }
 
             if current_status == "PROCESSING" and started_at:
-                # Job is already processing - this is likely a duplicate trigger
-                print(f"[{production_id}] WARNING: Job already PROCESSING (worker: {current_worker}, started: {started_at})")
-                print(f"[{production_id}] ABORT: Exiting to prevent duplicate execution.")
-                return {
-                    "success": False,
-                    "production_id": production_id,
-                    "experience_id": experience_id,
-                    "outputs": None,
-                    "error": f"Job already processing by worker {current_worker} - duplicate execution prevented",
-                    "motion_enabled": True,
-                }
+                # Check if job is stale (started more than 12 hours ago)
+                # If stale, allow restart - the previous job likely crashed
+                try:
+                    started_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                    # Make started_time naive for comparison if it has timezone
+                    if started_time.tzinfo is not None:
+                        started_time = started_time.replace(tzinfo=None)
+                    hours_elapsed = (datetime.now() - started_time).total_seconds() / 3600
+
+                    if hours_elapsed > 12:
+                        print(f"[{production_id}] Job status is PROCESSING but started {hours_elapsed:.1f} hours ago")
+                        print(f"[{production_id}] Treating as stale/crashed job - allowing restart")
+                        # Continue to claim the job below
+                    else:
+                        # Job is actively processing - abort
+                        print(f"[{production_id}] WARNING: Job already PROCESSING (worker: {current_worker}, started: {started_at})")
+                        print(f"[{production_id}] ABORT: Exiting to prevent duplicate execution.")
+                        return {
+                            "success": False,
+                            "production_id": production_id,
+                            "experience_id": experience_id,
+                            "outputs": None,
+                            "error": f"Job already processing by worker {current_worker} - duplicate execution prevented",
+                            "motion_enabled": True,
+                        }
+                except Exception as parse_error:
+                    print(f"[{production_id}] Could not parse started_at timestamp: {parse_error}")
+                    # Can't determine age, abort to be safe
+                    print(f"[{production_id}] ABORT: Exiting to prevent duplicate execution.")
+                    return {
+                        "success": False,
+                        "production_id": production_id,
+                        "experience_id": experience_id,
+                        "outputs": None,
+                        "error": f"Job already processing by worker {current_worker} - duplicate execution prevented",
+                        "motion_enabled": True,
+                    }
     except Exception as e:
         # If we can't check, log warning but continue (fail-open for robustness)
         print(f"[{production_id}] Warning: Could not verify job status: {e}")
@@ -693,13 +719,27 @@ def process_production_4d(
         traceback.print_exc()
         result["error"] = str(e)
 
+        # CRITICAL: Update database status to FAILED so job can be retried
+        try:
+            supabase.table("ProcessingJob").update({
+                "status": "FAILED",
+                "error": str(e)[:500],  # Truncate error message
+            }).eq("id", production_id).execute()
+            print(f"[{production_id}] Updated job status to FAILED")
+        except Exception as db_error:
+            print(f"[{production_id}] Warning: Could not update job status to FAILED: {db_error}")
+
     finally:
         # Cleanup
         shutil.rmtree(work_dir, ignore_errors=True)
 
     # Send callback
     if callback_url:
-        send_progress(callback_url, production_id, "complete", 100, "Processing complete")
+        if result["success"]:
+            send_progress(callback_url, production_id, "complete", 100, "Processing complete")
+        else:
+            send_progress(callback_url, production_id, "failed", 0, f"Processing failed: {result.get('error', 'Unknown error')}")
+
         print(f"[{production_id}] Sending callback...")
         try:
             import requests
@@ -745,11 +785,12 @@ def trigger_4d(data: dict) -> dict:
         supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
         if supabase_url and supabase_key:
             supabase = create_client(supabase_url, supabase_key)
-            # Check job status in database
-            result = supabase.table("ProcessingJob").select("status,workerId").eq("id", production_id).single().execute()
+            # Check job status in database (include startedAt for stale detection)
+            result = supabase.table("ProcessingJob").select("status,workerId,startedAt").eq("id", production_id).single().execute()
             if result.data:
                 status = result.data.get("status")
                 worker_id = result.data.get("workerId")
+                started_at = result.data.get("startedAt")
 
                 if status == "COMPLETED":
                     print(f"[trigger_4d] Job {production_id} already COMPLETED - ignoring duplicate trigger")
@@ -763,15 +804,30 @@ def trigger_4d(data: dict) -> dict:
                     }
 
                 if status == "PROCESSING" and worker_id:
-                    print(f"[trigger_4d] Job {production_id} already processing with worker {worker_id} - SKIPPING duplicate trigger")
-                    return {
-                        "success": True,
-                        "message": "Job already processing - duplicate trigger ignored",
-                        "call_id": worker_id,
-                        "production_id": production_id,
-                        "motion_enabled": True,
-                        "duplicate": True,
-                    }
+                    # Check if job is stale (started > 12 hours ago)
+                    is_stale = False
+                    if started_at:
+                        try:
+                            started_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                            if started_time.tzinfo is not None:
+                                started_time = started_time.replace(tzinfo=None)
+                            hours_elapsed = (datetime.now() - started_time).total_seconds() / 3600
+                            if hours_elapsed > 12:
+                                print(f"[trigger_4d] Job {production_id} is stale ({hours_elapsed:.1f}h old) - allowing restart")
+                                is_stale = True
+                        except Exception as e:
+                            print(f"[trigger_4d] Could not parse started_at: {e}")
+
+                    if not is_stale:
+                        print(f"[trigger_4d] Job {production_id} already processing with worker {worker_id} - SKIPPING duplicate trigger")
+                        return {
+                            "success": True,
+                            "message": "Job already processing - duplicate trigger ignored",
+                            "call_id": worker_id,
+                            "production_id": production_id,
+                            "motion_enabled": True,
+                            "duplicate": True,
+                        }
     except Exception as e:
         print(f"[trigger_4d] Warning: Could not check job status: {e}")
         # Continue anyway - better to potentially duplicate than to fail
