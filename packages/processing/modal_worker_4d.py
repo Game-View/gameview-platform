@@ -306,18 +306,18 @@ def process_production_4d(
                                 "error": f"Job already processing by worker {current_worker} - duplicate execution prevented",
                                 "motion_enabled": True,
                             }
-                except Exception as parse_error:
-                    print(f"[{production_id}] Could not parse started_at timestamp: {parse_error}")
-                    # Can't determine age, abort to be safe
-                    print(f"[{production_id}] ABORT: Exiting to prevent duplicate execution.")
-                    return {
-                        "success": False,
-                        "production_id": production_id,
-                        "experience_id": experience_id,
-                        "outputs": None,
-                        "error": f"Job already processing by worker {current_worker} - duplicate execution prevented",
-                        "motion_enabled": True,
-                    }
+                    except Exception as parse_error:
+                        print(f"[{production_id}] Could not parse started_at timestamp: {parse_error}")
+                        # Can't determine age, abort to be safe
+                        print(f"[{production_id}] ABORT: Exiting to prevent duplicate execution.")
+                        return {
+                            "success": False,
+                            "production_id": production_id,
+                            "experience_id": experience_id,
+                            "outputs": None,
+                            "error": f"Job already processing by worker {current_worker} - duplicate execution prevented",
+                            "motion_enabled": True,
+                        }
     except Exception as e:
         # If we can't check, log warning but continue (fail-open for robustness)
         print(f"[{production_id}] Warning: Could not verify job status: {e}")
