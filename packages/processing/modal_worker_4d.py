@@ -222,6 +222,7 @@ def process_production_4d(
     source_videos: list[dict],
     settings: dict,
     callback_url: str,
+    assigned_worker_id: str = None,
 ) -> dict:
     """
     Process a production job with 4D Gaussian Splatting for MOTION.
@@ -238,6 +239,7 @@ def process_production_4d(
             - iterations: 4D-GS training iterations (default: 30000)
             - motionEnabled: Should be True for this endpoint
         callback_url: URL to POST results when complete
+        assigned_worker_id: Worker ID assigned by trigger (to recognize self)
 
     Returns:
         dict with success status and output URLs including:
@@ -273,32 +275,37 @@ def process_production_4d(
                     "motion_enabled": True,
                 }
 
-            if current_status == "PROCESSING" and started_at:
-                # Check if job is stale (started more than 12 hours ago)
-                # If stale, allow restart - the previous job likely crashed
-                try:
-                    started_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-                    # Make started_time naive for comparison if it has timezone
-                    if started_time.tzinfo is not None:
-                        started_time = started_time.replace(tzinfo=None)
-                    hours_elapsed = (datetime.now() - started_time).total_seconds() / 3600
+            if current_status == "PROCESSING":
+                # Check if this is US (same worker ID) - if so, we're the rightful owner
+                if assigned_worker_id and current_worker == assigned_worker_id:
+                    print(f"[{production_id}] Job worker ID matches our assigned ID ({assigned_worker_id}) - we own this job, continuing")
+                    # This is our job, continue processing
+                elif started_at:
+                    # Check if job is stale (started more than 12 hours ago)
+                    # If stale, allow restart - the previous job likely crashed
+                    try:
+                        started_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                        # Make started_time naive for comparison if it has timezone
+                        if started_time.tzinfo is not None:
+                            started_time = started_time.replace(tzinfo=None)
+                        hours_elapsed = (datetime.now() - started_time).total_seconds() / 3600
 
-                    if hours_elapsed > 12:
-                        print(f"[{production_id}] Job status is PROCESSING but started {hours_elapsed:.1f} hours ago")
-                        print(f"[{production_id}] Treating as stale/crashed job - allowing restart")
-                        # Continue to claim the job below
-                    else:
-                        # Job is actively processing - abort
-                        print(f"[{production_id}] WARNING: Job already PROCESSING (worker: {current_worker}, started: {started_at})")
-                        print(f"[{production_id}] ABORT: Exiting to prevent duplicate execution.")
-                        return {
-                            "success": False,
-                            "production_id": production_id,
-                            "experience_id": experience_id,
-                            "outputs": None,
-                            "error": f"Job already processing by worker {current_worker} - duplicate execution prevented",
-                            "motion_enabled": True,
-                        }
+                        if hours_elapsed > 12:
+                            print(f"[{production_id}] Job status is PROCESSING but started {hours_elapsed:.1f} hours ago")
+                            print(f"[{production_id}] Treating as stale/crashed job - allowing restart")
+                            # Continue to claim the job below
+                        else:
+                            # Job is actively processing by someone else - abort
+                            print(f"[{production_id}] WARNING: Job already PROCESSING (worker: {current_worker}, started: {started_at})")
+                            print(f"[{production_id}] ABORT: Exiting to prevent duplicate execution.")
+                            return {
+                                "success": False,
+                                "production_id": production_id,
+                                "experience_id": experience_id,
+                                "outputs": None,
+                                "error": f"Job already processing by worker {current_worker} - duplicate execution prevented",
+                                "motion_enabled": True,
+                            }
                 except Exception as parse_error:
                     print(f"[{production_id}] Could not parse started_at timestamp: {parse_error}")
                     # Can't determine age, abort to be safe
@@ -316,20 +323,24 @@ def process_production_4d(
         print(f"[{production_id}] Warning: Could not verify job status: {e}")
         print(f"[{production_id}] Continuing with processing...")
 
-    # Generate unique worker ID and claim the job immediately
+    # Use assigned worker ID if provided, otherwise generate one
     import uuid
-    worker_id = f"modal-4d-{uuid.uuid4().hex[:8]}"
-    print(f"[{production_id}] Claiming job with worker ID: {worker_id}")
+    worker_id = assigned_worker_id or f"modal-4d-{uuid.uuid4().hex[:8]}"
+    print(f"[{production_id}] Using worker ID: {worker_id} (assigned: {assigned_worker_id is not None})")
 
-    try:
-        supabase.table("ProcessingJob").update({
-            "workerId": worker_id,
-            "status": "PROCESSING",
-            "startedAt": datetime.now().isoformat(),
-        }).eq("id", production_id).execute()
-        print(f"[{production_id}] Job claimed successfully")
-    except Exception as e:
-        print(f"[{production_id}] Warning: Could not claim job: {e}")
+    # Only update DB if we don't have an assigned ID (trigger_4d already set it)
+    if not assigned_worker_id:
+        try:
+            supabase.table("ProcessingJob").update({
+                "workerId": worker_id,
+                "status": "PROCESSING",
+                "startedAt": datetime.now().isoformat(),
+            }).eq("id", production_id).execute()
+            print(f"[{production_id}] Job claimed successfully")
+        except Exception as e:
+            print(f"[{production_id}] Warning: Could not claim job: {e}")
+    else:
+        print(f"[{production_id}] Skipping DB claim - trigger already set workerId")
 
     work_dir = Path(tempfile.mkdtemp(prefix=f"gv4d-{production_id}-"))
     input_dir = work_dir / "input"
@@ -832,21 +843,43 @@ def trigger_4d(data: dict) -> dict:
         print(f"[trigger_4d] Warning: Could not check job status: {e}")
         # Continue anyway - better to potentially duplicate than to fail
 
-    # Spawn the GPU processing function
+    # Generate a unique job run ID BEFORE spawning
+    # This ID will be set in DB and passed to GPU function so it can recognize itself
+    import uuid
+    job_run_id = f"run-{uuid.uuid4().hex[:12]}"
+    print(f"[trigger_4d] Generated job run ID: {job_run_id}")
+
+    # Update DB with this job run ID BEFORE spawning
+    # This ensures the GPU function will see this ID when it checks
+    try:
+        if supabase_url and supabase_key:
+            supabase = create_client(supabase_url, supabase_key)
+            supabase.table("ProcessingJob").update({
+                "workerId": job_run_id,
+                "status": "PROCESSING",
+                "startedAt": datetime.now().isoformat(),
+            }).eq("id", production_id).execute()
+            print(f"[trigger_4d] Set workerId to {job_run_id} before spawning")
+    except Exception as e:
+        print(f"[trigger_4d] Warning: Could not pre-set workerId: {e}")
+
+    # Spawn the GPU processing function with the job run ID
     call = process_production_4d.spawn(
         production_id=data["production_id"],
         experience_id=data["experience_id"],
         source_videos=data["source_videos"],
         settings=data["settings"],
         callback_url=data["callback_url"],
+        assigned_worker_id=job_run_id,
     )
 
-    print(f"[trigger_4d] Spawned new processing job with call_id: {call.object_id}")
+    print(f"[trigger_4d] Spawned new processing job with call_id: {call.object_id}, job_run_id: {job_run_id}")
 
     return {
         "success": True,
         "message": "4D Motion processing started",
         "call_id": call.object_id,
+        "job_run_id": job_run_id,
         "production_id": data["production_id"],
         "motion_enabled": True,
     }
