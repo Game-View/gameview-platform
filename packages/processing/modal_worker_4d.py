@@ -213,6 +213,7 @@ OptimizationParams = dict(
     image=processing_image_4d,
     gpu="A10G",  # 24GB VRAM
     timeout=43200,  # 12 hours max - 4D training takes longer
+    retries=0,  # CRITICAL: No retries - prevents duplicate job execution
     secrets=[supabase_secret],
 )
 def process_production_4d(
@@ -251,6 +252,58 @@ def process_production_4d(
     supabase_url = os.environ["SUPABASE_URL"]
     supabase_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     supabase = create_client(supabase_url, supabase_key)
+
+    # CRITICAL: Check if this job is already running or completed
+    # This prevents duplicate execution if the function is somehow triggered twice
+    try:
+        job_check = supabase.table("ProcessingJob").select("status,workerId,startedAt").eq("id", production_id).single().execute()
+        if job_check.data:
+            current_status = job_check.data.get("status")
+            current_worker = job_check.data.get("workerId")
+            started_at = job_check.data.get("startedAt")
+
+            if current_status == "COMPLETED":
+                print(f"[{production_id}] ABORT: Job already completed. Exiting to prevent duplicate work.")
+                return {
+                    "success": False,
+                    "production_id": production_id,
+                    "experience_id": experience_id,
+                    "outputs": None,
+                    "error": "Job already completed - duplicate execution prevented",
+                    "motion_enabled": True,
+                }
+
+            if current_status == "PROCESSING" and started_at:
+                # Job is already processing - this is likely a duplicate trigger
+                print(f"[{production_id}] WARNING: Job already PROCESSING (worker: {current_worker}, started: {started_at})")
+                print(f"[{production_id}] ABORT: Exiting to prevent duplicate execution.")
+                return {
+                    "success": False,
+                    "production_id": production_id,
+                    "experience_id": experience_id,
+                    "outputs": None,
+                    "error": f"Job already processing by worker {current_worker} - duplicate execution prevented",
+                    "motion_enabled": True,
+                }
+    except Exception as e:
+        # If we can't check, log warning but continue (fail-open for robustness)
+        print(f"[{production_id}] Warning: Could not verify job status: {e}")
+        print(f"[{production_id}] Continuing with processing...")
+
+    # Generate unique worker ID and claim the job immediately
+    import uuid
+    worker_id = f"modal-4d-{uuid.uuid4().hex[:8]}"
+    print(f"[{production_id}] Claiming job with worker ID: {worker_id}")
+
+    try:
+        supabase.table("ProcessingJob").update({
+            "workerId": worker_id,
+            "status": "PROCESSING",
+            "startedAt": datetime.now().isoformat(),
+        }).eq("id", production_id).execute()
+        print(f"[{production_id}] Job claimed successfully")
+    except Exception as e:
+        print(f"[{production_id}] Warning: Could not claim job: {e}")
 
     work_dir = Path(tempfile.mkdtemp(prefix=f"gv4d-{production_id}-"))
     input_dir = work_dir / "input"
@@ -665,6 +718,7 @@ def process_production_4d(
 
 @app.function(
     image=processing_image_4d,
+    retries=0,  # No retries on trigger either
     secrets=[supabase_secret],
 )
 @modal.fastapi_endpoint(method="POST")
@@ -681,7 +735,47 @@ def trigger_4d(data: dict) -> dict:
         "callback_url": "..."
     }
     """
-    print(f"[trigger_4d] Received 4D motion request for: {data.get('production_id')}")
+    from supabase import create_client
+
+    production_id = data.get("production_id")
+    print(f"[trigger_4d] Received 4D motion request for: {production_id}")
+
+    # Check if job is already processing to prevent duplicate runs
+    try:
+        supabase_url = os.environ.get("SUPABASE_URL")
+        supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        if supabase_url and supabase_key:
+            supabase = create_client(supabase_url, supabase_key)
+            # Check job status in database
+            result = supabase.table("ProcessingJob").select("status,workerId").eq("id", production_id).single().execute()
+            if result.data:
+                status = result.data.get("status")
+                worker_id = result.data.get("workerId")
+
+                if status == "COMPLETED":
+                    print(f"[trigger_4d] Job {production_id} already COMPLETED - ignoring duplicate trigger")
+                    return {
+                        "success": True,
+                        "message": "Job already completed - duplicate trigger ignored",
+                        "call_id": worker_id or "completed",
+                        "production_id": production_id,
+                        "motion_enabled": True,
+                        "duplicate": True,
+                    }
+
+                if status == "PROCESSING" and worker_id:
+                    print(f"[trigger_4d] Job {production_id} already processing with worker {worker_id} - SKIPPING duplicate trigger")
+                    return {
+                        "success": True,
+                        "message": "Job already processing - duplicate trigger ignored",
+                        "call_id": worker_id,
+                        "production_id": production_id,
+                        "motion_enabled": True,
+                        "duplicate": True,
+                    }
+    except Exception as e:
+        print(f"[trigger_4d] Warning: Could not check job status: {e}")
+        # Continue anyway - better to potentially duplicate than to fail
 
     # Spawn the GPU processing function
     call = process_production_4d.spawn(
@@ -691,6 +785,8 @@ def trigger_4d(data: dict) -> dict:
         settings=data["settings"],
         callback_url=data["callback_url"],
     )
+
+    print(f"[trigger_4d] Spawned new processing job with call_id: {call.object_id}")
 
     return {
         "success": True,
