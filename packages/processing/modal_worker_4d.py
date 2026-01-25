@@ -74,6 +74,7 @@ processing_image_4d = (
         "requests",
         "supabase",
         "fastapi",
+        "python-dateutil",  # Flexible datetime parsing
     ])
     .run_commands([
         # Clone 4DGaussians
@@ -284,7 +285,8 @@ def process_production_4d(
                     # Check if job is stale (started more than 12 hours ago)
                     # If stale, allow restart - the previous job likely crashed
                     try:
-                        started_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                        from dateutil import parser as dateutil_parser
+                        started_time = dateutil_parser.parse(started_at)
                         # Make started_time naive for comparison if it has timezone
                         if started_time.tzinfo is not None:
                             started_time = started_time.replace(tzinfo=None)
@@ -819,7 +821,8 @@ def trigger_4d(data: dict) -> dict:
                     is_stale = False
                     if started_at:
                         try:
-                            started_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                            from dateutil import parser as dateutil_parser
+                            started_time = dateutil_parser.parse(started_at)
                             if started_time.tzinfo is not None:
                                 started_time = started_time.replace(tzinfo=None)
                             hours_elapsed = (datetime.now() - started_time).total_seconds() / 3600
