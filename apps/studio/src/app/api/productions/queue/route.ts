@@ -39,12 +39,14 @@ export async function POST(request: NextRequest) {
       ? (process.env.MODAL_4D_WEBHOOK_URL || default4DUrl)
       : (process.env.MODAL_ENDPOINT_URL || defaultStaticUrl);
 
-    console.log("[API] Queue route called for production:", productionId);
-    console.log(`[API] Job type: ${isMotionJob ? "4D motion" : "static"}`);
-    console.log("[API] Modal endpoint:", modalEndpointUrl ? `${modalEndpointUrl.substring(0, 50)}...` : "NOT SET");
+    console.log("[QUEUE] ===== Queue route called =====");
+    console.log("[QUEUE] Production:", productionId);
+    console.log("[QUEUE] Motion enabled:", motionEnabled, "→ isMotionJob:", isMotionJob);
+    console.log("[QUEUE] Modal endpoint:", modalEndpointUrl ? `${modalEndpointUrl.substring(0, 80)}` : "NOT SET");
+    console.log("[QUEUE] Timestamp:", new Date().toISOString());
 
     if (modalEndpointUrl) {
-      console.log("[API] Triggering Modal processing for:", productionId);
+      console.log("[QUEUE] Triggering Modal processing for:", productionId);
 
       try {
         // Get the processing job for settings
@@ -64,7 +66,7 @@ export async function POST(request: NextRequest) {
           process.env.NEXT_PUBLIC_APP_URL ||
           (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
         const callbackUrl = `${baseUrl}/api/processing/callback`;
-        console.log("[API] Callback URL:", callbackUrl);
+        console.log("[QUEUE] Callback URL:", callbackUrl);
 
         // Prepare Modal payload
         const modalPayload = {
@@ -96,20 +98,26 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify(modalPayload),
         });
 
-        console.log("[API] Modal response status:", modalResponse.status);
+        console.log("[QUEUE] Modal response status:", modalResponse.status);
 
         if (modalResponse.ok) {
           let modalResult;
           try {
             const responseText = await modalResponse.text();
-            console.log("[API] Modal response body:", responseText.substring(0, 500));
+            console.log("[QUEUE] Modal response body:", responseText.substring(0, 500));
             modalResult = JSON.parse(responseText);
           } catch (parseError) {
-            console.error("[API] Failed to parse Modal response:", parseError);
+            console.error("[QUEUE] Failed to parse Modal response:", parseError);
             // Fall through to other options
             throw parseError;
           }
-          console.log("[API] Modal success - call_id:", modalResult.call_id);
+          console.log("[QUEUE] Modal success - call_id:", modalResult.call_id);
+
+          // Use job_run_id from trigger_4d if available (this is what the GPU function
+          // uses as assigned_worker_id to recognize itself). Falling back to call_id
+          // would cause the GPU function to see a different workerId and abort.
+          const workerId = modalResult.job_run_id || modalResult.call_id || "modal";
+          console.log("[QUEUE] Setting workerId:", workerId, "(job_run_id:", modalResult.job_run_id, ", call_id:", modalResult.call_id, ")");
 
           // Update job status to processing
           await db.processingJob.update({
@@ -118,7 +126,7 @@ export async function POST(request: NextRequest) {
               status: "PROCESSING",
               stage: "DOWNLOADING",
               startedAt: new Date(),
-              workerId: modalResult.call_id || "modal",
+              workerId,
             },
           });
 
@@ -131,11 +139,11 @@ export async function POST(request: NextRequest) {
           });
         } else {
           const errorText = await modalResponse.text();
-          console.error("[API] Modal trigger failed:", errorText);
+          console.error("[QUEUE] Modal trigger failed:", errorText);
           // Fall through to other options
         }
       } catch (modalError) {
-        console.error("[API] Modal error:", modalError);
+        console.error("[QUEUE] Modal error:", modalError);
         // Fall through to other options
       }
     }
@@ -161,13 +169,13 @@ export async function POST(request: NextRequest) {
           processor: "bullmq",
         });
       } catch (queueError) {
-        console.error("[API] BullMQ unavailable:", queueError);
+        console.error("[QUEUE] BullMQ unavailable:", queueError);
         // Fall through to pending
       }
     }
 
     // Option 3: Mark as pending for manual processing
-    console.log("[API] No processor available - production queued for manual processing:", productionId);
+    console.log("[QUEUE] No processor available - production queued for manual processing:", productionId);
     return NextResponse.json({
       success: true,
       jobId: productionId,
@@ -177,7 +185,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("[API] Failed to queue production:", error);
+    console.error("[QUEUE] Failed to queue production:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       { error: "Failed to queue production", details: errorMessage },
