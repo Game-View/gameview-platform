@@ -18,6 +18,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { productionId } = body;
 
+    console.log("[TRIGGER] Received request for production:", productionId, "body keys:", Object.keys(body));
+
     if (!productionId) {
       return NextResponse.json(
         { error: "productionId is required" },
@@ -168,6 +170,11 @@ export async function POST(req: NextRequest) {
 
     const modalResult = await modalResponse.json();
 
+    // Use job_run_id from trigger_4d if available (matches assigned_worker_id
+    // in GPU function). Using call_id would cause a workerId mismatch.
+    const workerId = modalResult.job_run_id || modalResult.call_id || "modal";
+    console.log("[TRIGGER] Modal responded - workerId:", workerId, "call_id:", modalResult.call_id, "job_run_id:", modalResult.job_run_id);
+
     // Update job status to processing
     await db.processingJob.update({
       where: { id: productionId },
@@ -175,7 +182,7 @@ export async function POST(req: NextRequest) {
         status: "PROCESSING",
         stage: "DOWNLOADING",
         startedAt: new Date(),
-        workerId: modalResult.call_id || "modal",
+        workerId,
       },
     });
 

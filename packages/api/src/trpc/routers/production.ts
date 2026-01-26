@@ -116,7 +116,10 @@ export const productionRouter = router({
       // The API route will handle adding to BullMQ
       try {
         const queueUrl = `${getInternalApiUrl()}/api/productions/queue`;
-        console.log("[Production] Triggering queue at:", queueUrl);
+        console.log("[TRPC] ===== production.create calling queue =====");
+        console.log("[TRPC] Production:", job.id, "Motion:", input.motionEnabled);
+        console.log("[TRPC] Queue URL:", queueUrl);
+        console.log("[TRPC] Timestamp:", new Date().toISOString());
 
         const queueResponse = await fetch(
           queueUrl,
