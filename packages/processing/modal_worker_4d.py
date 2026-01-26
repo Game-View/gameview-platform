@@ -736,7 +736,7 @@ def process_production_4d(
         try:
             supabase.table("ProcessingJob").update({
                 "status": "FAILED",
-                "error": str(e)[:500],  # Truncate error message
+                "errorMessage": str(e)[:500],  # Truncate error message
             }).eq("id", production_id).execute()
             print(f"[{production_id}] Updated job status to FAILED")
         except Exception as db_error:

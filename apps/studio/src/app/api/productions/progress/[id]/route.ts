@@ -49,7 +49,6 @@ function createPollingSSE(request: NextRequest, productionId: string) {
               status: true,
               stage: true,
               progress: true,
-              stageProgress: true,
               errorMessage: true,
             },
           });
@@ -62,7 +61,7 @@ function createPollingSSE(request: NextRequest, productionId: string) {
             return;
           }
 
-          const statusKey = `${job.status}-${job.stage}-${job.progress}-${job.stageProgress}`;
+          const statusKey = `${job.status}-${job.stage}-${job.progress}`;
           if (statusKey !== lastStatus || job.progress !== lastProgress) {
             lastStatus = statusKey;
             lastProgress = job.progress ?? -1;
@@ -72,7 +71,6 @@ function createPollingSSE(request: NextRequest, productionId: string) {
               status: job.status,
               stage: job.stage || "unknown",
               progress: job.progress || 0,
-              stageProgress: job.stageProgress || 0,
               error: job.errorMessage,
             });
             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
