@@ -444,16 +444,15 @@ def process_production_4d(
         colmap_env["QT_QPA_PLATFORM"] = "offscreen"
 
         # Feature extraction - configure for multi-camera setup
-        # DO NOT use single_camera=1 for multi-camera footage!
+        # Use single_camera=1: all cameras share intrinsics, matching desktop config
         # Use OPENCV camera model which handles most camera types well
         feature_cmd = [
             "colmap", "feature_extractor",
             "--database_path", str(database_path),
             "--image_path", str(colmap_images),
             "--ImageReader.camera_model", "OPENCV",
-            # For multi-camera: each camera gets its own intrinsics
-            # COLMAP will group images by prefix automatically
-            "--ImageReader.single_camera", "0",
+            # single_camera=1 matches desktop C++ pipeline, reduces matching complexity
+            "--ImageReader.single_camera", "1",
             # CPU mode for SIFT - Modal headless servers can't create OpenGL context for GPU
             "--SiftExtraction.use_gpu", "0",
             # Limit image size to manage memory with many frames
