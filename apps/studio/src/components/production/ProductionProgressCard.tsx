@@ -103,19 +103,8 @@ export function ProductionProgressCard({
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close export menu on outside click
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
-        setShowExportMenu(false);
-      }
-    }
-    if (showExportMenu) {
-      // Use click instead of mousedown - mousedown fires before click and can prevent button clicks
-      document.addEventListener("click", handleClickOutside);
-      return () => document.removeEventListener("click", handleClickOutside);
-    }
-  }, [showExportMenu]);
+  // Close export menu on outside click - DISABLED FOR TESTING
+  // The menu will stay open until an item is clicked
 
   // Calculate time elapsed or total time
   const formatTimeElapsed = () => {
