@@ -19,17 +19,25 @@ const MAX_PLY_SIZE_MB = 100; // Max file size in MB before showing error
  */
 async function computeBoundsFromPLY(url: string): Promise<SceneBounds | null> {
   try {
-    console.log("[PLY Parser] Fetching PLY to compute bounds...");
+    console.log("[PLY Parser] Fetching PLY to compute bounds from:", url);
 
-    // Fetch enough data to get header + sample vertices
-    // PLY header is typically < 2KB, each vertex is ~60 bytes
-    // Fetch 100KB to get header + ~1500 sample vertices
-    const response = await fetch(url, {
+    // Try Range request first, fall back to full fetch if not supported
+    let response = await fetch(url, {
       headers: { Range: "bytes=0-102400" }
     });
 
+    // Check if Range was honored (206) or if we got the full file (200)
+    if (response.status !== 206 && response.status !== 200) {
+      console.warn("[PLY Parser] Range request failed, status:", response.status);
+      // Try without Range header
+      response = await fetch(url);
+    }
+
+    console.log("[PLY Parser] Fetch status:", response.status);
+
     const buffer = await response.arrayBuffer();
     const bytes = new Uint8Array(buffer);
+    console.log("[PLY Parser] Fetched", buffer.byteLength, "bytes");
 
     // Find header end (look for "end_header\n")
     let headerEnd = -1;
@@ -381,8 +389,10 @@ export function GaussianSplats({
           scale: [scale, scale, scale],
           onProgress: (percent: number) => {
             if (!isMounted) return;
-            console.log("[Player] Loading progress:", Math.round(percent * 100) + "%");
-            onProgressRef.current?.(percent);
+            // Library reports 0-100, not 0-1
+            const pct = percent > 1 ? percent : percent * 100;
+            console.log("[Player] Loading progress:", Math.round(pct) + "%");
+            onProgressRef.current?.(percent > 1 ? percent / 100 : percent);
           },
         })
         .then(() => {
@@ -390,14 +400,48 @@ export function GaussianSplats({
 
           console.log("[Player] Gaussian splats loaded successfully!");
 
-          // Diagnostics: get scene info
-          let splatCount = 0;
-          try {
-            splatCount = viewer.getSplatCount?.() ?? 0;
-            console.log(`[Player] Splat count: ${splatCount}`);
-          } catch (e) {
-            console.log("[Player] Could not get splat count");
-          }
+          // IMPORTANT: Start the viewer FIRST before checking counts
+          // The tree needs to build before getSplatCount works
+          console.log("[Player] Starting viewer immediately...");
+          viewer.start();
+
+          // Wait a frame for the tree to build, then check splat count
+          requestAnimationFrame(() => {
+            if (!isMounted) return;
+
+            // Diagnostics: get scene info after tree builds
+            let splatCount = 0;
+            try {
+              splatCount = viewer.getSplatCount?.() ?? 0;
+              console.log(`[Player] Splat count (after frame): ${splatCount}`);
+            } catch (e) {
+              console.log("[Player] Could not get splat count");
+            }
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const viewerAny = viewer as any;
+
+            // Check splatMesh for actual data
+            if (viewerAny.splatMesh) {
+              console.log("[Player] SplatMesh exists");
+              if (viewerAny.splatMesh.geometry) {
+                const geo = viewerAny.splatMesh.geometry;
+                console.log("[Player] SplatMesh geometry attributes:", Object.keys(geo.attributes || {}));
+              }
+            }
+
+            // Check scenes array
+            if (viewerAny.scenes && viewerAny.scenes.length > 0) {
+              const scene = viewerAny.scenes[0];
+              console.log("[Player] Scene 0 splatBuffer:", scene.splatBuffer ? "exists" : "null");
+              if (scene.splatBuffer) {
+                console.log("[Player] SplatBuffer keys:", Object.keys(scene.splatBuffer));
+                if (scene.splatBuffer.splatCount !== undefined) {
+                  console.log("[Player] SplatBuffer.splatCount:", scene.splatBuffer.splatCount);
+                }
+              }
+            }
+          });
 
           // ===== DEBUG: Explore viewer object to find splat positions =====
           console.log("[Debug] Viewer object keys:", Object.keys(viewer));
@@ -624,9 +668,8 @@ export function GaussianSplats({
             console.warn("[Camera] Try pressing 'F' to manually fit camera if scene is not visible");
           }
 
-          console.log("[Player] Starting viewer...");
-          viewer.start();
-          console.log("[Player] Viewer started");
+          // Note: viewer.start() was called earlier, before camera positioning
+          // This ensures the tree is built for getSplatCount to work
 
           // Log final camera state
           console.log("[Player] Final camera position:", camera.position);
