@@ -10,9 +10,8 @@ import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
 // PLY file size roughly correlates: ~30 bytes per splat
 // 100MB PLY ≈ 3.3M splats, 50MB ≈ 1.6M splats
 const MAX_PLY_SIZE_MB = 100; // Max file size in MB before showing error
-// Note: Alpha threshold was causing "leaves with splats: 0" - splats loaded but not rendered
-// Keep threshold very low (1) to avoid culling valid splats
-const DEFAULT_ALPHA_THRESHOLD = 1;
+// Note: Disabled alpha threshold entirely - was causing "leaves with splats: 0"
+// The library may interpret alpha values differently than expected
 
 export interface GaussianSplatsProps {
   url: string;
@@ -177,12 +176,8 @@ export function GaussianSplats({
     const initTimeout = setTimeout(() => {
       if (!isMounted || contextLostRef.current) return;
 
-      // Use minimal alpha threshold to avoid culling valid splats
-      // Previous aggressive culling (50-100) caused "leaves with splats: 0" issue
-      const alphaThreshold = DEFAULT_ALPHA_THRESHOLD;
-
       console.log("[Player] Creating Gaussian splat viewer...");
-      console.log(`[Player] Alpha threshold: ${alphaThreshold} (minimal culling to preserve splats)`);
+      console.log("[Player] Alpha threshold: DISABLED (testing if this fixes 'leaves with splats: 0')");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewer = new GaussianSplats3D.Viewer({
@@ -204,7 +199,7 @@ export function GaussianSplats({
         focalAdjustment: 1.0,
         logLevel: GaussianSplats3D.LogLevel.Debug,
         sphericalHarmonicsDegree: 0,
-        splatAlphaRemovalThreshold: alphaThreshold,
+        // splatAlphaRemovalThreshold DISABLED - was causing "leaves with splats: 0"
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
@@ -222,7 +217,7 @@ export function GaussianSplats({
           position: position,
           rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
           scale: [scale, scale, scale],
-          splatAlphaRemovalThreshold: alphaThreshold,
+          // splatAlphaRemovalThreshold DISABLED - was causing "leaves with splats: 0"
           onProgress: (percent: number) => {
             if (!isMounted) return;
             console.log("[Player] Loading progress:", Math.round(percent * 100) + "%");
