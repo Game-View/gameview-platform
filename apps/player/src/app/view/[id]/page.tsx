@@ -62,6 +62,10 @@ export default function ViewExperiencePage() {
     );
   }
 
+  // Debug logging
+  console.log("[ViewPage] Experience data:", experience);
+  console.log("[ViewPage] PLY URL:", experience.plyUrl);
+
   // No PLY file
   if (!experience.plyUrl) {
     return (

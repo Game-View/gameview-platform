@@ -85,6 +85,10 @@ export function GaussianSplats({
       viewerRef.current = viewer;
 
       console.log("[Player] Loading Gaussian splats from:", url);
+      console.log("[Player] Renderer:", gl);
+      console.log("[Player] Camera:", camera);
+      console.log("[Player] Canvas size:", gl.domElement.width, "x", gl.domElement.height);
+
       viewer
         .addSplatScene(url, {
           showLoadingUI: false,
@@ -94,18 +98,22 @@ export function GaussianSplats({
           scale: [scale, scale, scale],
           onProgress: (percent: number) => {
             if (!isMounted) return;
+            console.log("[Player] Loading progress:", Math.round(percent * 100) + "%");
             onProgressRef.current?.(percent);
           },
         })
         .then(() => {
           if (!isMounted) return;
-          console.log("[Player] Gaussian splats loaded, starting viewer...");
+          console.log("[Player] Gaussian splats loaded successfully!");
+          console.log("[Player] Starting viewer...");
           viewer.start();
+          console.log("[Player] Viewer started");
           onLoadRef.current?.();
         })
         .catch((err: Error) => {
           if (!isMounted) return;
           console.error("[Player] Failed to load Gaussian splats:", err);
+          console.error("[Player] Error details:", err.message, err.stack);
           onErrorRef.current?.(err);
         });
     }, 100);
