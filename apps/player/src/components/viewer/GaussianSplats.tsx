@@ -177,7 +177,7 @@ export function GaussianSplats({
       if (!isMounted || contextLostRef.current) return;
 
       console.log("[Player] Creating Gaussian splat viewer...");
-      console.log("[Player] Testing: progressiveLoad=false, sceneRevealMode=Instant");
+      console.log("[Player] Testing: dynamicScene=true to bypass tree issues");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewer = new GaussianSplats3D.Viewer({
@@ -191,10 +191,10 @@ export function GaussianSplats({
         sharedMemoryForWorkers: false,
         integerBasedSort: true,
         halfPrecisionCovariancesOnGPU: true,
-        dynamicScene: false,
+        // IMPORTANT: dynamicScene=true rebuilds tree each frame, may bypass tree issue
+        dynamicScene: true,
         webXRMode: GaussianSplats3D.WebXRMode.None,
         renderMode: GaussianSplats3D.RenderMode.Always,
-        // Try Instant reveal instead of Gradual - may fix tree building
         sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
         antialiased: false,
         focalAdjustment: 1.0,

@@ -104,19 +104,20 @@ export default function ViewExperiencePage() {
           <meshStandardMaterial color="red" />
         </mesh>
 
+        {/* Using mkkellogg library with dynamicScene to bypass tree issues */}
         <GaussianSplats
           url={experience.plyUrl}
           onLoad={() => {
-            console.log("[ViewPage] Splat onLoad callback fired!");
+            console.log("[ViewPage] GaussianSplats onLoad callback fired!");
             setSplatLoading(false);
           }}
           onError={(err) => {
-            console.error("[ViewPage] Splat onError callback:", err);
+            console.error("[ViewPage] GaussianSplats onError callback:", err);
             setSplatLoading(false);
             setSplatError(err.message);
           }}
           onProgress={(progress) => {
-            console.log("[ViewPage] Splat progress:", progress);
+            console.log("[ViewPage] GaussianSplats progress:", progress);
             setSplatProgress(Math.round(progress * 100));
           }}
         />
