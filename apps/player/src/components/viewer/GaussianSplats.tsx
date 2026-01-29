@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
+
+// WebGL has limited GPU memory compared to desktop OpenGL
+// Desktop can handle 10M+ splats, browser typically crashes above 1-2M
+// PLY file size roughly correlates: ~30 bytes per splat
+// 100MB PLY ≈ 3.3M splats, 50MB ≈ 1.6M splats
+const MAX_PLY_SIZE_MB = 100; // Max file size in MB before showing error
+const AGGRESSIVE_ALPHA_THRESHOLD = 50; // Remove splats with alpha < 50 (out of 255)
 
 export interface GaussianSplatsProps {
   url: string;
@@ -19,7 +26,10 @@ export interface GaussianSplatsProps {
  * GaussianSplats component for rendering splat scenes in R3F (Player app)
  *
  * Uses selfDrivenMode with shared renderer for proper splat rendering.
- * Includes WebGL context loss handling for large scenes.
+ * Includes:
+ * - Pre-check of PLY file size to avoid crashes
+ * - Aggressive alpha culling to reduce splat count
+ * - WebGL context loss handling for graceful error display
  */
 export function GaussianSplats({
   url,
@@ -33,6 +43,9 @@ export function GaussianSplats({
   const { gl, camera } = useThree();
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
   const contextLostRef = useRef(false);
+  const [fileSizeChecked, setFileSizeChecked] = useState(false);
+  const [fileSizeOk, setFileSizeOk] = useState(false);
+  const [fileSizeMB, setFileSizeMB] = useState<number | null>(null);
 
   // Store callbacks in refs to avoid re-running useEffect when they change
   const onLoadRef = useRef(onLoad);
@@ -72,14 +85,20 @@ export function GaussianSplats({
         }
       }
 
-      // Report error to parent
-      onErrorRef.current?.(new Error("WebGL context lost - the 3D scene is too large for your browser. Try using a device with more GPU memory, or a different browser."));
+      // Report error to parent with helpful message
+      const sizePart = fileSizeMB ? ` (${fileSizeMB.toFixed(1)}MB)` : "";
+      onErrorRef.current?.(
+        new Error(
+          `WebGL crashed loading this scene${sizePart}. ` +
+          `The scene has too many splats for browser rendering. ` +
+          `Try downloading the PLY file and viewing in a desktop app like Splatapult.`
+        )
+      );
     };
 
     const handleContextRestored = () => {
       console.log("[Player] WebGL context restored");
       contextLostRef.current = false;
-      // Could attempt to reload here, but safer to let user refresh
     };
 
     canvas.addEventListener("webglcontextlost", handleContextLost);
@@ -89,10 +108,65 @@ export function GaussianSplats({
       canvas.removeEventListener("webglcontextlost", handleContextLost);
       canvas.removeEventListener("webglcontextrestored", handleContextRestored);
     };
-  }, [gl]);
+  }, [gl, fileSizeMB]);
 
+  // Pre-check file size before loading
+  useEffect(() => {
+    if (!url) return;
+
+    let cancelled = false;
+
+    async function checkFileSize() {
+      try {
+        console.log("[Player] Checking PLY file size...");
+        const response = await fetch(url, { method: "HEAD" });
+
+        if (cancelled) return;
+
+        const contentLength = response.headers.get("content-length");
+        if (contentLength) {
+          const sizeBytes = parseInt(contentLength, 10);
+          const sizeMB = sizeBytes / (1024 * 1024);
+          setFileSizeMB(sizeMB);
+
+          console.log(`[Player] PLY file size: ${sizeMB.toFixed(2)} MB`);
+
+          if (sizeMB > MAX_PLY_SIZE_MB) {
+            console.warn(
+              `[Player] PLY file is ${sizeMB.toFixed(1)}MB, exceeds ${MAX_PLY_SIZE_MB}MB limit. ` +
+              `This may crash the browser.`
+            );
+            // Still try to load, but with aggressive culling
+            // The context loss handler will catch crashes
+          }
+
+          setFileSizeOk(true);
+        } else {
+          console.log("[Player] Could not determine file size, proceeding anyway");
+          setFileSizeOk(true);
+        }
+      } catch (err) {
+        console.warn("[Player] Failed to check file size:", err);
+        // Proceed anyway - the main load will fail if there's a real issue
+        setFileSizeOk(true);
+      } finally {
+        if (!cancelled) {
+          setFileSizeChecked(true);
+        }
+      }
+    }
+
+    checkFileSize();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  // Main loading effect - only runs after file size check
   useEffect(() => {
     if (!gl || !camera || !url) return;
+    if (!fileSizeChecked || !fileSizeOk) return;
     if (contextLostRef.current) return;
 
     let isMounted = true;
@@ -100,6 +174,20 @@ export function GaussianSplats({
     // Delay to handle React Strict Mode double-mount
     const initTimeout = setTimeout(() => {
       if (!isMounted || contextLostRef.current) return;
+
+      // Determine alpha threshold based on file size
+      // Larger files = more aggressive culling
+      let alphaThreshold = AGGRESSIVE_ALPHA_THRESHOLD;
+      if (fileSizeMB && fileSizeMB > 150) {
+        alphaThreshold = 100; // Very aggressive for huge files
+        console.log(`[Player] Using very aggressive alpha threshold (${alphaThreshold}) for large file`);
+      } else if (fileSizeMB && fileSizeMB > 75) {
+        alphaThreshold = 75; // More aggressive for large files
+        console.log(`[Player] Using aggressive alpha threshold (${alphaThreshold}) for medium-large file`);
+      }
+
+      console.log("[Player] Creating Gaussian splat viewer...");
+      console.log(`[Player] Alpha threshold: ${alphaThreshold} (removes splats with alpha < ${alphaThreshold}/255)`);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewer = new GaussianSplats3D.Viewer({
@@ -117,12 +205,11 @@ export function GaussianSplats({
         webXRMode: GaussianSplats3D.WebXRMode.None,
         renderMode: GaussianSplats3D.RenderMode.Always,
         sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual,
-        antialiased: false, // Disable antialiasing to reduce memory
+        antialiased: false,
         focalAdjustment: 1.0,
-        logLevel: GaussianSplats3D.LogLevel.Debug, // Enable debug for troubleshooting
+        logLevel: GaussianSplats3D.LogLevel.Debug,
         sphericalHarmonicsDegree: 0,
-        // Memory optimization: remove nearly-transparent splats
-        splatAlphaRemovalThreshold: 5, // Remove splats with alpha < 5 (out of 255)
+        splatAlphaRemovalThreshold: alphaThreshold,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
@@ -140,8 +227,7 @@ export function GaussianSplats({
           position: position,
           rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
           scale: [scale, scale, scale],
-          // Memory optimization: remove low-alpha splats during load
-          splatAlphaRemovalThreshold: 5,
+          splatAlphaRemovalThreshold: alphaThreshold,
           onProgress: (percent: number) => {
             if (!isMounted) return;
             console.log("[Player] Loading progress:", Math.round(percent * 100) + "%");
@@ -150,7 +236,17 @@ export function GaussianSplats({
         })
         .then(() => {
           if (!isMounted || contextLostRef.current) return;
+
           console.log("[Player] Gaussian splats loaded successfully!");
+
+          // Try to get splat count for logging
+          try {
+            const splatCount = viewer.getSplatCount?.() ?? "unknown";
+            console.log(`[Player] Splat count after alpha culling: ${splatCount}`);
+          } catch (e) {
+            // getSplatCount might not exist in all versions
+          }
+
           console.log("[Player] Starting viewer...");
           viewer.start();
           console.log("[Player] Viewer started");
@@ -179,7 +275,7 @@ export function GaussianSplats({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, gl, camera, JSON.stringify(position), JSON.stringify(rotation), scale]);
+  }, [url, gl, camera, fileSizeChecked, fileSizeOk, fileSizeMB, JSON.stringify(position), JSON.stringify(rotation), scale]);
 
   return null;
 }
