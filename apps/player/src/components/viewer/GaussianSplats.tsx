@@ -10,7 +10,9 @@ import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
 // PLY file size roughly correlates: ~30 bytes per splat
 // 100MB PLY ≈ 3.3M splats, 50MB ≈ 1.6M splats
 const MAX_PLY_SIZE_MB = 100; // Max file size in MB before showing error
-const AGGRESSIVE_ALPHA_THRESHOLD = 50; // Remove splats with alpha < 50 (out of 255)
+// Note: Alpha threshold was causing "leaves with splats: 0" - splats loaded but not rendered
+// Keep threshold very low (1) to avoid culling valid splats
+const DEFAULT_ALPHA_THRESHOLD = 1;
 
 export interface GaussianSplatsProps {
   url: string;
@@ -175,19 +177,12 @@ export function GaussianSplats({
     const initTimeout = setTimeout(() => {
       if (!isMounted || contextLostRef.current) return;
 
-      // Determine alpha threshold based on file size
-      // Larger files = more aggressive culling
-      let alphaThreshold = AGGRESSIVE_ALPHA_THRESHOLD;
-      if (fileSizeMB && fileSizeMB > 150) {
-        alphaThreshold = 100; // Very aggressive for huge files
-        console.log(`[Player] Using very aggressive alpha threshold (${alphaThreshold}) for large file`);
-      } else if (fileSizeMB && fileSizeMB > 75) {
-        alphaThreshold = 75; // More aggressive for large files
-        console.log(`[Player] Using aggressive alpha threshold (${alphaThreshold}) for medium-large file`);
-      }
+      // Use minimal alpha threshold to avoid culling valid splats
+      // Previous aggressive culling (50-100) caused "leaves with splats: 0" issue
+      const alphaThreshold = DEFAULT_ALPHA_THRESHOLD;
 
       console.log("[Player] Creating Gaussian splat viewer...");
-      console.log(`[Player] Alpha threshold: ${alphaThreshold} (removes splats with alpha < ${alphaThreshold}/255)`);
+      console.log(`[Player] Alpha threshold: ${alphaThreshold} (minimal culling to preserve splats)`);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewer = new GaussianSplats3D.Viewer({
