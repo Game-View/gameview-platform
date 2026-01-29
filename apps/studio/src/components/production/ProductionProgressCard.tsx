@@ -9,11 +9,9 @@ import {
   Eye,
   RotateCcw,
   Trash2,
-  ChevronDown,
   Download,
   StopCircle,
 } from "lucide-react";
-import { useState, useRef } from "react";
 
 // Production stages matching Modal worker pipeline
 export type ProductionStage =
@@ -98,13 +96,6 @@ export function ProductionProgressCard({
   );
   const isFailed = production.status === "failed";
   const isCompleted = production.status === "completed";
-
-  // Export dropdown state
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement>(null);
-
-  // Close export menu on outside click - DISABLED FOR TESTING
-  // The menu will stay open until an item is clicked
 
   // Calculate time elapsed or total time
   const formatTimeElapsed = () => {
@@ -273,41 +264,20 @@ export function ProductionProgressCard({
           </button>
         )}
         {isCompleted && onExportPLY && (
-          <div className="relative" ref={exportMenuRef}>
-            <button
-              type="button"
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              className="flex items-center justify-center gap-1 px-3 py-2 bg-gv-neutral-700 hover:bg-gv-neutral-600 text-white rounded-gv text-sm transition-colors"
-            >
-              Export
-              <ChevronDown className="h-4 w-4" />
-            </button>
-            {showExportMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-gv-neutral-800 border border-gv-neutral-700 rounded-gv shadow-lg z-50 py-1 min-w-[140px]">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    alert("Download PLY clicked! ID: " + production.id);
-                    console.log("[ProductionCard] Download PLY clicked", production.id, production.experienceId);
-                    if (onExportPLY) {
-                      onExportPLY(production.id, production.experienceId);
-                    }
-                    setShowExportMenu(false);
-                  }}
-                  onMouseDown={(e) => {
-                    // Prevent the outside click handler from closing menu before click fires
-                    e.stopPropagation();
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-gv-neutral-300 hover:bg-gv-neutral-700 flex items-center gap-2 cursor-pointer"
-                >
-                  <Download className="h-4 w-4" />
-                  Download PLY
-                </button>
-              </div>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              alert("Export clicked! ID: " + production.id);
+              console.log("[ProductionCard] Export clicked", production.id, production.experienceId);
+              onExportPLY(production.id, production.experienceId);
+            }}
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-gv-neutral-700 hover:bg-gv-neutral-600 text-white rounded-gv text-sm transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            Export PLY
+          </button>
         )}
       </div>
     </div>
