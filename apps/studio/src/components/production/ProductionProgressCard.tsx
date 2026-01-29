@@ -9,9 +9,11 @@ import {
   Eye,
   RotateCcw,
   Trash2,
-  ChevronRight,
+  ChevronDown,
+  Download,
   StopCircle,
 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 
 // Production stages matching Modal worker pipeline
 export type ProductionStage =
@@ -48,6 +50,7 @@ interface ProductionProgressCardProps {
   onRetry?: (id: string) => void;
   onDelete?: (id: string) => void;
   onCancel?: (id: string) => void;
+  onExportPLY?: (id: string, experienceId: string) => void;
 }
 
 const STAGE_LABELS: Record<ProductionStage, string> = {
@@ -88,12 +91,30 @@ export function ProductionProgressCard({
   onRetry,
   onDelete,
   onCancel,
+  onExportPLY,
 }: ProductionProgressCardProps) {
   const isProcessing = !["completed", "failed", "cancelled"].includes(
     production.status
   );
   const isFailed = production.status === "failed";
   const isCompleted = production.status === "completed";
+
+  // Export dropdown state
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close export menu on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setShowExportMenu(false);
+      }
+    }
+    if (showExportMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showExportMenu]);
 
   // Calculate time elapsed or total time
   const formatTimeElapsed = () => {
@@ -261,13 +282,30 @@ export function ProductionProgressCard({
             <Trash2 className="h-4 w-4" />
           </button>
         )}
-        {isCompleted && (
-          <button
-            onClick={() => onView?.(production.id)}
-            className="flex items-center justify-center gap-2 px-3 py-2 bg-gv-neutral-700 hover:bg-gv-neutral-600 text-white rounded-gv text-sm transition-colors"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+        {isCompleted && onExportPLY && (
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="flex items-center justify-center gap-1 px-3 py-2 bg-gv-neutral-700 hover:bg-gv-neutral-600 text-white rounded-gv text-sm transition-colors"
+            >
+              Export
+              <ChevronDown className="h-4 w-4" />
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-gv-neutral-800 border border-gv-neutral-700 rounded-gv shadow-lg z-10 py-1 min-w-[140px]">
+                <button
+                  onClick={() => {
+                    onExportPLY(production.id, production.experienceId);
+                    setShowExportMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gv-neutral-300 hover:bg-gv-neutral-700 flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download PLY
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -283,6 +321,7 @@ interface ProductionProgressListProps {
   onRetry?: (id: string) => void;
   onDelete?: (id: string) => void;
   onCancel?: (id: string) => void;
+  onExportPLY?: (id: string, experienceId: string) => void;
 }
 
 export function ProductionProgressList({
@@ -291,6 +330,7 @@ export function ProductionProgressList({
   onRetry,
   onDelete,
   onCancel,
+  onExportPLY,
 }: ProductionProgressListProps) {
   if (productions.length === 0) {
     return null;
@@ -315,6 +355,7 @@ export function ProductionProgressList({
           onRetry={onRetry}
           onDelete={onDelete}
           onCancel={onCancel}
+          onExportPLY={onExportPLY}
         />
       ))}
     </div>
