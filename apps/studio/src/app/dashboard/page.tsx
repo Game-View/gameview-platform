@@ -699,6 +699,54 @@ export default function DashboardPage() {
     }
   };
 
+  const handleExportPLY = async (productionId: string, experienceId: string) => {
+    try {
+      // Fetch experience data to get plyUrl
+      const response = await fetch(
+        `/api/trpc/experience.get?batch=1&input=${encodeURIComponent(
+          JSON.stringify({ "0": { json: { id: experienceId } } })
+        )}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Server error (${response.status})`);
+      }
+
+      const data = await response.json();
+      const result = Array.isArray(data) ? data[0] : data;
+
+      if (result?.error) {
+        throw new Error(result.error.message || "Failed to fetch experience");
+      }
+
+      const experience = result?.result?.data?.json;
+      if (!experience?.plyUrl) {
+        toast.error("Export failed", "No PLY file available for this production.");
+        return;
+      }
+
+      // Find production name for filename
+      const production = productions.find(p => p.id === productionId);
+      const filename = production?.name
+        ? `${production.name.replace(/[^a-zA-Z0-9-_]/g, "_")}.ply`
+        : "scene.ply";
+
+      // Trigger download
+      const link = document.createElement("a");
+      link.href = experience.plyUrl;
+      link.download = filename;
+      link.target = "_blank";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Download started", `Downloading ${filename}`);
+    } catch (error) {
+      console.error("Failed to export PLY:", error);
+      toast.error("Export failed", error instanceof Error ? error.message : "Could not download PLY file.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gv-neutral-900">
       {/* Header */}
@@ -818,6 +866,7 @@ export default function DashboardPage() {
               onRetry={handleRetryProduction}
               onDelete={handleDeleteProduction}
               onCancel={handleCancelProduction}
+              onExportPLY={handleExportPLY}
             />
           </div>
         )}
