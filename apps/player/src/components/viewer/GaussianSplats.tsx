@@ -406,73 +406,100 @@ export function GaussianSplats({
 
           // Wait for tree to build (observed in logs: ~680ms for build)
           // Use multiple frames to ensure tree is ready
+          let checkAttempts = 0;
+          const maxAttempts = 50; // 5 seconds max
+
           const waitForTreeAndPosition = () => {
             if (!isMounted) return;
+            checkAttempts++;
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const viewerAny = viewer as any;
 
-            // Check if tree has splats
-            const tree = viewerAny.splatTree;
-            let treeReady = false;
-            let treeBounds: THREE.Box3 | null = null;
-
-            if (tree) {
-              // Try to find leaves with splats
-              let leavesWithSplats = 0;
-              if (tree.root && tree.root.children) {
-                const countLeaves = (node: any): number => {
-                  if (!node) return 0;
-                  if (!node.children || node.children.length === 0) {
-                    return (node.data && node.data.length > 0) ? 1 : 0;
-                  }
-                  return node.children.reduce((sum: number, child: any) => sum + countLeaves(child), 0);
-                };
-                leavesWithSplats = countLeaves(tree.root);
-              }
-
-              console.log("[Tree Check] Leaves with splats:", leavesWithSplats);
-
-              if (leavesWithSplats > 0 || (tree.root && tree.root.boundingBox)) {
-                treeReady = true;
-                if (tree.root && tree.root.boundingBox) {
-                  treeBounds = tree.root.boundingBox;
+            // Log tree structure on first check to debug
+            if (checkAttempts === 1) {
+              console.log("[Tree Debug] splatTree exists:", !!viewerAny.splatTree);
+              if (viewerAny.splatTree) {
+                console.log("[Tree Debug] splatTree keys:", Object.keys(viewerAny.splatTree));
+                if (viewerAny.splatTree.root) {
+                  console.log("[Tree Debug] root keys:", Object.keys(viewerAny.splatTree.root));
                 }
+              }
+              console.log("[Tree Debug] scenes:", viewerAny.scenes?.length || 0);
+              if (viewerAny.scenes?.[0]?.splatBuffer) {
+                console.log("[Tree Debug] splatBuffer keys:", Object.keys(viewerAny.scenes[0].splatBuffer));
               }
             }
 
-            // Also check splatBuffer for bounds
-            if (!treeBounds && viewerAny.scenes && viewerAny.scenes.length > 0) {
+            let treeBounds: THREE.Box3 | null = null;
+            let splatCount = 0;
+
+            // Method 1: Check splatBuffer for count and bounds
+            if (viewerAny.scenes && viewerAny.scenes.length > 0) {
               const scene = viewerAny.scenes[0];
               if (scene.splatBuffer) {
-                console.log("[SplatBuffer] Keys:", Object.keys(scene.splatBuffer));
-                console.log("[SplatBuffer] splatCount:", scene.splatBuffer.splatCount);
+                splatCount = scene.splatBuffer.splatCount || 0;
 
-                // Try to get bounds from splatBuffer
-                if (typeof scene.splatBuffer.getCenter === 'function') {
-                  const center = scene.splatBuffer.getCenter();
-                  console.log("[SplatBuffer] getCenter():", center);
-                }
+                // Try getBoundingBox method
                 if (typeof scene.splatBuffer.getBoundingBox === 'function') {
-                  treeBounds = scene.splatBuffer.getBoundingBox();
-                  console.log("[SplatBuffer] getBoundingBox():", treeBounds);
+                  try {
+                    treeBounds = scene.splatBuffer.getBoundingBox();
+                    console.log("[SplatBuffer] Got bounding box:", treeBounds?.min, treeBounds?.max);
+                  } catch (e) {
+                    console.log("[SplatBuffer] getBoundingBox failed:", e);
+                  }
                 }
               }
             }
 
-            // If we have bounds, position camera
-            if (treeBounds) {
+            // Method 2: Check splatTree.root.boundingBox
+            if (!treeBounds && viewerAny.splatTree?.root?.boundingBox) {
+              treeBounds = viewerAny.splatTree.root.boundingBox;
+              console.log("[SplatTree] Got root bounding box");
+            }
+
+            // Method 3: Try library's getSceneCenter/getSceneRadius
+            if (!treeBounds) {
+              try {
+                const sceneCenter = viewer.getSceneCenter?.();
+                const sceneRadius = viewer.getSceneRadius?.();
+
+                if (sceneCenter && sceneRadius && sceneRadius > 0) {
+                  // Create a synthetic box from center/radius
+                  treeBounds = new THREE.Box3(
+                    new THREE.Vector3(
+                      sceneCenter.x - sceneRadius,
+                      sceneCenter.y - sceneRadius,
+                      sceneCenter.z - sceneRadius
+                    ),
+                    new THREE.Vector3(
+                      sceneCenter.x + sceneRadius,
+                      sceneCenter.y + sceneRadius,
+                      sceneCenter.z + sceneRadius
+                    )
+                  );
+                  console.log("[Library] Using getSceneCenter/Radius:", sceneCenter, sceneRadius);
+                }
+              } catch (e) {
+                // Ignore
+              }
+            }
+
+            console.log(`[Tree Check #${checkAttempts}] splatCount: ${splatCount}, bounds: ${treeBounds ? 'yes' : 'no'}`);
+
+            // If we have splats loaded AND bounds, we're ready
+            if (splatCount > 0 && treeBounds) {
               const center = new THREE.Vector3();
               const size = new THREE.Vector3();
               treeBounds.getCenter(center);
               treeBounds.getSize(size);
               const radius = Math.max(size.x, size.y, size.z) / 2;
 
-              console.log("[Camera] TREE BOUNDS FOUND:");
-              console.log("[Camera]   Min:", treeBounds.min);
-              console.log("[Camera]   Max:", treeBounds.max);
+              console.log("[Camera] BOUNDS FOUND:");
+              console.log("[Camera]   Splat count:", splatCount);
+              console.log("[Camera]   Min:", treeBounds.min.x.toFixed(2), treeBounds.min.y.toFixed(2), treeBounds.min.z.toFixed(2));
+              console.log("[Camera]   Max:", treeBounds.max.x.toFixed(2), treeBounds.max.y.toFixed(2), treeBounds.max.z.toFixed(2));
               console.log("[Camera]   Center:", center.x.toFixed(2), center.y.toFixed(2), center.z.toFixed(2));
-              console.log("[Camera]   Size:", size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2));
               console.log("[Camera]   Radius:", radius.toFixed(2));
 
               positionCameraToScene(center, radius);
@@ -482,28 +509,15 @@ export function GaussianSplats({
                 size: size.clone(),
                 radius
               });
-            } else if (treeReady) {
-              console.log("[Camera] Tree ready but no bounds found, trying library methods...");
-              // Fallback to library methods
-              const sceneCenter = viewer.getSceneCenter?.();
-              const sceneRadius = viewer.getSceneRadius?.();
-              console.log("[Camera] getSceneCenter():", sceneCenter);
-              console.log("[Camera] getSceneRadius():", sceneRadius);
+            } else if (checkAttempts >= maxAttempts) {
+              console.error("[Tree Check] Timed out waiting for tree/bounds after", checkAttempts, "attempts");
+              console.error("[Tree Check] Final state: splatCount=", splatCount, "bounds=", treeBounds);
 
-              if (sceneCenter && sceneRadius && sceneRadius > 0) {
-                positionCameraToScene(sceneCenter, sceneRadius);
-                onLoadRef.current?.({
-                  center: sceneCenter.clone(),
-                  size: new THREE.Vector3(sceneRadius * 2, sceneRadius * 2, sceneRadius * 2),
-                  radius: sceneRadius
-                });
-              } else {
-                console.warn("[Camera] No valid bounds found, camera may be in wrong position");
-                onLoadRef.current?.();
-              }
+              // Last resort: position camera at origin with large view
+              console.warn("[Camera] Using fallback position - try keyboard navigation (WASD, arrows)");
+              onLoadRef.current?.();
             } else {
               // Wait more
-              console.log("[Tree Check] Not ready yet, waiting...");
               setTimeout(waitForTreeAndPosition, 100);
             }
           };
