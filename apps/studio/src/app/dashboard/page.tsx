@@ -700,8 +700,6 @@ export default function DashboardPage() {
   };
 
   const handleExportPLY = async (productionId: string, experienceId: string) => {
-    console.log("[Export PLY] Called with:", { productionId, experienceId });
-
     try {
       // Fetch experience data to get plyUrl
       const response = await fetch(
@@ -746,6 +744,25 @@ export default function DashboardPage() {
     } catch (error) {
       console.error("Failed to export PLY:", error);
       toast.error("Export failed", error instanceof Error ? error.message : "Could not download PLY file.");
+    }
+  };
+
+  // Player URL for viewing experiences
+  const PLAYER_BASE_URL = process.env.NEXT_PUBLIC_PLAYER_URL || "https://gameview-player.vercel.app";
+
+  const handleViewInBrowser = (experienceId: string) => {
+    const viewUrl = `${PLAYER_BASE_URL}/view/${experienceId}`;
+    window.open(viewUrl, "_blank");
+  };
+
+  const handleCopyLink = async (experienceId: string) => {
+    const viewUrl = `${PLAYER_BASE_URL}/view/${experienceId}`;
+    try {
+      await navigator.clipboard.writeText(viewUrl);
+      toast.success("Link copied", "Shareable link copied to clipboard");
+    } catch (error) {
+      console.error("Failed to copy link:", error);
+      toast.error("Copy failed", "Could not copy link to clipboard");
     }
   };
 
@@ -869,6 +886,8 @@ export default function DashboardPage() {
               onDelete={handleDeleteProduction}
               onCancel={handleCancelProduction}
               onExportPLY={handleExportPLY}
+              onViewInBrowser={handleViewInBrowser}
+              onCopyLink={handleCopyLink}
             />
           </div>
         )}
