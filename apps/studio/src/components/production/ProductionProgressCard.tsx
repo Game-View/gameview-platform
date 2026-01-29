@@ -11,6 +11,8 @@ import {
   Trash2,
   Download,
   StopCircle,
+  ExternalLink,
+  Link as LinkIcon,
 } from "lucide-react";
 
 // Production stages matching Modal worker pipeline
@@ -49,6 +51,8 @@ interface ProductionProgressCardProps {
   onDelete?: (id: string) => void;
   onCancel?: (id: string) => void;
   onExportPLY?: (id: string, experienceId: string) => void;
+  onViewInBrowser?: (experienceId: string) => void;
+  onCopyLink?: (experienceId: string) => void;
 }
 
 const STAGE_LABELS: Record<ProductionStage, string> = {
@@ -90,6 +94,8 @@ export function ProductionProgressCard({
   onDelete,
   onCancel,
   onExportPLY,
+  onViewInBrowser,
+  onCopyLink,
 }: ProductionProgressCardProps) {
   const isProcessing = !["completed", "failed", "cancelled"].includes(
     production.status
@@ -273,6 +279,28 @@ export function ProductionProgressCard({
             Export PLY
           </button>
         )}
+        {isCompleted && onViewInBrowser && (
+          <button
+            type="button"
+            onClick={() => onViewInBrowser(production.experienceId)}
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-gv-neutral-700 hover:bg-gv-neutral-600 text-white rounded-gv text-sm transition-colors"
+            title="View in browser"
+          >
+            <ExternalLink className="h-4 w-4" />
+            View
+          </button>
+        )}
+        {isCompleted && onCopyLink && (
+          <button
+            type="button"
+            onClick={() => onCopyLink(production.experienceId)}
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-gv-neutral-700 hover:bg-gv-neutral-600 text-white rounded-gv text-sm transition-colors"
+            title="Copy shareable link"
+          >
+            <LinkIcon className="h-4 w-4" />
+            Copy Link
+          </button>
+        )}
       </div>
     </div>
   );
@@ -288,6 +316,8 @@ interface ProductionProgressListProps {
   onDelete?: (id: string) => void;
   onCancel?: (id: string) => void;
   onExportPLY?: (id: string, experienceId: string) => void;
+  onViewInBrowser?: (experienceId: string) => void;
+  onCopyLink?: (experienceId: string) => void;
 }
 
 export function ProductionProgressList({
@@ -297,6 +327,8 @@ export function ProductionProgressList({
   onDelete,
   onCancel,
   onExportPLY,
+  onViewInBrowser,
+  onCopyLink,
 }: ProductionProgressListProps) {
   if (productions.length === 0) {
     return null;
@@ -322,6 +354,8 @@ export function ProductionProgressList({
           onDelete={onDelete}
           onCancel={onCancel}
           onExportPLY={onExportPLY}
+          onViewInBrowser={onViewInBrowser}
+          onCopyLink={onCopyLink}
         />
       ))}
     </div>

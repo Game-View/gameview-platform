@@ -747,6 +747,25 @@ export default function DashboardPage() {
     }
   };
 
+  // Player URL for viewing experiences
+  const PLAYER_BASE_URL = process.env.NEXT_PUBLIC_PLAYER_URL || "https://gameview-player.vercel.app";
+
+  const handleViewInBrowser = (experienceId: string) => {
+    const viewUrl = `${PLAYER_BASE_URL}/view/${experienceId}`;
+    window.open(viewUrl, "_blank");
+  };
+
+  const handleCopyLink = async (experienceId: string) => {
+    const viewUrl = `${PLAYER_BASE_URL}/view/${experienceId}`;
+    try {
+      await navigator.clipboard.writeText(viewUrl);
+      toast.success("Link copied", "Shareable link copied to clipboard");
+    } catch (error) {
+      console.error("Failed to copy link:", error);
+      toast.error("Copy failed", "Could not copy link to clipboard");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gv-neutral-900">
       {/* Header */}
@@ -867,6 +886,8 @@ export default function DashboardPage() {
               onDelete={handleDeleteProduction}
               onCancel={handleCancelProduction}
               onExportPLY={handleExportPLY}
+              onViewInBrowser={handleViewInBrowser}
+              onCopyLink={handleCopyLink}
             />
           </div>
         )}
