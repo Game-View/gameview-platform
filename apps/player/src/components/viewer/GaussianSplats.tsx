@@ -253,27 +253,32 @@ export function GaussianSplats({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const viewerAny = viewer as any;
 
-          // Log all properties that might contain position data
-          const interestingKeys = ['splatMesh', 'scene', 'splatBuffer', 'splats', 'splatData',
-            'splatTree', 'octree', 'boundingBox', 'sceneCenter', 'center', 'positions'];
-          for (const key of interestingKeys) {
-            if (viewerAny[key] !== undefined) {
-              console.log(`[Debug] viewer.${key}:`, viewerAny[key]);
+          // Log ALL properties to find where bounds are stored
+          console.log("[Debug] Full viewer dump:");
+          for (const key of Object.keys(viewerAny)) {
+            const val = viewerAny[key];
+            const valType = typeof val;
+            if (valType === 'object' && val !== null) {
+              console.log(`[Debug] viewer.${key}:`, val.constructor?.name || 'Object', Object.keys(val).slice(0, 10));
+            } else {
+              console.log(`[Debug] viewer.${key}:`, valType, val);
             }
           }
 
           // ===== Try multiple approaches to get bounding box =====
           let sceneBounds: SceneBounds | undefined;
 
-          // Approach 1: Use library's getSceneCenter/getSceneRadius
+          // Approach 1: Use library's getSceneCenter/getSceneRadius (PRIORITIZE THIS)
           try {
             const sceneCenter = viewer.getSceneCenter?.();
             const sceneRadius = viewer.getSceneRadius?.();
 
+            console.log("[Camera] Approach 1 - Library methods:");
+            console.log("[Camera]   getSceneCenter():", sceneCenter);
+            console.log("[Camera]   getSceneRadius():", sceneRadius);
+
             if (sceneCenter && sceneRadius && sceneRadius > 0) {
-              console.log("[Camera] Using library's scene center/radius");
-              console.log("[Camera] Scene center:", sceneCenter);
-              console.log("[Camera] Scene radius:", sceneRadius);
+              console.log("[Camera] SUCCESS: Using library's scene center/radius");
 
               sceneBounds = {
                 center: sceneCenter.clone(),
@@ -282,44 +287,121 @@ export function GaussianSplats({
               };
             }
           } catch (e) {
-            console.log("[Camera] getSceneCenter/getSceneRadius not available:", e);
+            console.log("[Camera] Approach 1 failed:", e);
           }
 
-          // Approach 2: Try to get bounding box from splatMesh geometry
-          if (!sceneBounds && viewerAny.splatMesh) {
+          // Approach 2: Try splatTree.root bounding box (spatial tree should have bounds)
+          if (!sceneBounds && viewerAny.splatTree) {
             try {
-              const splatMesh = viewerAny.splatMesh;
-              console.log("[Debug] splatMesh:", splatMesh);
-              console.log("[Debug] splatMesh.geometry:", splatMesh.geometry);
+              const tree = viewerAny.splatTree;
+              console.log("[Camera] Approach 2 - SplatTree:");
+              console.log("[Camera]   splatTree keys:", Object.keys(tree));
 
-              if (splatMesh.geometry) {
-                splatMesh.geometry.computeBoundingBox();
-                const box = splatMesh.geometry.boundingBox;
-                if (box && !box.isEmpty()) {
+              // Check root node
+              if (tree.root) {
+                console.log("[Camera]   splatTree.root keys:", Object.keys(tree.root));
+                const root = tree.root;
+
+                // Try various property names for bounding box
+                const boxProps = ['boundingBox', 'box', 'bounds', 'aabb', 'min', 'max'];
+                for (const prop of boxProps) {
+                  if (root[prop]) {
+                    console.log(`[Camera]   splatTree.root.${prop}:`, root[prop]);
+                  }
+                }
+
+                if (root.boundingBox) {
+                  const box = root.boundingBox;
                   const center = new THREE.Vector3();
                   const size = new THREE.Vector3();
                   box.getCenter(center);
                   box.getSize(size);
                   const radius = Math.max(size.x, size.y, size.z) / 2;
 
-                  console.log("[Camera] Using splatMesh geometry bounding box");
-                  console.log("[Camera] Box min:", box.min);
-                  console.log("[Camera] Box max:", box.max);
-                  console.log("[Camera] Center:", center);
-                  console.log("[Camera] Size:", size);
+                  console.log("[Camera] SUCCESS: Using splatTree.root.boundingBox");
+                  console.log("[Camera]   Box:", box.min, box.max);
+                  console.log("[Camera]   Center:", center);
+                  console.log("[Camera]   Radius:", radius);
 
                   sceneBounds = { center, size, radius };
                 }
               }
+
+              // Also check tree-level bounds
+              if (!sceneBounds && (tree.boundingBox || tree.sceneBoundingBox)) {
+                const box = tree.boundingBox || tree.sceneBoundingBox;
+                const center = new THREE.Vector3();
+                const size = new THREE.Vector3();
+                box.getCenter(center);
+                box.getSize(size);
+                const radius = Math.max(size.x, size.y, size.z) / 2;
+
+                console.log("[Camera] SUCCESS: Using splatTree.boundingBox");
+                sceneBounds = { center, size, radius };
+              }
             } catch (e) {
-              console.log("[Camera] Could not get bounds from splatMesh:", e);
+              console.log("[Camera] Approach 2 failed:", e);
             }
           }
 
-          // Approach 3: Try to get bounding box from scene
+          // Approach 3: Check for splatBuffer/splatDataTextures which contain position data
+          if (!sceneBounds) {
+            try {
+              console.log("[Camera] Approach 3 - Looking for splat data buffers:");
+
+              // Check various potential locations for splat data
+              const dataLocations = [
+                'splatBuffer', 'splatDataTextures', 'centersTexture',
+                'splatMesh.material.uniforms', 'scenes', 'sceneInfo'
+              ];
+
+              for (const loc of dataLocations) {
+                const parts = loc.split('.');
+                let obj = viewerAny;
+                for (const part of parts) {
+                  obj = obj?.[part];
+                }
+                if (obj) {
+                  console.log(`[Camera]   ${loc}:`, obj.constructor?.name || typeof obj,
+                    typeof obj === 'object' ? Object.keys(obj).slice(0, 10) : obj);
+                }
+              }
+
+              // Check scenes array for bounds
+              if (viewerAny.scenes && Array.isArray(viewerAny.scenes) && viewerAny.scenes.length > 0) {
+                const scene = viewerAny.scenes[0];
+                console.log("[Camera]   scenes[0] keys:", Object.keys(scene));
+
+                if (scene.splatBuffer) {
+                  console.log("[Camera]   scenes[0].splatBuffer keys:", Object.keys(scene.splatBuffer));
+
+                  // SplatBuffer might have getBoundingBox or similar
+                  if (scene.splatBuffer.getBoundingBox) {
+                    const box = scene.splatBuffer.getBoundingBox();
+                    const center = new THREE.Vector3();
+                    const size = new THREE.Vector3();
+                    box.getCenter(center);
+                    box.getSize(size);
+                    const radius = Math.max(size.x, size.y, size.z) / 2;
+
+                    console.log("[Camera] SUCCESS: Using splatBuffer.getBoundingBox()");
+                    sceneBounds = { center, size, radius };
+                  }
+                }
+              }
+            } catch (e) {
+              console.log("[Camera] Approach 3 failed:", e);
+            }
+          }
+
+          // Approach 4: Last resort - try scene bounding box (may not work for GPU data)
           if (!sceneBounds && viewerAny.scene) {
             try {
+              console.log("[Camera] Approach 4 - Scene bounding box (may not work for GPU textures):");
               const box = new THREE.Box3().setFromObject(viewerAny.scene);
+              console.log("[Camera]   Box:", box.min, box.max);
+              console.log("[Camera]   isEmpty:", box.isEmpty());
+
               if (!box.isEmpty()) {
                 const center = new THREE.Vector3();
                 const size = new THREE.Vector3();
@@ -327,39 +409,24 @@ export function GaussianSplats({
                 box.getSize(size);
                 const radius = Math.max(size.x, size.y, size.z) / 2;
 
-                console.log("[Camera] Using viewer.scene bounding box");
-                console.log("[Camera] Box min:", box.min);
-                console.log("[Camera] Box max:", box.max);
-                console.log("[Camera] Center:", center);
-
-                sceneBounds = { center, size, radius };
+                // Only use if radius is reasonable (not from debug geometry)
+                if (radius > 1) {
+                  console.log("[Camera] Using viewer.scene bounding box (radius:", radius, ")");
+                  sceneBounds = { center, size, radius };
+                } else {
+                  console.log("[Camera] Scene box too small, likely not real splat bounds");
+                }
               }
             } catch (e) {
-              console.log("[Camera] Could not get bounds from scene:", e);
+              console.log("[Camera] Approach 4 failed:", e);
             }
           }
 
-          // Approach 4: Try splatTree if available
-          if (!sceneBounds && viewerAny.splatTree) {
-            try {
-              const tree = viewerAny.splatTree;
-              console.log("[Debug] splatTree:", tree);
-              console.log("[Debug] splatTree keys:", Object.keys(tree));
-
-              if (tree.boundingBox || tree.box || tree.bounds) {
-                const box = tree.boundingBox || tree.box || tree.bounds;
-                const center = new THREE.Vector3();
-                const size = new THREE.Vector3();
-                box.getCenter(center);
-                box.getSize(size);
-                const radius = Math.max(size.x, size.y, size.z) / 2;
-
-                console.log("[Camera] Using splatTree bounding box");
-                sceneBounds = { center, size, radius };
-              }
-            } catch (e) {
-              console.log("[Camera] Could not get bounds from splatTree:", e);
-            }
+          // If still no bounds, log failure clearly
+          if (!sceneBounds) {
+            console.error("[Camera] FAILED: Could not detect scene bounds from any source!");
+            console.error("[Camera] The splats may be stored purely in GPU textures.");
+            console.error("[Camera] Try pressing arrow keys to navigate, or check console for position hints.");
           }
 
           // ===== Position camera based on bounds =====

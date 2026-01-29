@@ -196,11 +196,7 @@ export default function ViewExperiencePage() {
         <ambientLight intensity={0.5} />
         <directionalLight position={[10, 10, 5]} intensity={1} />
 
-        {/* Debug: small red sphere at origin to verify R3F is rendering */}
-        <mesh position={[0, 0, 0]}>
-          <sphereGeometry args={[0.1, 16, 16]} />
-          <meshStandardMaterial color="red" />
-        </mesh>
+        {/* GaussianSplats handles its own rendering - no debug geometry needed */}
 
         {/* Using mkkellogg library with dynamicScene to bypass tree issues */}
         <GaussianSplats
