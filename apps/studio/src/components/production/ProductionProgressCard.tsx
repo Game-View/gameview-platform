@@ -266,13 +266,7 @@ export function ProductionProgressCard({
         {isCompleted && onExportPLY && (
           <button
             type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              alert("Export clicked! ID: " + production.id);
-              console.log("[ProductionCard] Export clicked", production.id, production.experienceId);
-              onExportPLY(production.id, production.experienceId);
-            }}
+            onClick={() => onExportPLY(production.id, production.experienceId)}
             className="flex items-center justify-center gap-2 px-3 py-2 bg-gv-neutral-700 hover:bg-gv-neutral-600 text-white rounded-gv text-sm transition-colors"
           >
             <Download className="h-4 w-4" />
