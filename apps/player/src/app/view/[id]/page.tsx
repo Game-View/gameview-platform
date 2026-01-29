@@ -1,19 +1,114 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Loader2, ExternalLink, Info, X } from "lucide-react";
+import * as THREE from "three";
 import { trpc } from "@/lib/trpc/client";
+import type { SceneBounds } from "@/components/viewer/GaussianSplats";
 
 // Dynamic import for GaussianSplats (no SSR)
 const GaussianSplats = dynamic(
   () => import("@/components/viewer/GaussianSplats").then((mod) => mod.GaussianSplats),
   { ssr: false }
 );
+
+// Component to handle camera positioning and keyboard controls
+function CameraController({
+  sceneBounds,
+  controlsRef,
+}: {
+  sceneBounds: SceneBounds | null;
+  controlsRef: React.RefObject<any>;
+}) {
+  const { camera } = useThree();
+
+  // Fit camera to scene bounds
+  const fitCameraToScene = useCallback(() => {
+    if (!sceneBounds || !controlsRef.current) return;
+
+    const { center, radius } = sceneBounds;
+    const perspCamera = camera as THREE.PerspectiveCamera;
+
+    // Calculate distance to fit scene in view
+    const fov = perspCamera.fov * (Math.PI / 180);
+    const distance = (radius / Math.tan(fov / 2)) * 1.5;
+
+    // Position camera to look at center
+    perspCamera.position.set(
+      center.x,
+      center.y + radius * 0.5,
+      center.z + distance
+    );
+    perspCamera.lookAt(center.x, center.y, center.z);
+    perspCamera.updateProjectionMatrix();
+
+    // Update controls target
+    controlsRef.current.target.copy(center);
+    controlsRef.current.update();
+
+    console.log("[CameraController] Fit camera to scene:", {
+      position: perspCamera.position.clone(),
+      target: center.clone(),
+      distance,
+    });
+  }, [camera, sceneBounds, controlsRef]);
+
+  // Update controls target when bounds change
+  useEffect(() => {
+    if (sceneBounds && controlsRef.current) {
+      controlsRef.current.target.copy(sceneBounds.center);
+      controlsRef.current.maxDistance = sceneBounds.radius * 10;
+      controlsRef.current.minDistance = sceneBounds.radius * 0.1;
+      controlsRef.current.update();
+      console.log("[CameraController] Updated controls target to:", sceneBounds.center);
+    }
+  }, [sceneBounds, controlsRef]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!controlsRef.current) return;
+
+      const controls = controlsRef.current;
+      const rotateSpeed = 0.1;
+
+      switch (e.key.toLowerCase()) {
+        case "arrowleft":
+          // Rotate camera left around target
+          controls.rotateLeft?.(rotateSpeed) || (controls.azimuthAngle -= rotateSpeed);
+          break;
+        case "arrowright":
+          controls.rotateLeft?.(-rotateSpeed) || (controls.azimuthAngle += rotateSpeed);
+          break;
+        case "arrowup":
+          controls.rotateUp?.(rotateSpeed) || (controls.polarAngle -= rotateSpeed);
+          break;
+        case "arrowdown":
+          controls.rotateUp?.(-rotateSpeed) || (controls.polarAngle += rotateSpeed);
+          break;
+        case "f":
+          // Fit camera to scene
+          fitCameraToScene();
+          break;
+        case "r":
+          // Reset to initial position
+          fitCameraToScene();
+          break;
+      }
+      controls.update();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [controlsRef, fitCameraToScene]);
+
+  return null;
+}
 
 export default function ViewExperiencePage() {
   const params = useParams();
@@ -23,6 +118,9 @@ export default function ViewExperiencePage() {
   const [splatProgress, setSplatProgress] = useState(0);
   const [splatError, setSplatError] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(true);
+  const [sceneBounds, setSceneBounds] = useState<SceneBounds | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const controlsRef = useRef<any>(null);
 
   // Fetch experience data (using getForViewer for public access without auth)
   const { data: experience, isLoading, error } = trpc.experience.getForViewer.useQuery(
@@ -107,8 +205,12 @@ export default function ViewExperiencePage() {
         {/* Using mkkellogg library with dynamicScene to bypass tree issues */}
         <GaussianSplats
           url={experience.plyUrl}
-          onLoad={() => {
+          onLoad={(bounds) => {
             console.log("[ViewPage] GaussianSplats onLoad callback fired!");
+            console.log("[ViewPage] Scene bounds:", bounds);
+            if (bounds) {
+              setSceneBounds(bounds);
+            }
             setSplatLoading(false);
           }}
           onError={(err) => {
@@ -122,12 +224,16 @@ export default function ViewExperiencePage() {
           }}
         />
 
+        {/* Camera controller for auto-positioning and keyboard nav */}
+        <CameraController sceneBounds={sceneBounds} controlsRef={controlsRef} />
+
         <OrbitControls
+          ref={controlsRef}
           enablePan={true}
           enableZoom={true}
           enableRotate={true}
           minDistance={0.5}
-          maxDistance={100}
+          maxDistance={1000}
         />
       </Canvas>
 
@@ -206,7 +312,13 @@ export default function ViewExperiencePage() {
                 <span className="text-gv-neutral-500">Pan:</span> Right Click + Drag
               </div>
               <div>
-                <span className="text-gv-neutral-500">Reset:</span> Double Click
+                <span className="text-gv-neutral-500">Arrows:</span> Look around
+              </div>
+              <div>
+                <span className="text-gv-neutral-500">F key:</span> Fit to scene
+              </div>
+              <div>
+                <span className="text-gv-neutral-500">R key:</span> Reset view
               </div>
             </div>
           </div>
