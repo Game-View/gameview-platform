@@ -236,7 +236,7 @@ def process_production_4d(
         source_videos: List of {url, filename, size} dicts
         settings: Processing settings including:
             - fps: Frame extraction rate (default: 15)
-            - maxFrames: Maximum frames to process (default: 150)
+            - maxFrames: Maximum frames to process (default: 30, draft mode)
             - iterations: 4D-GS training iterations (default: 30000)
             - motionEnabled: Should be True for this endpoint
         callback_url: URL to POST results when complete
@@ -381,7 +381,7 @@ def process_production_4d(
         print(f"[{production_id}] Extracting frames for 4D motion...")
 
         fps = settings.get("fps", 15)  # Higher FPS for motion (vs 3 for static)
-        max_frames = settings.get("maxFrames", 150)  # Fewer frames needed for 4D
+        max_frames = settings.get("maxFrames", 30)  # Draft mode: 30 frames for faster processing
 
         for i, video_path in enumerate(video_paths):
             cam_frames_dir = frames_dir / f"cam{i:02d}"
@@ -455,9 +455,9 @@ def process_production_4d(
             "--ImageReader.single_camera", "1",
             # CPU mode for SIFT - Modal headless servers can't create OpenGL context for GPU
             "--SiftExtraction.use_gpu", "0",
-            # Limit image size to manage memory with many frames
-            "--SiftExtraction.max_image_size", "1600",
-            "--SiftExtraction.max_num_features", "8192",
+            # Draft mode: smaller images and fewer features for faster processing
+            "--SiftExtraction.max_image_size", "800",
+            "--SiftExtraction.max_num_features", "4096",
         ]
         print(f"[{production_id}] Running: {' '.join(feature_cmd)}")
 
