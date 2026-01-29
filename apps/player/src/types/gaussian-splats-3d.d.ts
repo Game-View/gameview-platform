@@ -47,6 +47,7 @@ declare module "@mkkellogg/gaussian-splats-3d" {
     sphericalHarmonicsDegree?: number;
     splatAlphaRemovalThreshold?: number;
     selfDrivenMode?: boolean;
+    optimizeSplatData?: boolean;
   }
 
   export interface SplatSceneOptions {

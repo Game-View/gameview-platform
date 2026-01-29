@@ -177,7 +177,7 @@ export function GaussianSplats({
       if (!isMounted || contextLostRef.current) return;
 
       console.log("[Player] Creating Gaussian splat viewer...");
-      console.log("[Player] Alpha threshold: DISABLED (testing if this fixes 'leaves with splats: 0')");
+      console.log("[Player] Testing: progressiveLoad=false, sceneRevealMode=Instant");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewer = new GaussianSplats3D.Viewer({
@@ -194,12 +194,14 @@ export function GaussianSplats({
         dynamicScene: false,
         webXRMode: GaussianSplats3D.WebXRMode.None,
         renderMode: GaussianSplats3D.RenderMode.Always,
-        sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual,
+        // Try Instant reveal instead of Gradual - may fix tree building
+        sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
         antialiased: false,
         focalAdjustment: 1.0,
         logLevel: GaussianSplats3D.LogLevel.Debug,
         sphericalHarmonicsDegree: 0,
-        // splatAlphaRemovalThreshold DISABLED - was causing "leaves with splats: 0"
+        // Disable optimizations that might cause issues
+        optimizeSplatData: false,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
@@ -213,11 +215,12 @@ export function GaussianSplats({
       viewer
         .addSplatScene(url, {
           showLoadingUI: false,
-          progressiveLoad: true,
+          // IMPORTANT: Disable progressive loading - may fix "leaves with splats: 0" issue
+          // Progressive loading can cause tree building issues
+          progressiveLoad: false,
           position: position,
           rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
           scale: [scale, scale, scale],
-          // splatAlphaRemovalThreshold DISABLED - was causing "leaves with splats: 0"
           onProgress: (percent: number) => {
             if (!isMounted) return;
             console.log("[Player] Loading progress:", Math.round(percent * 100) + "%");
