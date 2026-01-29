@@ -119,7 +119,7 @@ export function GaussianSplats({
         sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual,
         antialiased: false, // Disable antialiasing to reduce memory
         focalAdjustment: 1.0,
-        logLevel: GaussianSplats3D.LogLevel.None,
+        logLevel: GaussianSplats3D.LogLevel.Debug, // Enable debug for troubleshooting
         sphericalHarmonicsDegree: 0,
         // Memory optimization: remove nearly-transparent splats
         splatAlphaRemovalThreshold: 5, // Remove splats with alpha < 5 (out of 255)

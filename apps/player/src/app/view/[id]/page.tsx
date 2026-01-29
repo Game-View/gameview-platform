@@ -90,20 +90,35 @@ export default function ViewExperiencePage() {
     <div className="fixed inset-0 bg-black">
       {/* 3D Viewer */}
       <Canvas
-        camera={{ fov: 75, near: 0.1, far: 1000, position: [0, 1, 5] }}
+        camera={{ fov: 75, near: 0.1, far: 1000, position: [0, 2, 10] }}
         style={{ position: "absolute", inset: 0 }}
+        gl={{ antialias: false, alpha: false }}
       >
+        <color attach="background" args={["#111111"]} />
         <ambientLight intensity={0.5} />
         <directionalLight position={[10, 10, 5]} intensity={1} />
 
+        {/* Debug: small red sphere at origin to verify R3F is rendering */}
+        <mesh position={[0, 0, 0]}>
+          <sphereGeometry args={[0.1, 16, 16]} />
+          <meshStandardMaterial color="red" />
+        </mesh>
+
         <GaussianSplats
           url={experience.plyUrl}
-          onLoad={() => setSplatLoading(false)}
+          onLoad={() => {
+            console.log("[ViewPage] Splat onLoad callback fired!");
+            setSplatLoading(false);
+          }}
           onError={(err) => {
+            console.error("[ViewPage] Splat onError callback:", err);
             setSplatLoading(false);
             setSplatError(err.message);
           }}
-          onProgress={(progress) => setSplatProgress(Math.round(progress * 100))}
+          onProgress={(progress) => {
+            console.log("[ViewPage] Splat progress:", progress);
+            setSplatProgress(Math.round(progress * 100));
+          }}
         />
 
         <OrbitControls
