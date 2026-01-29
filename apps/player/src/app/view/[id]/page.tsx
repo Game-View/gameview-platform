@@ -90,7 +90,7 @@ export default function ViewExperiencePage() {
     <div className="fixed inset-0 bg-black">
       {/* 3D Viewer */}
       <Canvas
-        camera={{ fov: 75, near: 0.1, far: 1000, position: [0, 2, 10] }}
+        camera={{ fov: 75, near: 0.01, far: 10000, position: [0, 2, 10] }}
         style={{ position: "absolute", inset: 0 }}
         gl={{ antialias: false, alpha: false }}
       >
