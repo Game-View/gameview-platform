@@ -24,8 +24,8 @@ export default function ViewExperiencePage() {
   const [splatError, setSplatError] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(true);
 
-  // Fetch experience data
-  const { data: experience, isLoading, error } = trpc.experience.get.useQuery(
+  // Fetch experience data (using getForViewer for public access without auth)
+  const { data: experience, isLoading, error } = trpc.experience.getForViewer.useQuery(
     { id: experienceId },
     { enabled: !!experienceId }
   );

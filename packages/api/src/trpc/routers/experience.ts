@@ -8,6 +8,48 @@ const ageRatingEnum = z.enum(["E", "E10", "T", "M"]);
 
 export const experienceRouter = router({
   /**
+   * Get experience for simple 3D viewer (public, requires plyUrl)
+   * Used by /view/[id] route for sharing scenes without full auth
+   */
+  getForViewer: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const experience = await ctx.db.experience.findUnique({
+        where: { id: input.id },
+        select: {
+          id: true,
+          title: true,
+          plyUrl: true,
+          thumbnailUrl: true,
+          creator: {
+            select: {
+              displayName: true,
+              username: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      });
+
+      if (!experience) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Experience not found",
+        });
+      }
+
+      // Only allow viewing if plyUrl exists (scene is processed)
+      if (!experience.plyUrl) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Scene not ready for viewing",
+        });
+      }
+
+      return experience;
+    }),
+
+  /**
    * Get a single experience by ID (public)
    */
   get: publicProcedure
