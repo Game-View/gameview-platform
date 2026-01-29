@@ -39,7 +39,7 @@ app = modal.App("gameview-4d-processing")
 
 # GPU image with CUDA + COLMAP + 4DGaussians dependencies
 # Fully cloud-based, no local processing required
-# Cache buster v3: Fix CUDA arch detection for rasterizer build
+# Cache buster v4: Force numpy<2 and add open3d for 4DGaussians
 processing_image_4d = (
     modal.Image.from_registry("pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel")
     .env({
@@ -59,10 +59,13 @@ processing_image_4d = (
         "libglib2.0-0",
         "colmap",  # SfM for camera pose estimation
     ])
+    # Force numpy<2 BEFORE any other pip installs - pytorch base image has numpy 2.x
+    .run_commands([
+        "pip install --force-reinstall 'numpy<2'",
+        "pip install open3d",
+    ])
     .pip_install([
-        # Core dependencies
-        "numpy<2",  # Must be <2 for 4DGaussians compatibility
-        "open3d",  # Required by 4DGaussians for point cloud operations
+        # Core dependencies (numpy already installed above)
         "opencv-python-headless",
         "Pillow",
         "plyfile",
