@@ -45,6 +45,8 @@ declare module "@mkkellogg/gaussian-splats-3d" {
     focalAdjustment?: number;
     logLevel?: LogLevel;
     sphericalHarmonicsDegree?: number;
+    splatAlphaRemovalThreshold?: number;
+    selfDrivenMode?: boolean;
   }
 
   export interface SplatSceneOptions {
@@ -54,14 +56,13 @@ declare module "@mkkellogg/gaussian-splats-3d" {
     position?: [number, number, number];
     rotation?: [number, number, number, string];
     scale?: [number, number, number];
+    splatAlphaRemovalThreshold?: number;
   }
 
   export class Viewer {
     constructor(options?: ViewerOptions);
-    addSplatScene(
-      url: string,
-      options?: SplatSceneOptions
-    ): Promise<void>;
+    addSplatScene(url: string, options?: SplatSceneOptions): Promise<void>;
+    getSplatCount(): number;
     start(): void;
     stop(): void;
     dispose(): void;
