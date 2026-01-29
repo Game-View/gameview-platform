@@ -285,6 +285,7 @@ export function ProductionProgressCard({
         {isCompleted && onExportPLY && (
           <div className="relative" ref={exportMenuRef}>
             <button
+              type="button"
               onClick={() => setShowExportMenu(!showExportMenu)}
               className="flex items-center justify-center gap-1 px-3 py-2 bg-gv-neutral-700 hover:bg-gv-neutral-600 text-white rounded-gv text-sm transition-colors"
             >
@@ -294,7 +295,10 @@ export function ProductionProgressCard({
             {showExportMenu && (
               <div className="absolute right-0 top-full mt-1 bg-gv-neutral-800 border border-gv-neutral-700 rounded-gv shadow-lg z-10 py-1 min-w-[140px]">
                 <button
-                  onClick={() => {
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log("[ProductionCard] Download PLY clicked", production.id, production.experienceId);
                     onExportPLY(production.id, production.experienceId);
                     setShowExportMenu(false);
                   }}
