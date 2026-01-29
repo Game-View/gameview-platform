@@ -234,17 +234,53 @@ export function GaussianSplats({
 
           console.log("[Player] Gaussian splats loaded successfully!");
 
-          // Try to get splat count for logging
+          // Diagnostics: get scene info
           try {
             const splatCount = viewer.getSplatCount?.() ?? "unknown";
-            console.log(`[Player] Splat count after alpha culling: ${splatCount}`);
+            console.log(`[Player] Splat count: ${splatCount}`);
           } catch (e) {
-            // getSplatCount might not exist in all versions
+            console.log("[Player] Could not get splat count");
+          }
+
+          // Try to get scene center and radius for auto-camera positioning
+          try {
+            const sceneCenter = viewer.getSceneCenter?.();
+            const sceneRadius = viewer.getSceneRadius?.();
+
+            if (sceneCenter && sceneRadius) {
+              console.log("[Player] Scene center:", sceneCenter);
+              console.log("[Player] Scene radius:", sceneRadius);
+
+              // Auto-position camera to look at scene center from a good distance
+              const distance = sceneRadius * 2.5; // 2.5x radius gives good view
+              const perspCamera = camera as THREE.PerspectiveCamera;
+
+              // Position camera at center + offset on Z axis (looking at scene)
+              perspCamera.position.set(
+                sceneCenter.x,
+                sceneCenter.y + sceneRadius * 0.5, // Slightly above center
+                sceneCenter.z + distance
+              );
+              perspCamera.lookAt(sceneCenter.x, sceneCenter.y, sceneCenter.z);
+              perspCamera.updateProjectionMatrix();
+
+              console.log("[Player] Auto-positioned camera to:", perspCamera.position);
+              console.log("[Player] Camera looking at:", sceneCenter);
+            } else {
+              console.log("[Player] Could not get scene bounds for auto-positioning");
+            }
+          } catch (e) {
+            console.log("[Player] Scene bounds not available:", e);
           }
 
           console.log("[Player] Starting viewer...");
           viewer.start();
           console.log("[Player] Viewer started");
+
+          // Log final camera state
+          console.log("[Player] Final camera position:", camera.position);
+          console.log("[Player] Camera near/far:", (camera as THREE.PerspectiveCamera).near, (camera as THREE.PerspectiveCamera).far);
+
           onLoadRef.current?.();
         })
         .catch((err: Error) => {

@@ -63,6 +63,8 @@ declare module "@mkkellogg/gaussian-splats-3d" {
     constructor(options?: ViewerOptions);
     addSplatScene(url: string, options?: SplatSceneOptions): Promise<void>;
     getSplatCount(): number;
+    getSceneCenter(): THREE.Vector3;
+    getSceneRadius(): number;
     start(): void;
     stop(): void;
     dispose(): void;
