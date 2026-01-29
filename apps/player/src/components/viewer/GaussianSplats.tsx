@@ -409,30 +409,23 @@ export function GaussianSplats({
           const positionCameraToScene = (center: THREE.Vector3, radius: number) => {
             const perspCamera = camera as THREE.PerspectiveCamera;
 
-            // Calculate distance to fit scene in view
-            const fov = perspCamera.fov * (Math.PI / 180);
-            const distance = radius / Math.tan(fov / 2);
+            // Position camera AT the center of the scene
+            // This is like standing inside a room - the splats should surround you
+            perspCamera.position.set(center.x, center.y, center.z);
 
-            // Position camera at center, pulled back along Z
-            // This puts the camera INSIDE the scene like desktop viewer
-            perspCamera.position.set(
-              center.x,
-              center.y,
-              center.z + distance * 0.5 // Start closer, inside the scene
-            );
-            perspCamera.lookAt(center);
+            // Look forward along -Z axis (common convention)
+            perspCamera.lookAt(center.x, center.y, center.z - 1);
+
+            // Use very small near plane for small scenes (radius ~0.58)
+            perspCamera.near = 0.0001;
+            perspCamera.far = Math.max(1000, radius * 200);
             perspCamera.updateProjectionMatrix();
 
-            // Update near/far planes based on scene size
-            perspCamera.near = Math.max(0.01, radius * 0.001);
-            perspCamera.far = Math.max(10000, radius * 100);
-            perspCamera.updateProjectionMatrix();
-
-            console.log("[Camera] POSITIONED:");
-            console.log("[Camera]   Position:", perspCamera.position.x.toFixed(2), perspCamera.position.y.toFixed(2), perspCamera.position.z.toFixed(2));
-            console.log("[Camera]   Looking at:", center.x.toFixed(2), center.y.toFixed(2), center.z.toFixed(2));
-            console.log("[Camera]   Distance:", distance.toFixed(2), "(using 0.5x for inside view)");
-            console.log("[Camera]   Near/Far:", perspCamera.near.toFixed(4), perspCamera.far.toFixed(2));
+            console.log("[Camera] POSITIONED AT CENTER:");
+            console.log("[Camera]   Position:", perspCamera.position.x.toFixed(4), perspCamera.position.y.toFixed(4), perspCamera.position.z.toFixed(4));
+            console.log("[Camera]   Scene center:", center.x.toFixed(4), center.y.toFixed(4), center.z.toFixed(4));
+            console.log("[Camera]   Scene radius:", radius.toFixed(4));
+            console.log("[Camera]   Near/Far:", perspCamera.near, perspCamera.far);
           };
 
           // PRIORITY: Use PLY-parsed bounds (computed before library load)
