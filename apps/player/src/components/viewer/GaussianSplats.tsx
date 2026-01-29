@@ -19,6 +19,7 @@ export interface GaussianSplatsProps {
  * GaussianSplats component for rendering splat scenes in R3F (Player app)
  *
  * Uses selfDrivenMode with shared renderer for proper splat rendering.
+ * Includes WebGL context loss handling for large scenes.
  */
 export function GaussianSplats({
   url,
@@ -31,6 +32,7 @@ export function GaussianSplats({
 }: GaussianSplatsProps) {
   const { gl, camera } = useThree();
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
+  const contextLostRef = useRef(false);
 
   // Store callbacks in refs to avoid re-running useEffect when they change
   const onLoadRef = useRef(onLoad);
@@ -50,14 +52,54 @@ export function GaussianSplats({
     }
   }, [gl]);
 
+  // Handle WebGL context loss
+  useEffect(() => {
+    if (!gl) return;
+
+    const canvas = gl.domElement;
+
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      contextLostRef.current = true;
+      console.error("[Player] WebGL context lost - scene may be too large for this device");
+
+      // Stop the viewer if it exists
+      if (viewerRef.current) {
+        try {
+          viewerRef.current.stop();
+        } catch (e) {
+          // Ignore errors during cleanup
+        }
+      }
+
+      // Report error to parent
+      onErrorRef.current?.(new Error("WebGL context lost - the 3D scene is too large for your browser. Try using a device with more GPU memory, or a different browser."));
+    };
+
+    const handleContextRestored = () => {
+      console.log("[Player] WebGL context restored");
+      contextLostRef.current = false;
+      // Could attempt to reload here, but safer to let user refresh
+    };
+
+    canvas.addEventListener("webglcontextlost", handleContextLost);
+    canvas.addEventListener("webglcontextrestored", handleContextRestored);
+
+    return () => {
+      canvas.removeEventListener("webglcontextlost", handleContextLost);
+      canvas.removeEventListener("webglcontextrestored", handleContextRestored);
+    };
+  }, [gl]);
+
   useEffect(() => {
     if (!gl || !camera || !url) return;
+    if (contextLostRef.current) return;
 
     let isMounted = true;
 
     // Delay to handle React Strict Mode double-mount
     const initTimeout = setTimeout(() => {
-      if (!isMounted) return;
+      if (!isMounted || contextLostRef.current) return;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewer = new GaussianSplats3D.Viewer({
@@ -75,10 +117,12 @@ export function GaussianSplats({
         webXRMode: GaussianSplats3D.WebXRMode.None,
         renderMode: GaussianSplats3D.RenderMode.Always,
         sceneRevealMode: GaussianSplats3D.SceneRevealMode.Gradual,
-        antialiased: true,
+        antialiased: false, // Disable antialiasing to reduce memory
         focalAdjustment: 1.0,
         logLevel: GaussianSplats3D.LogLevel.None,
         sphericalHarmonicsDegree: 0,
+        // Memory optimization: remove nearly-transparent splats
+        splatAlphaRemovalThreshold: 5, // Remove splats with alpha < 5 (out of 255)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
@@ -96,6 +140,8 @@ export function GaussianSplats({
           position: position,
           rotation: [rotation[0], rotation[1], rotation[2], "XYZ"] as [number, number, number, string],
           scale: [scale, scale, scale],
+          // Memory optimization: remove low-alpha splats during load
+          splatAlphaRemovalThreshold: 5,
           onProgress: (percent: number) => {
             if (!isMounted) return;
             console.log("[Player] Loading progress:", Math.round(percent * 100) + "%");
@@ -103,7 +149,7 @@ export function GaussianSplats({
           },
         })
         .then(() => {
-          if (!isMounted) return;
+          if (!isMounted || contextLostRef.current) return;
           console.log("[Player] Gaussian splats loaded successfully!");
           console.log("[Player] Starting viewer...");
           viewer.start();
@@ -123,8 +169,12 @@ export function GaussianSplats({
       clearTimeout(initTimeout);
 
       if (viewerRef.current) {
-        viewerRef.current.stop();
-        viewerRef.current.dispose();
+        try {
+          viewerRef.current.stop();
+          viewerRef.current.dispose();
+        } catch (e) {
+          // Ignore errors during cleanup if context was lost
+        }
         viewerRef.current = null;
       }
     };
