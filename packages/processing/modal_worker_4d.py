@@ -61,7 +61,8 @@ processing_image_4d = (
     ])
     .pip_install([
         # Core dependencies
-        "numpy",
+        "numpy<2",  # Must be <2 for 4DGaussians compatibility
+        "open3d",  # Required by 4DGaussians for point cloud operations
         "opencv-python-headless",
         "Pillow",
         "plyfile",
