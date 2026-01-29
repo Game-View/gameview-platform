@@ -13,7 +13,7 @@ import {
   Download,
   StopCircle,
 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 
 // Production stages matching Modal worker pipeline
 export type ProductionStage =
