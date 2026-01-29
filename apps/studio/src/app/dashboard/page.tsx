@@ -700,6 +700,8 @@ export default function DashboardPage() {
   };
 
   const handleExportPLY = async (productionId: string, experienceId: string) => {
+    console.log("[Export PLY] Called with:", { productionId, experienceId });
+
     try {
       // Fetch experience data to get plyUrl
       const response = await fetch(
