@@ -9,9 +9,15 @@ import { OrbitControls } from "@react-three/drei";
 import { Loader2, ExternalLink, Info, X } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 
-// Dynamic import for GaussianSplats (no SSR)
+// Dynamic import for splat renderers (no SSR)
 const GaussianSplats = dynamic(
   () => import("@/components/viewer/GaussianSplats").then((mod) => mod.GaussianSplats),
+  { ssr: false }
+);
+
+// Alternative renderer using Spark library (supports PLY natively)
+const SparkSplats = dynamic(
+  () => import("@/components/viewer/SparkSplats").then((mod) => mod.SparkSplats),
   { ssr: false }
 );
 
@@ -104,19 +110,20 @@ export default function ViewExperiencePage() {
           <meshStandardMaterial color="red" />
         </mesh>
 
-        <GaussianSplats
+        {/* Using Spark library for PLY rendering (alternative to mkkellogg) */}
+        <SparkSplats
           url={experience.plyUrl}
           onLoad={() => {
-            console.log("[ViewPage] Splat onLoad callback fired!");
+            console.log("[ViewPage] SparkSplats onLoad callback fired!");
             setSplatLoading(false);
           }}
           onError={(err) => {
-            console.error("[ViewPage] Splat onError callback:", err);
+            console.error("[ViewPage] SparkSplats onError callback:", err);
             setSplatLoading(false);
             setSplatError(err.message);
           }}
           onProgress={(progress) => {
-            console.log("[ViewPage] Splat progress:", progress);
+            console.log("[ViewPage] SparkSplats progress:", progress);
             setSplatProgress(Math.round(progress * 100));
           }}
         />
