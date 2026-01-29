@@ -13,12 +13,18 @@ const MAX_PLY_SIZE_MB = 100; // Max file size in MB before showing error
 // Note: Disabled alpha threshold entirely - was causing "leaves with splats: 0"
 // The library may interpret alpha values differently than expected
 
+export interface SceneBounds {
+  center: THREE.Vector3;
+  size: THREE.Vector3;
+  radius: number;
+}
+
 export interface GaussianSplatsProps {
   url: string;
   position?: [number, number, number];
   rotation?: [number, number, number];
   scale?: number;
-  onLoad?: () => void;
+  onLoad?: (bounds?: SceneBounds) => void;
   onError?: (error: Error) => void;
   onProgress?: (progress: number) => void;
 }
@@ -233,42 +239,160 @@ export function GaussianSplats({
           console.log("[Player] Gaussian splats loaded successfully!");
 
           // Diagnostics: get scene info
+          let splatCount = 0;
           try {
-            const splatCount = viewer.getSplatCount?.() ?? "unknown";
+            splatCount = viewer.getSplatCount?.() ?? 0;
             console.log(`[Player] Splat count: ${splatCount}`);
           } catch (e) {
             console.log("[Player] Could not get splat count");
           }
 
-          // Try to get scene center and radius for auto-camera positioning
+          // ===== DEBUG: Explore viewer object to find splat positions =====
+          console.log("[Debug] Viewer object keys:", Object.keys(viewer));
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const viewerAny = viewer as any;
+
+          // Log all properties that might contain position data
+          const interestingKeys = ['splatMesh', 'scene', 'splatBuffer', 'splats', 'splatData',
+            'splatTree', 'octree', 'boundingBox', 'sceneCenter', 'center', 'positions'];
+          for (const key of interestingKeys) {
+            if (viewerAny[key] !== undefined) {
+              console.log(`[Debug] viewer.${key}:`, viewerAny[key]);
+            }
+          }
+
+          // ===== Try multiple approaches to get bounding box =====
+          let sceneBounds: SceneBounds | undefined;
+
+          // Approach 1: Use library's getSceneCenter/getSceneRadius
           try {
             const sceneCenter = viewer.getSceneCenter?.();
             const sceneRadius = viewer.getSceneRadius?.();
 
-            if (sceneCenter && sceneRadius) {
-              console.log("[Player] Scene center:", sceneCenter);
-              console.log("[Player] Scene radius:", sceneRadius);
+            if (sceneCenter && sceneRadius && sceneRadius > 0) {
+              console.log("[Camera] Using library's scene center/radius");
+              console.log("[Camera] Scene center:", sceneCenter);
+              console.log("[Camera] Scene radius:", sceneRadius);
 
-              // Auto-position camera to look at scene center from a good distance
-              const distance = sceneRadius * 2.5; // 2.5x radius gives good view
-              const perspCamera = camera as THREE.PerspectiveCamera;
-
-              // Position camera at center + offset on Z axis (looking at scene)
-              perspCamera.position.set(
-                sceneCenter.x,
-                sceneCenter.y + sceneRadius * 0.5, // Slightly above center
-                sceneCenter.z + distance
-              );
-              perspCamera.lookAt(sceneCenter.x, sceneCenter.y, sceneCenter.z);
-              perspCamera.updateProjectionMatrix();
-
-              console.log("[Player] Auto-positioned camera to:", perspCamera.position);
-              console.log("[Player] Camera looking at:", sceneCenter);
-            } else {
-              console.log("[Player] Could not get scene bounds for auto-positioning");
+              sceneBounds = {
+                center: sceneCenter.clone(),
+                size: new THREE.Vector3(sceneRadius * 2, sceneRadius * 2, sceneRadius * 2),
+                radius: sceneRadius
+              };
             }
           } catch (e) {
-            console.log("[Player] Scene bounds not available:", e);
+            console.log("[Camera] getSceneCenter/getSceneRadius not available:", e);
+          }
+
+          // Approach 2: Try to get bounding box from splatMesh geometry
+          if (!sceneBounds && viewerAny.splatMesh) {
+            try {
+              const splatMesh = viewerAny.splatMesh;
+              console.log("[Debug] splatMesh:", splatMesh);
+              console.log("[Debug] splatMesh.geometry:", splatMesh.geometry);
+
+              if (splatMesh.geometry) {
+                splatMesh.geometry.computeBoundingBox();
+                const box = splatMesh.geometry.boundingBox;
+                if (box && !box.isEmpty()) {
+                  const center = new THREE.Vector3();
+                  const size = new THREE.Vector3();
+                  box.getCenter(center);
+                  box.getSize(size);
+                  const radius = Math.max(size.x, size.y, size.z) / 2;
+
+                  console.log("[Camera] Using splatMesh geometry bounding box");
+                  console.log("[Camera] Box min:", box.min);
+                  console.log("[Camera] Box max:", box.max);
+                  console.log("[Camera] Center:", center);
+                  console.log("[Camera] Size:", size);
+
+                  sceneBounds = { center, size, radius };
+                }
+              }
+            } catch (e) {
+              console.log("[Camera] Could not get bounds from splatMesh:", e);
+            }
+          }
+
+          // Approach 3: Try to get bounding box from scene
+          if (!sceneBounds && viewerAny.scene) {
+            try {
+              const box = new THREE.Box3().setFromObject(viewerAny.scene);
+              if (!box.isEmpty()) {
+                const center = new THREE.Vector3();
+                const size = new THREE.Vector3();
+                box.getCenter(center);
+                box.getSize(size);
+                const radius = Math.max(size.x, size.y, size.z) / 2;
+
+                console.log("[Camera] Using viewer.scene bounding box");
+                console.log("[Camera] Box min:", box.min);
+                console.log("[Camera] Box max:", box.max);
+                console.log("[Camera] Center:", center);
+
+                sceneBounds = { center, size, radius };
+              }
+            } catch (e) {
+              console.log("[Camera] Could not get bounds from scene:", e);
+            }
+          }
+
+          // Approach 4: Try splatTree if available
+          if (!sceneBounds && viewerAny.splatTree) {
+            try {
+              const tree = viewerAny.splatTree;
+              console.log("[Debug] splatTree:", tree);
+              console.log("[Debug] splatTree keys:", Object.keys(tree));
+
+              if (tree.boundingBox || tree.box || tree.bounds) {
+                const box = tree.boundingBox || tree.box || tree.bounds;
+                const center = new THREE.Vector3();
+                const size = new THREE.Vector3();
+                box.getCenter(center);
+                box.getSize(size);
+                const radius = Math.max(size.x, size.y, size.z) / 2;
+
+                console.log("[Camera] Using splatTree bounding box");
+                sceneBounds = { center, size, radius };
+              }
+            } catch (e) {
+              console.log("[Camera] Could not get bounds from splatTree:", e);
+            }
+          }
+
+          // ===== Position camera based on bounds =====
+          if (sceneBounds) {
+            const { center, radius } = sceneBounds;
+            const perspCamera = camera as THREE.PerspectiveCamera;
+
+            // Calculate distance to fit scene in view
+            const fov = perspCamera.fov * (Math.PI / 180);
+            const distance = (radius / Math.tan(fov / 2)) * 1.5;
+
+            // Position camera to look at center from a good angle
+            perspCamera.position.set(
+              center.x,
+              center.y + radius * 0.5, // Slightly above
+              center.z + distance
+            );
+            perspCamera.lookAt(center.x, center.y, center.z);
+            perspCamera.updateProjectionMatrix();
+
+            // Update near/far planes based on scene size
+            perspCamera.near = Math.max(0.01, radius * 0.001);
+            perspCamera.far = Math.max(10000, radius * 100);
+            perspCamera.updateProjectionMatrix();
+
+            console.log("[Camera] Auto-positioned camera:");
+            console.log("[Camera]   Position:", perspCamera.position);
+            console.log("[Camera]   Looking at:", center);
+            console.log("[Camera]   Distance:", distance);
+            console.log("[Camera]   Near/Far:", perspCamera.near, perspCamera.far);
+          } else {
+            console.warn("[Camera] Could not determine scene bounds - camera may be in wrong position");
+            console.warn("[Camera] Try pressing 'F' to manually fit camera if scene is not visible");
           }
 
           console.log("[Player] Starting viewer...");
@@ -279,7 +403,7 @@ export function GaussianSplats({
           console.log("[Player] Final camera position:", camera.position);
           console.log("[Player] Camera near/far:", (camera as THREE.PerspectiveCamera).near, (camera as THREE.PerspectiveCamera).far);
 
-          onLoadRef.current?.();
+          onLoadRef.current?.(sceneBounds);
         })
         .catch((err: Error) => {
           if (!isMounted) return;
