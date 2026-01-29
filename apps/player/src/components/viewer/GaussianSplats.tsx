@@ -13,6 +13,149 @@ const MAX_PLY_SIZE_MB = 100; // Max file size in MB before showing error
 // Note: Disabled alpha threshold entirely - was causing "leaves with splats: 0"
 // The library may interpret alpha values differently than expected
 
+/**
+ * Parse PLY file header and sample vertices to compute scene bounds
+ * This is the same approach desktop viewers use to find the scene center
+ */
+async function computeBoundsFromPLY(url: string): Promise<SceneBounds | null> {
+  try {
+    console.log("[PLY Parser] Fetching PLY to compute bounds...");
+
+    // Fetch enough data to get header + sample vertices
+    // PLY header is typically < 2KB, each vertex is ~60 bytes
+    // Fetch 100KB to get header + ~1500 sample vertices
+    const response = await fetch(url, {
+      headers: { Range: "bytes=0-102400" }
+    });
+
+    const buffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+
+    // Find header end (look for "end_header\n")
+    let headerEnd = -1;
+    const decoder = new TextDecoder();
+    const text = decoder.decode(bytes.slice(0, Math.min(4096, bytes.length)));
+    const endHeaderIndex = text.indexOf("end_header");
+
+    if (endHeaderIndex === -1) {
+      console.error("[PLY Parser] Could not find end_header");
+      return null;
+    }
+
+    // Find the newline after end_header
+    headerEnd = endHeaderIndex + "end_header".length;
+    while (headerEnd < bytes.length && bytes[headerEnd] !== 10) {
+      headerEnd++;
+    }
+    headerEnd++; // Skip the newline
+
+    const header = text.slice(0, endHeaderIndex + "end_header".length);
+    console.log("[PLY Parser] Header:", header);
+
+    // Parse header to find format and properties
+    const lines = header.split("\n");
+    let vertexCount = 0;
+    let format = "";
+    const properties: string[] = [];
+
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts[0] === "format") {
+        format = parts[1];
+      } else if (parts[0] === "element" && parts[1] === "vertex") {
+        vertexCount = parseInt(parts[2], 10);
+      } else if (parts[0] === "property") {
+        properties.push(parts[2]); // property type name
+      }
+    }
+
+    console.log("[PLY Parser] Format:", format);
+    console.log("[PLY Parser] Vertex count:", vertexCount);
+    console.log("[PLY Parser] Properties:", properties.slice(0, 10));
+
+    // Find x, y, z property indices
+    const xIndex = properties.indexOf("x");
+    const yIndex = properties.indexOf("y");
+    const zIndex = properties.indexOf("z");
+
+    if (xIndex === -1 || yIndex === -1 || zIndex === -1) {
+      console.error("[PLY Parser] Could not find x, y, z properties");
+      return null;
+    }
+
+    console.log("[PLY Parser] Position indices - x:", xIndex, "y:", yIndex, "z:", zIndex);
+
+    // For binary_little_endian, read float32 values
+    if (format !== "binary_little_endian") {
+      console.error("[PLY Parser] Unsupported format:", format);
+      return null;
+    }
+
+    // Calculate bytes per vertex (assuming all properties are float32)
+    const bytesPerVertex = properties.length * 4;
+    console.log("[PLY Parser] Bytes per vertex:", bytesPerVertex);
+
+    // Read sample vertices to compute bounds
+    const dataView = new DataView(buffer, headerEnd);
+    const sampleCount = Math.min(1000, Math.floor((buffer.byteLength - headerEnd) / bytesPerVertex));
+
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+
+    for (let i = 0; i < sampleCount; i++) {
+      const offset = i * bytesPerVertex;
+
+      if (offset + (zIndex + 1) * 4 > dataView.byteLength) break;
+
+      const x = dataView.getFloat32(offset + xIndex * 4, true);
+      const y = dataView.getFloat32(offset + yIndex * 4, true);
+      const z = dataView.getFloat32(offset + zIndex * 4, true);
+
+      // Skip invalid values
+      if (!isFinite(x) || !isFinite(y) || !isFinite(z)) continue;
+
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+      minZ = Math.min(minZ, z);
+      maxZ = Math.max(maxZ, z);
+    }
+
+    if (!isFinite(minX) || !isFinite(maxX)) {
+      console.error("[PLY Parser] Could not compute valid bounds");
+      return null;
+    }
+
+    const center = new THREE.Vector3(
+      (minX + maxX) / 2,
+      (minY + maxY) / 2,
+      (minZ + maxZ) / 2
+    );
+
+    const size = new THREE.Vector3(
+      maxX - minX,
+      maxY - minY,
+      maxZ - minZ
+    );
+
+    const radius = Math.max(size.x, size.y, size.z) / 2;
+
+    console.log("[PLY Parser] SUCCESS - Computed bounds from PLY data:");
+    console.log("[PLY Parser]   Min:", minX.toFixed(2), minY.toFixed(2), minZ.toFixed(2));
+    console.log("[PLY Parser]   Max:", maxX.toFixed(2), maxY.toFixed(2), maxZ.toFixed(2));
+    console.log("[PLY Parser]   Center:", center);
+    console.log("[PLY Parser]   Size:", size);
+    console.log("[PLY Parser]   Radius:", radius.toFixed(2));
+
+    return { center, size, radius };
+  } catch (err) {
+    console.error("[PLY Parser] Failed to parse PLY:", err);
+    return null;
+  }
+}
+
 export interface SceneBounds {
   center: THREE.Vector3;
   size: THREE.Vector3;
@@ -53,6 +196,7 @@ export function GaussianSplats({
   const [fileSizeChecked, setFileSizeChecked] = useState(false);
   const [fileSizeOk, setFileSizeOk] = useState(false);
   const [fileSizeMB, setFileSizeMB] = useState<number | null>(null);
+  const [plyBounds, setPlyBounds] = useState<SceneBounds | null>(null);
 
   // Store callbacks in refs to avoid re-running useEffect when they change
   const onLoadRef = useRef(onLoad);
@@ -117,13 +261,13 @@ export function GaussianSplats({
     };
   }, [gl, fileSizeMB]);
 
-  // Pre-check file size before loading
+  // Pre-check file size and compute PLY bounds before loading
   useEffect(() => {
     if (!url) return;
 
     let cancelled = false;
 
-    async function checkFileSize() {
+    async function checkFileSizeAndComputeBounds() {
       try {
         console.log("[Player] Checking PLY file size...");
         const response = await fetch(url, { method: "HEAD" });
@@ -143,8 +287,6 @@ export function GaussianSplats({
               `[Player] PLY file is ${sizeMB.toFixed(1)}MB, exceeds ${MAX_PLY_SIZE_MB}MB limit. ` +
               `This may crash the browser.`
             );
-            // Still try to load, but with aggressive culling
-            // The context loss handler will catch crashes
           }
 
           setFileSizeOk(true);
@@ -152,9 +294,19 @@ export function GaussianSplats({
           console.log("[Player] Could not determine file size, proceeding anyway");
           setFileSizeOk(true);
         }
+
+        // IMPORTANT: Compute bounds from PLY data BEFORE library loads it
+        // This is how desktop viewers find the scene center
+        if (!cancelled) {
+          console.log("[Player] Computing bounds from PLY data...");
+          const bounds = await computeBoundsFromPLY(url);
+          if (!cancelled && bounds) {
+            setPlyBounds(bounds);
+            console.log("[Player] PLY bounds computed successfully:", bounds);
+          }
+        }
       } catch (err) {
         console.warn("[Player] Failed to check file size:", err);
-        // Proceed anyway - the main load will fail if there's a real issue
         setFileSizeOk(true);
       } finally {
         if (!cancelled) {
@@ -163,7 +315,7 @@ export function GaussianSplats({
       }
     }
 
-    checkFileSize();
+    checkFileSizeAndComputeBounds();
 
     return () => {
       cancelled = true;
@@ -268,26 +420,36 @@ export function GaussianSplats({
           // ===== Try multiple approaches to get bounding box =====
           let sceneBounds: SceneBounds | undefined;
 
-          // Approach 1: Use library's getSceneCenter/getSceneRadius (PRIORITIZE THIS)
-          try {
-            const sceneCenter = viewer.getSceneCenter?.();
-            const sceneRadius = viewer.getSceneRadius?.();
+          // Approach 0: Use PLY bounds computed earlier (MOST RELIABLE - same as desktop viewer)
+          if (plyBounds) {
+            console.log("[Camera] Using PLY-parsed bounds (computed before library load):");
+            console.log("[Camera]   Center:", plyBounds.center);
+            console.log("[Camera]   Radius:", plyBounds.radius);
+            sceneBounds = plyBounds;
+          }
 
-            console.log("[Camera] Approach 1 - Library methods:");
-            console.log("[Camera]   getSceneCenter():", sceneCenter);
-            console.log("[Camera]   getSceneRadius():", sceneRadius);
+          // Approach 1: Use library's getSceneCenter/getSceneRadius (fallback)
+          if (!sceneBounds) {
+            try {
+              const sceneCenter = viewer.getSceneCenter?.();
+              const sceneRadius = viewer.getSceneRadius?.();
 
-            if (sceneCenter && sceneRadius && sceneRadius > 0) {
-              console.log("[Camera] SUCCESS: Using library's scene center/radius");
+              console.log("[Camera] Approach 1 - Library methods:");
+              console.log("[Camera]   getSceneCenter():", sceneCenter);
+              console.log("[Camera]   getSceneRadius():", sceneRadius);
 
-              sceneBounds = {
-                center: sceneCenter.clone(),
-                size: new THREE.Vector3(sceneRadius * 2, sceneRadius * 2, sceneRadius * 2),
-                radius: sceneRadius
-              };
+              if (sceneCenter && sceneRadius && sceneRadius > 0) {
+                console.log("[Camera] SUCCESS: Using library's scene center/radius");
+
+                sceneBounds = {
+                  center: sceneCenter.clone(),
+                  size: new THREE.Vector3(sceneRadius * 2, sceneRadius * 2, sceneRadius * 2),
+                  radius: sceneRadius
+                };
+              }
+            } catch (e) {
+              console.log("[Camera] Approach 1 failed:", e);
             }
-          } catch (e) {
-            console.log("[Camera] Approach 1 failed:", e);
           }
 
           // Approach 2: Try splatTree.root bounding box (spatial tree should have bounds)
