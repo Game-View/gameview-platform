@@ -111,8 +111,9 @@ export function ProductionProgressCard({
       }
     }
     if (showExportMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      // Use click instead of mousedown - mousedown fires before click and can prevent button clicks
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
     }
   }, [showExportMenu]);
 
