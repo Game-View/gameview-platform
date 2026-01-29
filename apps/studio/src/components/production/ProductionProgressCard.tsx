@@ -293,16 +293,24 @@ export function ProductionProgressCard({
               <ChevronDown className="h-4 w-4" />
             </button>
             {showExportMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-gv-neutral-800 border border-gv-neutral-700 rounded-gv shadow-lg z-10 py-1 min-w-[140px]">
+              <div className="absolute right-0 top-full mt-1 bg-gv-neutral-800 border border-gv-neutral-700 rounded-gv shadow-lg z-50 py-1 min-w-[140px]">
                 <button
                   type="button"
                   onClick={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
+                    alert("Download PLY clicked! ID: " + production.id);
                     console.log("[ProductionCard] Download PLY clicked", production.id, production.experienceId);
-                    onExportPLY(production.id, production.experienceId);
+                    if (onExportPLY) {
+                      onExportPLY(production.id, production.experienceId);
+                    }
                     setShowExportMenu(false);
                   }}
-                  className="w-full px-4 py-2 text-left text-sm text-gv-neutral-300 hover:bg-gv-neutral-700 flex items-center gap-2"
+                  onMouseDown={(e) => {
+                    // Prevent the outside click handler from closing menu before click fires
+                    e.stopPropagation();
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gv-neutral-300 hover:bg-gv-neutral-700 flex items-center gap-2 cursor-pointer"
                 >
                   <Download className="h-4 w-4" />
                   Download PLY
