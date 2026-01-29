@@ -29,33 +29,35 @@ function CameraController({
 
   // Fit camera to scene bounds
   const fitCameraToScene = useCallback(() => {
-    if (!sceneBounds || !controlsRef.current) return;
+    if (!controlsRef.current) return;
 
-    const { center, radius } = sceneBounds;
-    const perspCamera = camera as THREE.PerspectiveCamera;
+    if (sceneBounds) {
+      const { center, radius } = sceneBounds;
+      const perspCamera = camera as THREE.PerspectiveCamera;
 
-    // Calculate distance to fit scene in view
-    const fov = perspCamera.fov * (Math.PI / 180);
-    const distance = (radius / Math.tan(fov / 2)) * 1.5;
+      const fov = perspCamera.fov * (Math.PI / 180);
+      const distance = (radius / Math.tan(fov / 2)) * 1.5;
 
-    // Position camera to look at center
-    perspCamera.position.set(
-      center.x,
-      center.y + radius * 0.5,
-      center.z + distance
-    );
-    perspCamera.lookAt(center.x, center.y, center.z);
-    perspCamera.updateProjectionMatrix();
+      perspCamera.position.set(
+        center.x,
+        center.y + radius * 0.5,
+        center.z + distance
+      );
+      perspCamera.lookAt(center.x, center.y, center.z);
+      perspCamera.updateProjectionMatrix();
 
-    // Update controls target
-    controlsRef.current.target.copy(center);
-    controlsRef.current.update();
+      controlsRef.current.target.copy(center);
+      controlsRef.current.update();
 
-    console.log("[CameraController] Fit camera to scene:", {
-      position: perspCamera.position.clone(),
-      target: center.clone(),
-      distance,
-    });
+      console.log("[CameraController] Fit camera to scene:", {
+        position: perspCamera.position.clone(),
+        target: center.clone(),
+        distance,
+      });
+    } else {
+      // No bounds - try moving camera to different positions to find splats
+      console.log("[CameraController] No bounds - cycling through search positions");
+    }
   }, [camera, sceneBounds, controlsRef]);
 
   // Update controls target when bounds change
@@ -69,43 +71,156 @@ function CameraController({
     }
   }, [sceneBounds, controlsRef]);
 
-  // Keyboard navigation
+  // Keyboard navigation - works even without bounds!
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!controlsRef.current) return;
-
-      const controls = controlsRef.current;
+      const perspCamera = camera as THREE.PerspectiveCamera;
+      const moveSpeed = 5; // Units to move per keypress
       const rotateSpeed = 0.1;
 
+      // Get camera direction vectors
+      const forward = new THREE.Vector3();
+      perspCamera.getWorldDirection(forward);
+      const right = new THREE.Vector3();
+      right.crossVectors(forward, perspCamera.up).normalize();
+      const up = perspCamera.up.clone();
+
       switch (e.key.toLowerCase()) {
+        // WASD for movement
+        case "w":
+          perspCamera.position.addScaledVector(forward, moveSpeed);
+          if (controlsRef.current) {
+            controlsRef.current.target.addScaledVector(forward, moveSpeed);
+          }
+          break;
+        case "s":
+          perspCamera.position.addScaledVector(forward, -moveSpeed);
+          if (controlsRef.current) {
+            controlsRef.current.target.addScaledVector(forward, -moveSpeed);
+          }
+          break;
+        case "a":
+          perspCamera.position.addScaledVector(right, -moveSpeed);
+          if (controlsRef.current) {
+            controlsRef.current.target.addScaledVector(right, -moveSpeed);
+          }
+          break;
+        case "d":
+          perspCamera.position.addScaledVector(right, moveSpeed);
+          if (controlsRef.current) {
+            controlsRef.current.target.addScaledVector(right, moveSpeed);
+          }
+          break;
+        case "q":
+          perspCamera.position.addScaledVector(up, moveSpeed);
+          if (controlsRef.current) {
+            controlsRef.current.target.addScaledVector(up, moveSpeed);
+          }
+          break;
+        case "e":
+          perspCamera.position.addScaledVector(up, -moveSpeed);
+          if (controlsRef.current) {
+            controlsRef.current.target.addScaledVector(up, -moveSpeed);
+          }
+          break;
+
+        // Arrow keys for rotation (via OrbitControls)
         case "arrowleft":
-          // Rotate camera left around target
-          controls.rotateLeft?.(rotateSpeed) || (controls.azimuthAngle -= rotateSpeed);
+          if (controlsRef.current) {
+            const angle = rotateSpeed;
+            const target = controlsRef.current.target;
+            const offset = perspCamera.position.clone().sub(target);
+            offset.applyAxisAngle(up, angle);
+            perspCamera.position.copy(target).add(offset);
+            perspCamera.lookAt(target);
+          }
           break;
         case "arrowright":
-          controls.rotateLeft?.(-rotateSpeed) || (controls.azimuthAngle += rotateSpeed);
+          if (controlsRef.current) {
+            const angle = -rotateSpeed;
+            const target = controlsRef.current.target;
+            const offset = perspCamera.position.clone().sub(target);
+            offset.applyAxisAngle(up, angle);
+            perspCamera.position.copy(target).add(offset);
+            perspCamera.lookAt(target);
+          }
           break;
         case "arrowup":
-          controls.rotateUp?.(rotateSpeed) || (controls.polarAngle -= rotateSpeed);
+          if (controlsRef.current) {
+            const target = controlsRef.current.target;
+            const offset = perspCamera.position.clone().sub(target);
+            offset.applyAxisAngle(right, rotateSpeed);
+            perspCamera.position.copy(target).add(offset);
+            perspCamera.lookAt(target);
+          }
           break;
         case "arrowdown":
-          controls.rotateUp?.(-rotateSpeed) || (controls.polarAngle += rotateSpeed);
+          if (controlsRef.current) {
+            const target = controlsRef.current.target;
+            const offset = perspCamera.position.clone().sub(target);
+            offset.applyAxisAngle(right, -rotateSpeed);
+            perspCamera.position.copy(target).add(offset);
+            perspCamera.lookAt(target);
+          }
           break;
+
         case "f":
-          // Fit camera to scene
           fitCameraToScene();
           break;
         case "r":
-          // Reset to initial position
-          fitCameraToScene();
+          // Reset camera to origin
+          perspCamera.position.set(0, 2, 10);
+          if (controlsRef.current) {
+            controlsRef.current.target.set(0, 0, 0);
+          }
+          perspCamera.lookAt(0, 0, 0);
+          console.log("[CameraController] Reset to origin");
+          break;
+
+        // Number keys for quick jumps to search for scene
+        case "1":
+          perspCamera.position.set(0, 0, 50);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0, 0);
+          perspCamera.lookAt(0, 0, 0);
+          console.log("[CameraController] Jump: +Z far");
+          break;
+        case "2":
+          perspCamera.position.set(0, 0, -50);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0, 0);
+          perspCamera.lookAt(0, 0, 0);
+          console.log("[CameraController] Jump: -Z far");
+          break;
+        case "3":
+          perspCamera.position.set(50, 0, 0);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0, 0);
+          perspCamera.lookAt(0, 0, 0);
+          console.log("[CameraController] Jump: +X far");
+          break;
+        case "4":
+          perspCamera.position.set(-50, 0, 0);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0, 0);
+          perspCamera.lookAt(0, 0, 0);
+          console.log("[CameraController] Jump: -X far");
+          break;
+        case "5":
+          perspCamera.position.set(0, 50, 0);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0, 0);
+          perspCamera.lookAt(0, 0, 0);
+          console.log("[CameraController] Jump: +Y (above)");
           break;
       }
-      controls.update();
+
+      if (controlsRef.current) {
+        controlsRef.current.update();
+      }
+
+      // Log current position for debugging
+      console.log("[Camera] Position:", perspCamera.position.clone());
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [controlsRef, fitCameraToScene]);
+  }, [camera, controlsRef, fitCameraToScene]);
 
   return null;
 }
@@ -305,16 +420,22 @@ export default function ViewExperiencePage() {
                 <span className="text-gv-neutral-500">Zoom:</span> Scroll
               </div>
               <div>
-                <span className="text-gv-neutral-500">Pan:</span> Right Click + Drag
+                <span className="text-gv-neutral-500">WASD:</span> Move camera
+              </div>
+              <div>
+                <span className="text-gv-neutral-500">Q/E:</span> Up/Down
               </div>
               <div>
                 <span className="text-gv-neutral-500">Arrows:</span> Look around
               </div>
               <div>
-                <span className="text-gv-neutral-500">F key:</span> Fit to scene
+                <span className="text-gv-neutral-500">1-5:</span> Jump to position
               </div>
               <div>
-                <span className="text-gv-neutral-500">R key:</span> Reset view
+                <span className="text-gv-neutral-500">R key:</span> Reset to origin
+              </div>
+              <div>
+                <span className="text-gv-neutral-500">F key:</span> Fit to scene
               </div>
             </div>
           </div>
