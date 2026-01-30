@@ -218,10 +218,13 @@ export function GaussianSplats({
   useFrame(() => {
     if (viewerRef.current && viewerReadyRef.current && !contextLostRef.current) {
       try {
+        // Cast to any because library types don't expose update/render methods
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const viewer = viewerRef.current as any;
         // Update the viewer (sorting, culling, etc.)
-        viewerRef.current.update();
+        viewer.update();
         // Render the splats
-        viewerRef.current.render();
+        viewer.render();
       } catch (e) {
         // Ignore render errors (might happen during cleanup)
       }
