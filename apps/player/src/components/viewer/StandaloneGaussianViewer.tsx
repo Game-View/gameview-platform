@@ -81,7 +81,7 @@ export function StandaloneGaussianViewer({
       .addSplatScene(url, {
         showLoadingUI: true,
         progressiveLoad: false,
-        format: GaussianSplats3D.SceneFormat.Ply,
+        format: 0, // 0 = PLY format (SceneFormat.Ply)
         onProgress: (percent: number) => {
           if (!isMounted) return;
           const pct = percent > 1 ? percent : percent * 100;
