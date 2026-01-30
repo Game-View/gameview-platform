@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useThree } from "@react-three/fiber";
+import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
 
@@ -200,6 +200,7 @@ export function GaussianSplats({
 }: GaussianSplatsProps) {
   const { gl, camera } = useThree();
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
+  const viewerReadyRef = useRef(false); // Track when viewer is ready for manual rendering
   const contextLostRef = useRef(false);
   const [fileSizeChecked, setFileSizeChecked] = useState(false);
   const [fileSizeOk, setFileSizeOk] = useState(false);
@@ -211,6 +212,21 @@ export function GaussianSplats({
   const onLoadRef = useRef(onLoad);
   const onErrorRef = useRef(onError);
   const onProgressRef = useRef(onProgress);
+
+  // MANUAL RENDERING: Call viewer.update() and viewer.render() each frame
+  // This gives us control over the render loop instead of relying on selfDrivenMode
+  useFrame(() => {
+    if (viewerRef.current && viewerReadyRef.current && !contextLostRef.current) {
+      try {
+        // Update the viewer (sorting, culling, etc.)
+        viewerRef.current.update();
+        // Render the splats
+        viewerRef.current.render();
+      } catch (e) {
+        // Ignore render errors (might happen during cleanup)
+      }
+    }
+  });
 
   useEffect(() => {
     onLoadRef.current = onLoad;
@@ -344,21 +360,22 @@ export function GaussianSplats({
       if (!isMounted || contextLostRef.current) return;
 
       console.log("[Player] Creating Gaussian splat viewer...");
-      console.log("[Player] Testing: dynamicScene=true to bypass tree issues");
+      console.log("[Player] Using selfDrivenMode=FALSE for manual render control");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const viewer = new GaussianSplats3D.Viewer({
         renderer: gl,
         camera: camera as THREE.PerspectiveCamera,
         useBuiltInControls: false,
-        selfDrivenMode: true,
+        // CRITICAL: Use manual rendering mode so we control when render happens
+        selfDrivenMode: false,
         ignoreDevicePixelRatio: false,
         gpuAcceleratedSort: true,
         enableSIMDInSort: true,
         sharedMemoryForWorkers: false,
         integerBasedSort: true,
         halfPrecisionCovariancesOnGPU: true,
-        // IMPORTANT: dynamicScene=true rebuilds tree each frame, may bypass tree issue
+        // dynamicScene=true rebuilds tree each frame
         dynamicScene: true,
         webXRMode: GaussianSplats3D.WebXRMode.None,
         renderMode: GaussianSplats3D.RenderMode.Always,
@@ -367,7 +384,6 @@ export function GaussianSplats({
         focalAdjustment: 1.0,
         logLevel: GaussianSplats3D.LogLevel.Debug,
         sphericalHarmonicsDegree: 0,
-        // Disable optimizations that might cause issues
         optimizeSplatData: false,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
@@ -432,14 +448,15 @@ export function GaussianSplats({
             positionCameraToScene(center, radius);
           }
 
-          // NOW start the viewer (after camera is positioned)
-          console.log("[Player] Starting viewer...");
-          viewer.start();
+          // With selfDrivenMode=false, we don't call viewer.start()
+          // Instead, our useFrame hook will call viewer.update() and viewer.render()
+          console.log("[Player] Enabling manual rendering via useFrame hook...");
+          viewerReadyRef.current = true;
 
-          // Set WebGL state AFTER viewer starts (it may reset state)
+          // Set WebGL state for proper rendering
           const glContext = gl.getContext();
           if (glContext) {
-            console.log("[WebGL] Setting render state after viewer.start():");
+            console.log("[WebGL] Setting render state:");
             glContext.enable(glContext.DEPTH_TEST);
             glContext.depthFunc(glContext.LEQUAL);
             glContext.enable(glContext.BLEND);
@@ -549,9 +566,12 @@ export function GaussianSplats({
       isMounted = false;
       clearTimeout(initTimeout);
 
+      // Stop manual rendering
+      viewerReadyRef.current = false;
+
       if (viewerRef.current) {
         try {
-          viewerRef.current.stop();
+          // With selfDrivenMode=false, just dispose (no stop needed)
           viewerRef.current.dispose();
         } catch (e) {
           // Ignore errors during cleanup if context was lost
