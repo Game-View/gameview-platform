@@ -39,6 +39,7 @@ export function StandaloneGaussianViewer({
     console.log("[Standalone] Container size:", container.clientWidth, "x", container.clientHeight);
 
     // Create the viewer with library defaults - let it handle everything
+    // Cast to any to bypass TypeScript issues with library's type definitions
     const viewer = new GaussianSplats3D.Viewer({
       // Let library create its own renderer
       cameraUp: [0, 1, 0],
@@ -59,12 +60,13 @@ export function StandaloneGaussianViewer({
       sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
       logLevel: GaussianSplats3D.LogLevel.Debug,
       sphericalHarmonicsDegree: 0,
-    });
+    } as any);
 
     viewerRef.current = viewer;
 
     // Add the viewer's canvas to our container
-    const rendererElement = viewer.renderer?.domElement;
+    // Cast to any since TypeScript definitions don't include renderer property
+    const rendererElement = (viewer as any).renderer?.domElement;
     if (rendererElement) {
       rendererElement.style.width = "100%";
       rendererElement.style.height = "100%";
