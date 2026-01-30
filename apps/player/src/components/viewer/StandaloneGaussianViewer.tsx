@@ -38,12 +38,13 @@ export function StandaloneGaussianViewer({
     console.log("[Standalone] Creating viewer with URL:", url);
     console.log("[Standalone] Container size:", container.clientWidth, "x", container.clientHeight);
 
-    // Create the viewer with library defaults - let it handle everything
+    // Create the viewer with rootElement so it knows where to render
     // Cast to any to bypass TypeScript issues with library's type definitions
     const viewer = new GaussianSplats3D.Viewer({
-      // Let library create its own renderer
+      // IMPORTANT: Tell the library where to render
+      rootElement: container,
       cameraUp: [0, 1, 0],
-      initialCameraPosition: [0, 0, 5],
+      initialCameraPosition: [0, 0, 10],
       initialCameraLookAt: [0, 0, 0],
       // Use built-in controls for navigation
       useBuiltInControls: true,
@@ -60,19 +61,12 @@ export function StandaloneGaussianViewer({
       sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
       logLevel: GaussianSplats3D.LogLevel.Debug,
       sphericalHarmonicsDegree: 0,
+      // Anti-aliasing for better quality
+      antialiased: true,
     } as any);
 
     viewerRef.current = viewer;
-
-    // Add the viewer's canvas to our container
-    // Cast to any since TypeScript definitions don't include renderer property
-    const rendererElement = (viewer as any).renderer?.domElement;
-    if (rendererElement) {
-      rendererElement.style.width = "100%";
-      rendererElement.style.height = "100%";
-      container.appendChild(rendererElement);
-      console.log("[Standalone] Canvas added to container");
-    }
+    console.log("[Standalone] Viewer created with rootElement");
 
     // Load the splat scene - explicitly specify PLY format for blob URLs
     // The library can't detect format from blob: URLs since they have no extension
@@ -93,6 +87,33 @@ export function StandaloneGaussianViewer({
       .then(() => {
         if (!isMounted) return;
         console.log("[Standalone] Scene loaded successfully!");
+
+        // Try to get scene center and position camera there
+        try {
+          const splatMesh = (viewer as any).splatMesh;
+          if (splatMesh) {
+            // Get the scene's bounding box center
+            const scenes = splatMesh.scenes || [];
+            if (scenes.length > 0 && scenes[0].splatBuffer) {
+              const buffer = scenes[0].splatBuffer;
+              const center = buffer.sceneCenter || { x: 0, y: 0, z: 0 };
+              const radius = buffer.sceneRadius || 10;
+
+              console.log("[Standalone] Scene center:", center);
+              console.log("[Standalone] Scene radius:", radius);
+
+              // Position camera to view the scene
+              const cam = (viewer as any).camera;
+              if (cam) {
+                cam.position.set(center.x, center.y, center.z + radius * 2);
+                cam.lookAt(center.x, center.y, center.z);
+                console.log("[Standalone] Camera repositioned to:", cam.position);
+              }
+            }
+          }
+        } catch (e) {
+          console.log("[Standalone] Could not auto-center camera:", e);
+        }
 
         // Start the viewer
         viewer.start();
