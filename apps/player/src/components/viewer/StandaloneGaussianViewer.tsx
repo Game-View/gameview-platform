@@ -104,45 +104,71 @@ export function StandaloneGaussianViewer({
               // Check the splatTree for bounds (it's built after start)
               const splatTree = splatMesh.baseSplatTree || splatMesh.splatTree;
               console.log("[Standalone] SplatTree:", splatTree);
+              console.log("[Standalone] SplatTree keys:", splatTree ? Object.keys(splatTree) : "null");
 
-              if (splatTree && splatTree.rootNode) {
-                const rootNode = splatTree.rootNode;
-                console.log("[Standalone] RootNode:", rootNode);
-                console.log("[Standalone] RootNode boundingBox:", rootNode.boundingBox);
+              // Try different ways to find bounds
+              let bb = null;
 
-                // Get bounds from the root node
-                const bb = rootNode.boundingBox;
-                if (bb && bb.min && bb.max) {
-                  const centerX = (bb.min.x + bb.max.x) / 2;
-                  const centerY = (bb.min.y + bb.max.y) / 2;
-                  const centerZ = (bb.min.z + bb.max.z) / 2;
+              // Method 1: rootNode
+              if (splatTree?.rootNode?.boundingBox) {
+                bb = splatTree.rootNode.boundingBox;
+                console.log("[Standalone] Found bounds via rootNode");
+              }
+              // Method 2: direct boundingBox
+              else if (splatTree?.boundingBox) {
+                bb = splatTree.boundingBox;
+                console.log("[Standalone] Found bounds via splatTree.boundingBox");
+              }
+              // Method 3: subTrees[0]
+              else if (splatTree?.subTrees?.[0]?.rootNode?.boundingBox) {
+                bb = splatTree.subTrees[0].rootNode.boundingBox;
+                console.log("[Standalone] Found bounds via subTrees[0]");
+              }
+              // Method 4: Try scenes transform
+              else if (splatMesh.scenes?.[0]) {
+                const scene = splatMesh.scenes[0];
+                console.log("[Standalone] Scene keys:", Object.keys(scene));
+                // Check for position in transform matrix
+                if (scene.transform?.elements) {
+                  const m = scene.transform.elements;
+                  // Translation is in elements 12, 13, 14 of a 4x4 matrix
+                  console.log("[Standalone] Transform translation:", { x: m[12], y: m[13], z: m[14] });
+                }
+              }
 
-                  const sizeX = bb.max.x - bb.min.x;
-                  const sizeY = bb.max.y - bb.min.y;
-                  const sizeZ = bb.max.z - bb.min.z;
-                  const maxSize = Math.max(sizeX, sizeY, sizeZ);
+              console.log("[Standalone] Found boundingBox:", bb);
 
-                  console.log("[Standalone] Tree bounds center:", { x: centerX, y: centerY, z: centerZ });
-                  console.log("[Standalone] Tree bounds size:", { x: sizeX, y: sizeY, z: sizeZ });
+              // Use the bounding box if we found one
+              if (bb && bb.min && bb.max) {
+                const centerX = (bb.min.x + bb.max.x) / 2;
+                const centerY = (bb.min.y + bb.max.y) / 2;
+                const centerZ = (bb.min.z + bb.max.z) / 2;
 
-                  if (isFinite(maxSize) && maxSize > 0) {
-                    const cam = (viewer as any).camera;
-                    const controls = (viewer as any).controls;
+                const sizeX = bb.max.x - bb.min.x;
+                const sizeY = bb.max.y - bb.min.y;
+                const sizeZ = bb.max.z - bb.min.z;
+                const maxSize = Math.max(sizeX, sizeY, sizeZ);
 
-                    if (cam) {
-                      const distance = maxSize * 1.5;
-                      cam.position.set(centerX, centerY + sizeY * 0.2, centerZ + distance);
-                      cam.lookAt(centerX, centerY, centerZ);
-                      console.log("[Standalone] Camera repositioned to:", cam.position);
+                console.log("[Standalone] Bounds center:", { x: centerX, y: centerY, z: centerZ });
+                console.log("[Standalone] Bounds size:", { x: sizeX, y: sizeY, z: sizeZ });
 
-                      if (controls && controls.target) {
-                        controls.target.set(centerX, centerY, centerZ);
-                        controls.update?.();
-                        console.log("[Standalone] Controls target set");
-                      }
+                if (isFinite(maxSize) && maxSize > 0) {
+                  const cam = (viewer as any).camera;
+                  const controls = (viewer as any).controls;
+
+                  if (cam) {
+                    const distance = maxSize * 1.5;
+                    cam.position.set(centerX, centerY + sizeY * 0.2, centerZ + distance);
+                    cam.lookAt(centerX, centerY, centerZ);
+                    console.log("[Standalone] Camera repositioned to:", cam.position);
+
+                    if (controls && controls.target) {
+                      controls.target.set(centerX, centerY, centerZ);
+                      controls.update?.();
+                      console.log("[Standalone] Controls target set");
                     }
-                    return true; // Success
                   }
+                  return true; // Success
                 }
               }
             }
