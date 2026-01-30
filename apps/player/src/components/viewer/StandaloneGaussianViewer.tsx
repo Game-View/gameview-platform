@@ -124,15 +124,50 @@ export function StandaloneGaussianViewer({
                 bb = splatTree.subTrees[0].rootNode.boundingBox;
                 console.log("[Standalone] Found bounds via subTrees[0]");
               }
-              // Method 4: Try scenes transform
-              else if (splatMesh.scenes?.[0]) {
+              // Method 4: Try splatBuffer centerArray to compute bounds
+              if (!bb && splatMesh.scenes?.[0]) {
                 const scene = splatMesh.scenes[0];
-                console.log("[Standalone] Scene keys:", Object.keys(scene));
-                // Check for position in transform matrix
-                if (scene.transform?.elements) {
-                  const m = scene.transform.elements;
-                  // Translation is in elements 12, 13, 14 of a 4x4 matrix
-                  console.log("[Standalone] Transform translation:", { x: m[12], y: m[13], z: m[14] });
+                const splatBuffer = scene.splatBuffer;
+
+                if (splatBuffer) {
+                  console.log("[Standalone] SplatBuffer keys:", Object.keys(splatBuffer));
+
+                  // Look for center data
+                  const centerArray = splatBuffer.centerArray;
+                  if (centerArray && centerArray.length > 0) {
+                    console.log("[Standalone] CenterArray length:", centerArray.length, "first 12:", Array.from(centerArray.slice(0, 12)));
+
+                    // Compute bounds from center array
+                    let minX = Infinity, minY = Infinity, minZ = Infinity;
+                    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+                    const stride = 3;
+                    const count = Math.floor(centerArray.length / stride);
+                    const sampleStep = Math.max(1, Math.floor(count / 5000)); // Sample ~5000 points
+
+                    for (let i = 0; i < count; i += sampleStep) {
+                      const x = centerArray[i * stride];
+                      const y = centerArray[i * stride + 1];
+                      const z = centerArray[i * stride + 2];
+
+                      if (isFinite(x) && isFinite(y) && isFinite(z)) {
+                        minX = Math.min(minX, x);
+                        minY = Math.min(minY, y);
+                        minZ = Math.min(minZ, z);
+                        maxX = Math.max(maxX, x);
+                        maxY = Math.max(maxY, y);
+                        maxZ = Math.max(maxZ, z);
+                      }
+                    }
+
+                    if (isFinite(minX) && isFinite(maxX)) {
+                      bb = {
+                        min: { x: minX, y: minY, z: minZ },
+                        max: { x: maxX, y: maxY, z: maxZ }
+                      };
+                      console.log("[Standalone] Computed bounds from centerArray:", bb);
+                    }
+                  }
                 }
               }
 
