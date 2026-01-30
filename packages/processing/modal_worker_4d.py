@@ -98,6 +98,22 @@ def send_progress(callback_url: str, production_id: str, stage: str, progress: i
     """Send progress update to Studio API."""
     import requests
 
+    # Map internal stages to valid Prisma JobStage enum values
+    # Prisma accepts: DOWNLOADING, COLMAP, SPLATTING, UPLOADING, FINALIZING
+    stage_mapping = {
+        "downloading": "DOWNLOADING",
+        "frame_extraction": "COLMAP",
+        "colmap_features": "COLMAP",
+        "colmap_matching": "COLMAP",
+        "colmap_mapper": "COLMAP",
+        "training_4d": "SPLATTING",
+        "exporting": "SPLATTING",
+        "uploading": "UPLOADING",
+        "complete": "FINALIZING",
+        "failed": "FINALIZING",
+    }
+    prisma_stage = stage_mapping.get(stage, "COLMAP")
+
     progress_url = callback_url.replace("/api/processing/callback", "/api/processing/progress")
 
     try:
@@ -105,14 +121,14 @@ def send_progress(callback_url: str, production_id: str, stage: str, progress: i
             progress_url,
             json={
                 "production_id": production_id,
-                "stage": stage,
+                "stage": prisma_stage,
                 "progress": progress,
                 "message": message,
             },
             headers={"Content-Type": "application/json"},
             timeout=10,
         )
-        print(f"[{production_id}] Progress update: {stage} {progress}% - {response.status_code}")
+        print(f"[{production_id}] Progress update: {stage} ({prisma_stage}) {progress}% - {response.status_code}")
     except Exception as e:
         print(f"[{production_id}] Progress update failed: {e}")
 
