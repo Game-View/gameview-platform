@@ -401,44 +401,17 @@ export function GaussianSplats({
 
           console.log("[Player] Gaussian splats loaded successfully!");
 
-          // IMPORTANT: Start the viewer FIRST to trigger tree building
-          console.log("[Player] Starting viewer to build tree...");
-          viewer.start();
-
-          // CRITICAL: Set WebGL state like desktop viewer does
-          // Desktop uses: glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-          // Desktop uses: glEnable(GL_DEPTH_TEST);
-          const glContext = gl.getContext();
-          if (glContext) {
-            console.log("[WebGL] Setting explicit render state (like desktop viewer):");
-
-            // Enable depth testing
-            glContext.enable(glContext.DEPTH_TEST);
-            glContext.depthFunc(glContext.LEQUAL);
-            console.log("[WebGL]   Depth test: ENABLED (LEQUAL)");
-
-            // Enable blending with pre-multiplied alpha (same as desktop)
-            glContext.enable(glContext.BLEND);
-            glContext.blendFunc(glContext.ONE, glContext.ONE_MINUS_SRC_ALPHA);
-            console.log("[WebGL]   Blend: ONE, ONE_MINUS_SRC_ALPHA (pre-multiplied)");
-
-            // Log current WebGL state
-            console.log("[WebGL]   Canvas size:", glContext.drawingBufferWidth, "x", glContext.drawingBufferHeight);
-            console.log("[WebGL]   Viewport:", glContext.getParameter(glContext.VIEWPORT));
-          }
-
-          // Define camera positioning function first (before use)
+          // Define camera positioning function
           const positionCameraToScene = (center: THREE.Vector3, radius: number) => {
             const perspCamera = camera as THREE.PerspectiveCamera;
 
             // Position camera AT the center of the scene
-            // This is like standing inside a room - the splats should surround you
             perspCamera.position.set(center.x, center.y, center.z);
 
-            // Look forward along -Z axis (common convention)
+            // Look forward along -Z axis
             perspCamera.lookAt(center.x, center.y, center.z - 1);
 
-            // Use very small near plane for small scenes (radius ~0.58)
+            // Use very small near plane for small scenes
             perspCamera.near = 0.0001;
             perspCamera.far = Math.max(1000, radius * 200);
             perspCamera.updateProjectionMatrix();
@@ -447,20 +420,37 @@ export function GaussianSplats({
             console.log("[Camera]   Position:", perspCamera.position.x.toFixed(4), perspCamera.position.y.toFixed(4), perspCamera.position.z.toFixed(4));
             console.log("[Camera]   Scene center:", center.x.toFixed(4), center.y.toFixed(4), center.z.toFixed(4));
             console.log("[Camera]   Scene radius:", radius.toFixed(4));
-            console.log("[Camera]   Near/Far:", perspCamera.near, perspCamera.far);
           };
 
-          // PRIORITY: Use PLY-parsed bounds (computed before library load)
-          // This is the most reliable method - same as desktop viewer
+          // IMPORTANT: Position camera BEFORE starting viewer (like desktop)
+          // Desktop viewer sets camera position before entering render loop
           if (plyBoundsRef.current) {
             const { center, radius } = plyBoundsRef.current;
-            console.log("[Camera] Using PLY-parsed bounds (computed from file):");
+            console.log("[Camera] Using PLY-parsed bounds (BEFORE viewer.start):");
             console.log("[Camera]   Center:", center.x.toFixed(2), center.y.toFixed(2), center.z.toFixed(2));
             console.log("[Camera]   Radius:", radius.toFixed(2));
-
             positionCameraToScene(center, radius);
+          }
+
+          // NOW start the viewer (after camera is positioned)
+          console.log("[Player] Starting viewer...");
+          viewer.start();
+
+          // Set WebGL state AFTER viewer starts (it may reset state)
+          const glContext = gl.getContext();
+          if (glContext) {
+            console.log("[WebGL] Setting render state after viewer.start():");
+            glContext.enable(glContext.DEPTH_TEST);
+            glContext.depthFunc(glContext.LEQUAL);
+            glContext.enable(glContext.BLEND);
+            glContext.blendFunc(glContext.ONE, glContext.ONE_MINUS_SRC_ALPHA);
+            console.log("[WebGL]   Canvas:", glContext.drawingBufferWidth, "x", glContext.drawingBufferHeight);
+          }
+
+          // Report load complete
+          if (plyBoundsRef.current) {
             onLoadRef.current?.(plyBoundsRef.current);
-            return; // Done - no need to wait for tree
+            return;
           }
 
           console.log("[Camera] PLY bounds not available, waiting for library tree...");
