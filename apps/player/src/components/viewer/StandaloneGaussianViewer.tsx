@@ -88,60 +88,56 @@ export function StandaloneGaussianViewer({
         if (!isMounted) return;
         console.log("[Standalone] Scene loaded successfully!");
 
-        // Compute actual scene center by accessing raw splat data
+        // Position camera using library's calculated scene center and bounding box
         try {
           const splatMesh = (viewer as any).splatMesh;
-          console.log("[Standalone] SplatMesh keys:", splatMesh ? Object.keys(splatMesh) : "null");
 
           if (splatMesh) {
             const splatCount = splatMesh.getSplatCount?.() || 0;
             console.log("[Standalone] Total splat count:", splatCount);
 
-            // Log scenes structure
-            const scenes = splatMesh.scenes;
-            console.log("[Standalone] Scenes count:", scenes?.length);
+            // Use the library's calculated scene center and bounding box
+            const sceneCenter = splatMesh.calculatedSceneCenter;
+            const boundingBox = splatMesh.boundingBox;
 
-            if (scenes && scenes.length > 0) {
-              const scene = scenes[0];
-              console.log("[Standalone] Scene[0] keys:", Object.keys(scene || {}));
+            console.log("[Standalone] calculatedSceneCenter:", sceneCenter);
+            console.log("[Standalone] boundingBox:", boundingBox);
 
-              const splatBuffer = scene?.splatBuffer;
-              console.log("[Standalone] SplatBuffer keys:", splatBuffer ? Object.keys(splatBuffer) : "null");
+            if (sceneCenter && boundingBox) {
+              // Get bounding box size
+              const size = {
+                x: boundingBox.max.x - boundingBox.min.x,
+                y: boundingBox.max.y - boundingBox.min.y,
+                z: boundingBox.max.z - boundingBox.min.z,
+              };
+              const maxSize = Math.max(size.x, size.y, size.z);
 
-              // Try to find position data - look at centerArray or similar
-              if (splatBuffer) {
-                const possibleArrays = ["centerArray", "centers", "positions", "data"];
-                for (const key of possibleArrays) {
-                  if (splatBuffer[key]) {
-                    console.log(`[Standalone] Found ${key}:`, splatBuffer[key].length, "elements, first 10:", Array.from(splatBuffer[key].slice(0, 10)));
-                  }
-                }
+              console.log("[Standalone] Scene size:", size);
+              console.log("[Standalone] Max dimension:", maxSize);
 
-                // Try accessing via scenes[0].transform for position offset
-                if (scene.transform) {
-                  console.log("[Standalone] Scene transform:", scene.transform);
+              // Position camera to view the entire scene
+              const cam = (viewer as any).camera;
+              const controls = (viewer as any).controls;
+
+              if (cam && maxSize > 0) {
+                const distance = maxSize * 1.5; // Back up enough to see whole scene
+                cam.position.set(
+                  sceneCenter.x,
+                  sceneCenter.y + size.y * 0.3, // Slightly above center
+                  sceneCenter.z + distance
+                );
+                cam.lookAt(sceneCenter.x, sceneCenter.y, sceneCenter.z);
+                console.log("[Standalone] Camera repositioned to:", cam.position);
+
+                // Update controls target to scene center
+                if (controls && controls.target) {
+                  controls.target.set(sceneCenter.x, sceneCenter.y, sceneCenter.z);
+                  controls.update?.();
+                  console.log("[Standalone] Controls target set to:", controls.target);
                 }
               }
-            }
-
-            // Alternative: try splatDataTextures
-            if (splatMesh.splatDataTextures) {
-              console.log("[Standalone] SplatDataTextures keys:", Object.keys(splatMesh.splatDataTextures));
-            }
-
-            // Try the viewer's internal scene or controls for auto-focus
-            const cam = (viewer as any).camera;
-            const controls = (viewer as any).controls;
-            console.log("[Standalone] Camera:", cam?.position);
-            console.log("[Standalone] Controls:", controls ? Object.keys(controls) : "null");
-
-            // Try calling viewer methods that might auto-center
-            if (typeof (viewer as any).setFocusedSplat === "function") {
-              console.log("[Standalone] Has setFocusedSplat method");
-            }
-            if (typeof (viewer as any).resetView === "function") {
-              console.log("[Standalone] Has resetView method - calling it");
-              (viewer as any).resetView();
+            } else {
+              console.log("[Standalone] No sceneCenter or boundingBox available yet");
             }
           }
         } catch (e) {
