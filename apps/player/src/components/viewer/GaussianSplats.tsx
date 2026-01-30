@@ -405,6 +405,28 @@ export function GaussianSplats({
           console.log("[Player] Starting viewer to build tree...");
           viewer.start();
 
+          // CRITICAL: Set WebGL state like desktop viewer does
+          // Desktop uses: glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+          // Desktop uses: glEnable(GL_DEPTH_TEST);
+          const glContext = gl.getContext();
+          if (glContext) {
+            console.log("[WebGL] Setting explicit render state (like desktop viewer):");
+
+            // Enable depth testing
+            glContext.enable(glContext.DEPTH_TEST);
+            glContext.depthFunc(glContext.LEQUAL);
+            console.log("[WebGL]   Depth test: ENABLED (LEQUAL)");
+
+            // Enable blending with pre-multiplied alpha (same as desktop)
+            glContext.enable(glContext.BLEND);
+            glContext.blendFunc(glContext.ONE, glContext.ONE_MINUS_SRC_ALPHA);
+            console.log("[WebGL]   Blend: ONE, ONE_MINUS_SRC_ALPHA (pre-multiplied)");
+
+            // Log current WebGL state
+            console.log("[WebGL]   Canvas size:", glContext.drawingBufferWidth, "x", glContext.drawingBufferHeight);
+            console.log("[WebGL]   Viewport:", glContext.getParameter(glContext.VIEWPORT));
+          }
+
           // Define camera positioning function first (before use)
           const positionCameraToScene = (center: THREE.Vector3, radius: number) => {
             const perspCamera = camera as THREE.PerspectiveCamera;
