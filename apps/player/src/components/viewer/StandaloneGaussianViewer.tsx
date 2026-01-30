@@ -74,11 +74,13 @@ export function StandaloneGaussianViewer({
       console.log("[Standalone] Canvas added to container");
     }
 
-    // Load the splat scene
+    // Load the splat scene - explicitly specify PLY format for blob URLs
+    // The library can't detect format from blob: URLs since they have no extension
     viewer
       .addSplatScene(url, {
         showLoadingUI: true,
         progressiveLoad: false,
+        format: GaussianSplats3D.SceneFormat.Ply,
         onProgress: (percent: number) => {
           if (!isMounted) return;
           const pct = percent > 1 ? percent : percent * 100;
