@@ -88,6 +88,33 @@ export function StandaloneGaussianViewer({
         if (!isMounted) return;
         console.log("[Standalone] Scene loaded successfully!");
 
+        // Try to get scene center and position camera there
+        try {
+          const splatMesh = (viewer as any).splatMesh;
+          if (splatMesh) {
+            // Get the scene's bounding box center
+            const scenes = splatMesh.scenes || [];
+            if (scenes.length > 0 && scenes[0].splatBuffer) {
+              const buffer = scenes[0].splatBuffer;
+              const center = buffer.sceneCenter || { x: 0, y: 0, z: 0 };
+              const radius = buffer.sceneRadius || 10;
+
+              console.log("[Standalone] Scene center:", center);
+              console.log("[Standalone] Scene radius:", radius);
+
+              // Position camera to view the scene
+              const cam = (viewer as any).camera;
+              if (cam) {
+                cam.position.set(center.x, center.y, center.z + radius * 2);
+                cam.lookAt(center.x, center.y, center.z);
+                console.log("[Standalone] Camera repositioned to:", cam.position);
+              }
+            }
+          }
+        } catch (e) {
+          console.log("[Standalone] Could not auto-center camera:", e);
+        }
+
         // Start the viewer
         viewer.start();
         console.log("[Standalone] Viewer started");
