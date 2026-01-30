@@ -54,7 +54,7 @@ export function StandaloneGaussianViewer({
       enableSIMDInSort: true,
       sharedMemoryForWorkers: false,
       integerBasedSort: true,
-      halfPrecisionCovariancesOnGPU: true,
+      halfPrecisionCovariancesOnGPU: false, // Disabled - was causing "value out of range" errors
       dynamicScene: true,
       renderMode: GaussianSplats3D.RenderMode.Always,
       sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
