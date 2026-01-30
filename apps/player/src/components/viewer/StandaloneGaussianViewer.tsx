@@ -76,6 +76,7 @@ export function StandaloneGaussianViewer({
 
     // Load the splat scene - explicitly specify PLY format for blob URLs
     // The library can't detect format from blob: URLs since they have no extension
+    // Cast options to any since TypeScript definitions don't include 'format'
     viewer
       .addSplatScene(url, {
         showLoadingUI: true,
@@ -88,7 +89,7 @@ export function StandaloneGaussianViewer({
           setProgress(Math.round(pct));
           onProgress?.(percent > 1 ? percent / 100 : percent);
         },
-      })
+      } as any)
       .then(() => {
         if (!isMounted) return;
         console.log("[Standalone] Scene loaded successfully!");
