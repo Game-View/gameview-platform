@@ -88,75 +88,60 @@ export function StandaloneGaussianViewer({
         if (!isMounted) return;
         console.log("[Standalone] Scene loaded successfully!");
 
-        // Compute actual scene center by sampling splat positions
+        // Compute actual scene center by accessing raw splat data
         try {
           const splatMesh = (viewer as any).splatMesh;
+          console.log("[Standalone] SplatMesh keys:", splatMesh ? Object.keys(splatMesh) : "null");
+
           if (splatMesh) {
             const splatCount = splatMesh.getSplatCount?.() || 0;
             console.log("[Standalone] Total splat count:", splatCount);
 
-            if (splatCount > 0) {
-              let sumX = 0, sumY = 0, sumZ = 0;
-              let minX = Infinity, minY = Infinity, minZ = Infinity;
-              let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+            // Log scenes structure
+            const scenes = splatMesh.scenes;
+            console.log("[Standalone] Scenes count:", scenes?.length);
 
-              // Sample every Nth splat for performance (sample ~1000 points)
-              const sampleStep = Math.max(1, Math.floor(splatCount / 1000));
-              let sampleCount = 0;
+            if (scenes && scenes.length > 0) {
+              const scene = scenes[0];
+              console.log("[Standalone] Scene[0] keys:", Object.keys(scene || {}));
 
-              // Try to get splat positions
-              const tempCenter = { x: 0, y: 0, z: 0 };
-              for (let i = 0; i < splatCount; i += sampleStep) {
-                try {
-                  if (typeof splatMesh.getSplatCenter === "function") {
-                    splatMesh.getSplatCenter(i, tempCenter);
-                  } else {
-                    break;
+              const splatBuffer = scene?.splatBuffer;
+              console.log("[Standalone] SplatBuffer keys:", splatBuffer ? Object.keys(splatBuffer) : "null");
+
+              // Try to find position data - look at centerArray or similar
+              if (splatBuffer) {
+                const possibleArrays = ["centerArray", "centers", "positions", "data"];
+                for (const key of possibleArrays) {
+                  if (splatBuffer[key]) {
+                    console.log(`[Standalone] Found ${key}:`, splatBuffer[key].length, "elements, first 10:", Array.from(splatBuffer[key].slice(0, 10)));
                   }
+                }
 
-                  sumX += tempCenter.x;
-                  sumY += tempCenter.y;
-                  sumZ += tempCenter.z;
-
-                  minX = Math.min(minX, tempCenter.x);
-                  minY = Math.min(minY, tempCenter.y);
-                  minZ = Math.min(minZ, tempCenter.z);
-                  maxX = Math.max(maxX, tempCenter.x);
-                  maxY = Math.max(maxY, tempCenter.y);
-                  maxZ = Math.max(maxZ, tempCenter.z);
-
-                  sampleCount++;
-                } catch (e) {
-                  break;
+                // Try accessing via scenes[0].transform for position offset
+                if (scene.transform) {
+                  console.log("[Standalone] Scene transform:", scene.transform);
                 }
               }
+            }
 
-              if (sampleCount > 0) {
-                const centerX = sumX / sampleCount;
-                const centerY = sumY / sampleCount;
-                const centerZ = sumZ / sampleCount;
+            // Alternative: try splatDataTextures
+            if (splatMesh.splatDataTextures) {
+              console.log("[Standalone] SplatDataTextures keys:", Object.keys(splatMesh.splatDataTextures));
+            }
 
-                const sizeX = maxX - minX;
-                const sizeY = maxY - minY;
-                const sizeZ = maxZ - minZ;
-                const radius = Math.max(sizeX, sizeY, sizeZ) / 2;
+            // Try the viewer's internal scene or controls for auto-focus
+            const cam = (viewer as any).camera;
+            const controls = (viewer as any).controls;
+            console.log("[Standalone] Camera:", cam?.position);
+            console.log("[Standalone] Controls:", controls ? Object.keys(controls) : "null");
 
-                console.log("[Standalone] Computed center:", { x: centerX, y: centerY, z: centerZ });
-                console.log("[Standalone] Bounds:", { minX, minY, minZ, maxX, maxY, maxZ });
-                console.log("[Standalone] Scene size:", { sizeX, sizeY, sizeZ });
-                console.log("[Standalone] Radius:", radius);
-
-                // Position camera to view the scene
-                const cam = (viewer as any).camera;
-                if (cam) {
-                  const distance = Math.max(radius * 2.5, 10);
-                  cam.position.set(centerX, centerY, centerZ + distance);
-                  cam.lookAt(centerX, centerY, centerZ);
-                  console.log("[Standalone] Camera repositioned to:", cam.position);
-                }
-              } else {
-                console.log("[Standalone] Could not sample splat positions");
-              }
+            // Try calling viewer methods that might auto-center
+            if (typeof (viewer as any).setFocusedSplat === "function") {
+              console.log("[Standalone] Has setFocusedSplat method");
+            }
+            if (typeof (viewer as any).resetView === "function") {
+              console.log("[Standalone] Has resetView method - calling it");
+              (viewer as any).resetView();
             }
           }
         } catch (e) {
