@@ -10,7 +10,7 @@ const StandaloneGaussianViewer = dynamic(
 );
 
 // The same PLY URL we've been testing with
-const TEST_PLY_URL = "https://tgkhjgemsarkmoflcrhj.supabase.co/storage/v1/object/public/ction-outputs/cmkygjjg0300031704raquf3p0/scene.ply";
+const TEST_PLY_URL = "https://tgkhjgemsarkmoflcrhj.supabase.co/storage/v1/object/public/production-outputs/cmkygjjg0300031704raquf3p0/scene.ply";
 
 export default function TestViewerPage() {
   const [loaded, setLoaded] = useState(false);
