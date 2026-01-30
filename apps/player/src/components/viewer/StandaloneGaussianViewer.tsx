@@ -88,65 +88,80 @@ export function StandaloneGaussianViewer({
         if (!isMounted) return;
         console.log("[Standalone] Scene loaded successfully!");
 
-        // Position camera using library's calculated scene center and bounding box
-        try {
-          const splatMesh = (viewer as any).splatMesh;
-
-          if (splatMesh) {
-            const splatCount = splatMesh.getSplatCount?.() || 0;
-            console.log("[Standalone] Total splat count:", splatCount);
-
-            // Use the library's calculated scene center and bounding box
-            const sceneCenter = splatMesh.calculatedSceneCenter;
-            const boundingBox = splatMesh.boundingBox;
-
-            console.log("[Standalone] calculatedSceneCenter:", sceneCenter);
-            console.log("[Standalone] boundingBox:", boundingBox);
-
-            if (sceneCenter && boundingBox) {
-              // Get bounding box size
-              const size = {
-                x: boundingBox.max.x - boundingBox.min.x,
-                y: boundingBox.max.y - boundingBox.min.y,
-                z: boundingBox.max.z - boundingBox.min.z,
-              };
-              const maxSize = Math.max(size.x, size.y, size.z);
-
-              console.log("[Standalone] Scene size:", size);
-              console.log("[Standalone] Max dimension:", maxSize);
-
-              // Position camera to view the entire scene
-              const cam = (viewer as any).camera;
-              const controls = (viewer as any).controls;
-
-              if (cam && maxSize > 0) {
-                const distance = maxSize * 1.5; // Back up enough to see whole scene
-                cam.position.set(
-                  sceneCenter.x,
-                  sceneCenter.y + size.y * 0.3, // Slightly above center
-                  sceneCenter.z + distance
-                );
-                cam.lookAt(sceneCenter.x, sceneCenter.y, sceneCenter.z);
-                console.log("[Standalone] Camera repositioned to:", cam.position);
-
-                // Update controls target to scene center
-                if (controls && controls.target) {
-                  controls.target.set(sceneCenter.x, sceneCenter.y, sceneCenter.z);
-                  controls.update?.();
-                  console.log("[Standalone] Controls target set to:", controls.target);
-                }
-              }
-            } else {
-              console.log("[Standalone] No sceneCenter or boundingBox available yet");
-            }
-          }
-        } catch (e) {
-          console.log("[Standalone] Could not auto-center camera:", e);
-        }
-
-        // Start the viewer
+        // Start the viewer first - bounds are calculated after start
         viewer.start();
         console.log("[Standalone] Viewer started");
+
+        // Position camera after a delay to let bounds be calculated
+        const positionCamera = () => {
+          try {
+            const splatMesh = (viewer as any).splatMesh;
+
+            if (splatMesh) {
+              const splatCount = splatMesh.getSplatCount?.() || 0;
+              console.log("[Standalone] Total splat count:", splatCount);
+
+              // Check the splatTree for bounds (it's built after start)
+              const splatTree = splatMesh.baseSplatTree || splatMesh.splatTree;
+              console.log("[Standalone] SplatTree:", splatTree);
+
+              if (splatTree && splatTree.rootNode) {
+                const rootNode = splatTree.rootNode;
+                console.log("[Standalone] RootNode:", rootNode);
+                console.log("[Standalone] RootNode boundingBox:", rootNode.boundingBox);
+
+                // Get bounds from the root node
+                const bb = rootNode.boundingBox;
+                if (bb && bb.min && bb.max) {
+                  const centerX = (bb.min.x + bb.max.x) / 2;
+                  const centerY = (bb.min.y + bb.max.y) / 2;
+                  const centerZ = (bb.min.z + bb.max.z) / 2;
+
+                  const sizeX = bb.max.x - bb.min.x;
+                  const sizeY = bb.max.y - bb.min.y;
+                  const sizeZ = bb.max.z - bb.min.z;
+                  const maxSize = Math.max(sizeX, sizeY, sizeZ);
+
+                  console.log("[Standalone] Tree bounds center:", { x: centerX, y: centerY, z: centerZ });
+                  console.log("[Standalone] Tree bounds size:", { x: sizeX, y: sizeY, z: sizeZ });
+
+                  if (isFinite(maxSize) && maxSize > 0) {
+                    const cam = (viewer as any).camera;
+                    const controls = (viewer as any).controls;
+
+                    if (cam) {
+                      const distance = maxSize * 1.5;
+                      cam.position.set(centerX, centerY + sizeY * 0.2, centerZ + distance);
+                      cam.lookAt(centerX, centerY, centerZ);
+                      console.log("[Standalone] Camera repositioned to:", cam.position);
+
+                      if (controls && controls.target) {
+                        controls.target.set(centerX, centerY, centerZ);
+                        controls.update?.();
+                        console.log("[Standalone] Controls target set");
+                      }
+                    }
+                    return true; // Success
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.log("[Standalone] Could not auto-center camera:", e);
+          }
+          return false;
+        };
+
+        // Try immediately, then retry after delays if needed
+        if (!positionCamera()) {
+          setTimeout(() => {
+            if (isMounted && !positionCamera()) {
+              setTimeout(() => {
+                if (isMounted) positionCamera();
+              }, 1000);
+            }
+          }, 500);
+        }
 
         setLoading(false);
         onLoad?.();
