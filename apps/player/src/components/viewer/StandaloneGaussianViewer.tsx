@@ -88,26 +88,74 @@ export function StandaloneGaussianViewer({
         if (!isMounted) return;
         console.log("[Standalone] Scene loaded successfully!");
 
-        // Try to get scene center and position camera there
+        // Compute actual scene center by sampling splat positions
         try {
           const splatMesh = (viewer as any).splatMesh;
           if (splatMesh) {
-            // Get the scene's bounding box center
-            const scenes = splatMesh.scenes || [];
-            if (scenes.length > 0 && scenes[0].splatBuffer) {
-              const buffer = scenes[0].splatBuffer;
-              const center = buffer.sceneCenter || { x: 0, y: 0, z: 0 };
-              const radius = buffer.sceneRadius || 10;
+            const splatCount = splatMesh.getSplatCount?.() || 0;
+            console.log("[Standalone] Total splat count:", splatCount);
 
-              console.log("[Standalone] Scene center:", center);
-              console.log("[Standalone] Scene radius:", radius);
+            if (splatCount > 0) {
+              let sumX = 0, sumY = 0, sumZ = 0;
+              let minX = Infinity, minY = Infinity, minZ = Infinity;
+              let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
 
-              // Position camera to view the scene
-              const cam = (viewer as any).camera;
-              if (cam) {
-                cam.position.set(center.x, center.y, center.z + radius * 2);
-                cam.lookAt(center.x, center.y, center.z);
-                console.log("[Standalone] Camera repositioned to:", cam.position);
+              // Sample every Nth splat for performance (sample ~1000 points)
+              const sampleStep = Math.max(1, Math.floor(splatCount / 1000));
+              let sampleCount = 0;
+
+              // Try to get splat positions
+              const tempCenter = { x: 0, y: 0, z: 0 };
+              for (let i = 0; i < splatCount; i += sampleStep) {
+                try {
+                  if (typeof splatMesh.getSplatCenter === "function") {
+                    splatMesh.getSplatCenter(i, tempCenter);
+                  } else {
+                    break;
+                  }
+
+                  sumX += tempCenter.x;
+                  sumY += tempCenter.y;
+                  sumZ += tempCenter.z;
+
+                  minX = Math.min(minX, tempCenter.x);
+                  minY = Math.min(minY, tempCenter.y);
+                  minZ = Math.min(minZ, tempCenter.z);
+                  maxX = Math.max(maxX, tempCenter.x);
+                  maxY = Math.max(maxY, tempCenter.y);
+                  maxZ = Math.max(maxZ, tempCenter.z);
+
+                  sampleCount++;
+                } catch (e) {
+                  break;
+                }
+              }
+
+              if (sampleCount > 0) {
+                const centerX = sumX / sampleCount;
+                const centerY = sumY / sampleCount;
+                const centerZ = sumZ / sampleCount;
+
+                const sizeX = maxX - minX;
+                const sizeY = maxY - minY;
+                const sizeZ = maxZ - minZ;
+                const radius = Math.max(sizeX, sizeY, sizeZ) / 2;
+
+                console.log("[Standalone] Computed center:", { x: centerX, y: centerY, z: centerZ });
+                console.log("[Standalone] Bounds:", { minX, minY, minZ, maxX, maxY, maxZ });
+                console.log("[Standalone] Scene size:", { sizeX, sizeY, sizeZ });
+                console.log("[Standalone] Radius:", radius);
+
+                // Position camera to view the scene
+                const cam = (viewer as any).camera;
+                if (cam) {
+                  const distance = Math.max(radius * 2.5, 10);
+                  cam.position.set(centerX, centerY, centerZ + distance);
+                  cam.lookAt(centerX, centerY, centerZ);
+                  console.log("[Standalone] Camera repositioned to:", cam.position);
+                }
+              } else {
+                console.log("[Standalone] Could not sample splat positions");
               }
             }
           }
