@@ -305,9 +305,20 @@ export default function ViewExperiencePage() {
       <Canvas
         camera={{ fov: 75, near: 0.01, far: 10000, position: [0, 2, 10] }}
         style={{ position: "absolute", inset: 0 }}
-        gl={{ antialias: false, alpha: false }}
+        gl={{
+          antialias: false,
+          alpha: false,
+          // CRITICAL: Let the Gaussian splats library control clearing
+          // Without this, R3F will clear the canvas after library renders
+          autoClear: false,
+          autoClearColor: false,
+          autoClearDepth: false,
+          autoClearStencil: false,
+        }}
+        // Don't render R3F scene automatically - let splat library control
+        frameloop="always"
       >
-        <color attach="background" args={["#111111"]} />
+        {/* No background color - splat library will handle this */}
         <ambientLight intensity={0.5} />
         <directionalLight position={[10, 10, 5]} intensity={1} />
 
